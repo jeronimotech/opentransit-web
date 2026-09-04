@@ -29,7 +29,8 @@ export type Mode =
 
 export type Geometry = { encoded: string; precision: number };
 
-export type ApiError = { error: { code: string; message: string } };
+export type ApiErrorDetail = { path: string; message: string };
+export type ApiError = { error: { code: string; message: string; details?: ApiErrorDetail[] } };
 
 export type Agency = {
   id: string;
@@ -476,3 +477,39 @@ export type CityHealth = {
 };
 
 export type Healthz = { status: string; version: string; cities: string[] };
+
+/* ── Admin (operators): per-city overrides on top of cities/*.yaml ─────────── */
+
+export type AdminMe = { ok: true; cities: string[] };
+
+/** The editable slice of a city. `null` in `override` means "not overridden". */
+export type AdminEditable = {
+  fares: CityFares | null;
+  config: CityConfig | null;
+  links: CityLinks | null;
+  services: CityService[] | null;
+  branding: { primaryColor: string } | null;
+};
+export type AdminSection = keyof AdminEditable;
+export type AdminOverride = Partial<AdminEditable>;
+
+export type AdminConfigResponse = {
+  effective: City;
+  override: AdminOverride | null;
+  yaml: AdminEditable;
+  revision: number;
+  updatedAt: string | null;
+  updatedBy: string | null;
+};
+
+/** PUT body: only the sections being changed; JSON `null` resets a section to YAML. */
+export type AdminConfigPatch = Partial<AdminEditable> & { note?: string; updatedBy?: string };
+
+export type AdminHistoryItem = {
+  revision: number;
+  changedAt: string;
+  changedBy: string | null;
+  note: string | null;
+  data: AdminOverride | null;
+};
+export type AdminHistoryResponse = { items: AdminHistoryItem[] };

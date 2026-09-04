@@ -20,7 +20,6 @@ import {
   TZ,
   alerts,
   buildItineraries,
-  city,
   corridorFor,
   corridors,
   currentVehicles,
@@ -46,6 +45,12 @@ function normalize(s: string) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "");
+}
+
+/** The public city, with any admin overrides made in this session applied. */
+async function liveCity() {
+  const { effectiveCity } = await import("./admin");
+  return effectiveCity();
 }
 
 let seq = 1;
@@ -153,8 +158,14 @@ function placeFor(lat: number, lon: number): Place {
   };
 }
 
-export async function mockRequest<T>(path: string, q: Q): Promise<T> {
+type Init = { method: string; body: string | null; headers: Record<string, string> };
+
+export async function mockRequest<T>(path: string, q: Q, init: Init = { method: "GET", body: null, headers: {} }): Promise<T> {
   await delay(120 + Math.random() * 200);
+  if (path.startsWith("/v1/admin/")) {
+    const { adminMock } = await import("./admin");
+    return adminMock<T>(path, q, init);
+  }
   const p = path.replace(/^\/v1\/cities\/[^/]+/, "");
   const cityId = path.match(/^\/v1\/cities\/([^/]+)/)?.[1];
   if (cityId && cityId !== "bogota") {
@@ -162,8 +173,8 @@ export async function mockRequest<T>(path: string, q: Q): Promise<T> {
   }
 
   if (path === "/healthz") return { status: "ok", version: "0.1.0-mock", cities: ["bogota"] } as T;
-  if (path === "/v1/cities") return { cities: [city] } as T;
-  if (p === "") return city as T;
+  if (path === "/v1/cities") return { cities: [await liveCity()] } as T;
+  if (p === "") return (await liveCity()) as T;
 
   if (p === "/plan") {
     await delay(500);

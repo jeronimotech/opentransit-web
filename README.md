@@ -86,6 +86,7 @@ pnpm dev          # against NEXT_PUBLIC_API_URL (default http://localhost:8001)
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8001` | Base URL of opentransit-api, no trailing slash |
 | `NEXT_PUBLIC_MOCK` | `0` | `1` serves fixtures from `src/mocks/` instead of calling the API |
+| `NEXT_PUBLIC_ADMIN_ENABLED` | `1` | `0` removes the `/admin` operator section (404) from a deployment |
 
 Both are inlined at build time (they are `NEXT_PUBLIC_*`), so the Docker image bakes them in.
 
@@ -97,6 +98,28 @@ itineraries Portal Norte → Portal Sur (direct, one transfer, zonal + trunk) wi
 move along their shapes every 4 s through the same SSE consumer the real stream uses, departures, the v1.1 arrival
 board and "next buses" endpoints, station POIs, service windows, accessibility flags, remote config and three alerts.
 It's what CI builds against and what `pnpm screenshots` uses (`BASE_URL=http://localhost:3100 pnpm screenshots`).
+
+## Admin (operators)
+
+`/admin` lets an operator change a city **without redeploying**: fares (the estimated fare every itinerary shows),
+remote config (polling cadence, visible modules, minimum app version, maintenance mode), agency links, the service
+tiles on the home screen and the primary colour. It is not linked from the public navigation.
+
+- **Auth**: paste the API's `ADMIN_TOKEN`. The token is validated with `GET /v1/admin/me` and kept in
+  `sessionStorage` only (never in the URL, never in `localStorage`), so closing the tab forgets it. "Salir" clears it.
+- **Tabs**: Tarifas (landing) · Configuración · Enlaces · Servicios · Marca · Historial. Each tab edits one section of
+  `GET/PUT /v1/admin/cities/{city}/config`; a section can be reset to the YAML values ("Restablecer a YAML" sends
+  `null`), and "Restablecer todo" is `DELETE`. Badges mark what is overridden versus what comes from `cities/*.yaml`.
+- **Tarifas** validates inline with the API's rules and shows a live preview ("un viaje con 1 transbordo dentro de
+  110 min = $3.200 · con 3 transbordos = $6.400") computed with the same rule the planner uses (`src/lib/fare.ts`
+  and `src/lib/admin/fare-preview.ts`). Fares are always published as *estimated*.
+- **Maintenance** needs a confirmation step; **Servicios** rows can be added, removed and reordered;
+  **Historial** lists every revision with who/when/note and the keys that changed (diffed on effective values).
+- Mock mode has a full in-memory admin (token `demo`), used by `pnpm screenshots:admin`.
+
+Security notes: serve the admin over **HTTPS only** (the token travels in a header), rotate `ADMIN_TOKEN` when someone
+leaves, and set `NEXT_PUBLIC_ADMIN_ENABLED=0` on public deployments that don't need it (the API still enforces the
+token either way). Screenshots: `docs/screenshots/admin-*.png`.
 
 ## How it talks to the API
 
@@ -128,8 +151,9 @@ re-add their sources when the basemap style reloads (theme switch).
 | Command | What |
 |---|---|
 | `pnpm dev` / `pnpm dev:mock` | dev server (real API / fixtures) |
-| `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm build` | what CI runs (`test` = vitest unit tests for colour blending, headsign cleanup, marker zoom rules) |
+| `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm build` | what CI runs (`test` = vitest unit tests for colour blending, headsign cleanup, marker zoom rules, admin fare preview/validation/diff) |
 | `pnpm screenshots` | regenerate `docs/screenshots/` from a running `dev:mock` (needs `npx playwright install chromium`) |
+| `pnpm screenshots:admin` | admin flow screenshots (login → validation error → save → history); `TOKEN=… SUFFIX=live-api RESET=1` for the real API |
 
 ## Contributing
 

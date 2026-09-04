@@ -13,7 +13,8 @@
     "postinstall": "node scripts/copy-maplibre-worker.mjs",
     "predev": "node scripts/copy-maplibre-worker.mjs",
     "prebuild": "node scripts/copy-maplibre-worker.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "screenshots:admin": "node scripts/screenshots-admin.mjs"
   },
   "dependencies": {
     "@mapbox/polyline": "^1.2.1",
@@ -41,5 +42,5 @@
     "vitest": "^3.2.7"
   },
   "license": "MIT",
-  "description": "Open-source multimodal trip planner — web client"
+  "description": "Open-source multimodal trip planner \u2014 web client"
 }

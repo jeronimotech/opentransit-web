@@ -1,6 +1,11 @@
 import type {
+  AdminConfigPatch,
+  AdminConfigResponse,
+  AdminHistoryResponse,
+  AdminMe,
   AlertsResponse,
   ApiError,
+  ApiErrorDetail,
   BoardResponse,
   City,
   CityHealth,
@@ -31,10 +36,12 @@ export const MOCK = process.env.NEXT_PUBLIC_MOCK === "1";
 export class ApiRequestError extends Error {
   status: number;
   code: string;
-  constructor(status: number, code: string, message: string) {
+  details: ApiErrorDetail[];
+  constructor(status: number, code: string, message: string, details: ApiErrorDetail[] = []) {
     super(message);
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -54,7 +61,11 @@ function qs(q?: Query): string {
 async function request<T>(path: string, q?: Query, init?: RequestInit): Promise<T> {
   if (MOCK) {
     const { mockRequest } = await import("@/mocks/handlers");
-    return mockRequest<T>(path, q ?? {});
+    return mockRequest<T>(path, q ?? {}, {
+      method: init?.method ?? "GET",
+      body: typeof init?.body === "string" ? init.body : null,
+      headers: (init?.headers ?? {}) as Record<string, string>,
+    });
   }
   const res = await fetch(`${API_URL}${path}${qs(q)}`, {
     ...init,
@@ -71,9 +82,11 @@ async function request<T>(path: string, q?: Query, init?: RequestInit): Promise<
       res.status,
       body?.error?.code ?? "HTTP_ERROR",
       body?.error?.message ?? `${res.status} ${res.statusText}`,
+      body?.error?.details ?? [],
     );
   }
-  return (await res.json()) as T;
+  const text = await res.text();
+  return (text ? JSON.parse(text) : null) as T;
 }
 
 const c = (city: string) => `/v1/cities/${encodeURIComponent(city)}`;
@@ -151,6 +164,29 @@ export const api = {
   alerts: (city: string, f?: { routeId?: string; stopId?: string; active?: boolean }) =>
     request<AlertsResponse>(`${c(city)}/alerts`, f),
   health: (city: string) => request<CityHealth>(`${c(city)}/health`),
+};
+
+/* ── Admin: token-authenticated operator endpoints ───────────────────────── */
+
+const a = (city: string) => `/v1/admin/cities/${encodeURIComponent(city)}/config`;
+const adminInit = (token: string, method = "GET", body?: unknown): RequestInit => ({
+  method,
+  headers: {
+    "X-Admin-Token": token,
+    ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+  },
+  body: body !== undefined ? JSON.stringify(body) : undefined,
+});
+
+export const adminApi = {
+  me: (token: string) => request<AdminMe>("/v1/admin/me", undefined, adminInit(token)),
+  config: (token: string, city: string) => request<AdminConfigResponse>(a(city), undefined, adminInit(token)),
+  update: (token: string, city: string, patch: AdminConfigPatch) =>
+    request<AdminConfigResponse>(a(city), undefined, adminInit(token, "PUT", patch)),
+  reset: (token: string, city: string) =>
+    request<AdminConfigResponse | null>(a(city), undefined, adminInit(token, "DELETE")),
+  history: (token: string, city: string, limit = 20) =>
+    request<AdminHistoryResponse>(`${a(city)}/history`, { limit }, adminInit(token)),
 };
 
 export const ALL_MODES: Mode[] = ["BUS", "CABLE_CAR", "RAIL", "SUBWAY", "TRAM", "BICYCLE"];
