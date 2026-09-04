@@ -1,5 +1,6 @@
 /**
- * Types mirroring the opentransit API contract v1 (docs/CONTRACT.md).
+ * Types mirroring the opentransit API contract v1 + v1.1 additions (ROADMAP-v1.1.md).
+ * v1.1 fields are optional so the client keeps working against a v1 API.
  * All keys camelCase; times ISO-8601 with offset; distances meters; durations seconds.
  */
 
@@ -57,6 +58,70 @@ export type City = {
   };
   agencies: Agency[];
   attribution: string;
+  /** v1.1 — optional so older API builds still parse. */
+  components?: CityComponent[];
+  fares?: CityFares | null;
+  config?: CityConfig;
+  links?: CityLinks;
+  services?: CityService[];
+};
+
+export type CityComponent = {
+  id: Component;
+  label: string;
+  color: string;
+  icon: "brt" | "bus" | "cable" | "rail" | "tram" | "metro" | "boat" | "other";
+};
+
+export type CityFares = {
+  currency: string;
+  base: number;
+  transfer: number;
+  transferWindowMinutes: number;
+  maxTransfers: number;
+  note: string | null;
+  estimated: boolean;
+};
+
+export type CityConfig = {
+  vehiclePollSeconds: number;
+  departuresRefreshSeconds: number;
+  features: Partial<{
+    liveVehicles: boolean;
+    board: boolean;
+    pois: boolean;
+    followAlong: boolean;
+    bike: boolean;
+    next: boolean;
+    favorites: boolean;
+    alerts: boolean;
+  }>;
+  minAppVersion: { ios: string; android: string; web?: string } | null;
+  maintenance: { active: boolean; message: string | null } | null;
+};
+
+export type CityLinks = Partial<{
+  pqrs: string | null;
+  recharge: string | null;
+  support: string | null;
+  privacy: string | null;
+  fares: string | null;
+}>;
+
+export type CityService = {
+  id: string;
+  label: string;
+  icon: string;
+  url: string;
+  kind: "external" | "internal";
+};
+
+export type ServiceWindow = {
+  start: string; // "04:00"
+  end: string; // "23:00"
+  active: boolean;
+  nextStart: string | null;
+  source: "gtfs" | "config";
 };
 
 export type RouteRef = {
@@ -68,6 +133,7 @@ export type RouteRef = {
   mode: Mode;
   agencyId: string;
   component: Component;
+  serviceWindow?: ServiceWindow | null;
 };
 
 export type Place = {
@@ -143,9 +209,16 @@ export type Itinerary = {
   walkTimeSeconds: number;
   waitingTimeSeconds: number;
   transfers: number;
-  fare: { amount: number; currency: string } | null;
+  fare: Fare | null;
   accessible: boolean | null;
   legs: Leg[];
+};
+
+export type Fare = {
+  amount: number;
+  currency: string;
+  estimated?: boolean;
+  breakdown?: { label: string; amount: number }[];
 };
 
 export type PlanParams = {
@@ -160,6 +233,8 @@ export type PlanParams = {
   numItineraries?: number;
   maxWalkDistance?: number;
   locale?: "es" | "en";
+  fromName?: string;
+  toName?: string;
 };
 
 export type PlanResponse = {
@@ -196,6 +271,15 @@ export type Stop = {
   component: Component | null;
   wheelchair: "unknown" | "accessible" | "not_accessible";
   parentStationId: string | null;
+  /** v1.1 — honest accessibility: `verified=false` when the feed value is a blanket default. */
+  accessibility?: StopAccessibility | null;
+};
+
+export type StopAccessibility = {
+  wheelchair: "accessible" | "not_accessible" | "unknown";
+  source: "gtfs" | "osm" | "none";
+  verified: boolean;
+  note: string | null;
 };
 
 export type NearbyStop = Stop & { distanceMeters: number };
@@ -224,6 +308,59 @@ export type DeparturesResponse = {
   stop: Stop;
   generatedAt: string;
   departures: Departure[];
+};
+
+export type Freshness = { realtime: boolean; ageSeconds: number | null; stale: boolean };
+
+export type BoardTime = {
+  time: string;
+  minutes: number;
+  realtime: boolean;
+  delaySeconds: number | null;
+  tripId: string | null;
+  vehicleId: string | null;
+};
+
+export type BoardRow = { route: RouteRef; headsign: string | null; next: BoardTime[] };
+
+export type BoardResponse = {
+  stop: Stop;
+  generatedAt: string;
+  freshness: Freshness;
+  rows: BoardRow[];
+};
+
+export type NextBus = {
+  minutes: number;
+  time: string;
+  source: "live" | "scheduled" | "estimated";
+  vehicle: Vehicle | null;
+  stopsAway: number | null;
+  distanceMeters: number | null;
+  tripId: string | null;
+};
+
+export type NextResponse = {
+  stop: Stop;
+  route: RouteRef;
+  freshness: Freshness;
+  next: NextBus[];
+};
+
+export type PoiType = "bike_parking" | "toilets" | "atm" | "health" | "library" | "other";
+
+export type PoiProperties = {
+  id: string;
+  type: PoiType;
+  name: string | null;
+  source: "osm" | "city";
+  osmId?: string | null;
+  wheelchair?: "yes" | "no" | "limited" | null;
+};
+
+export type PoiCollection = {
+  type: "FeatureCollection";
+  features: { type: "Feature"; geometry: { type: "Point"; coordinates: [number, number] }; properties: PoiProperties }[];
 };
 
 export type RoutesResponse = { routes: RouteRef[] };
@@ -326,11 +463,14 @@ export type CityHealth = {
     stops: number;
   };
   realtime: {
-    lastFetchAt: string;
+    enabled?: boolean;
+    lastFetchAt: string | null;
     entityAgeP50Seconds: number | null;
     vehicles: number;
     pctTripResolved: number | null;
     alerts: number;
+    stale?: boolean;
+    staleSeconds?: number | null;
   };
   router: { up: boolean; version: string; graphBuiltAt: string | null };
 };

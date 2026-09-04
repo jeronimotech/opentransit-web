@@ -16,6 +16,7 @@ export type PlannerState = {
   arriveBy: boolean;
   modes: Mode[]; // transit modes enabled (WALK always implied)
   wheelchair: boolean;
+  bike: boolean; // "llegar en bici a la estación" (BICYCLE + TRANSIT)
   selected: number | null; // itinerary index
 };
 
@@ -41,6 +42,7 @@ export function readPlanner(sp: URLSearchParams): PlannerState {
     arriveBy: sp.get("arriveBy") === "1",
     modes,
     wheelchair: sp.get("wheelchair") === "1",
+    bike: sp.get("bike") === "1",
     selected: it !== null && it !== "" ? Number(it) : null,
   };
 }
@@ -63,6 +65,7 @@ export function writePlanner(s: PlannerState): URLSearchParams {
   const sorted = [...s.modes].sort().join(",");
   if (sorted !== sortedDefault) p.set("modes", s.modes.join(","));
   if (s.wheelchair) p.set("wheelchair", "1");
+  if (s.bike) p.set("bike", "1");
   if (s.selected !== null) p.set("it", String(s.selected));
   return p;
 }
@@ -76,9 +79,11 @@ export function toPlanParams(s: PlannerState, locale: "es" | "en"): PlanParams |
     toLon: s.to.lon,
     time: s.time ?? undefined,
     arriveBy: s.arriveBy || undefined,
-    modes: [...s.modes, "WALK"],
+    modes: [...s.modes, "WALK", ...(s.bike ? (["BICYCLE"] as Mode[]) : [])],
     wheelchair: s.wheelchair || undefined,
     numItineraries: 5,
     locale,
+    fromName: s.from.name ?? undefined,
+    toName: s.to.name ?? undefined,
   };
 }

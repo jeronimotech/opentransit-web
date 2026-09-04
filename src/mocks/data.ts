@@ -12,6 +12,7 @@ import type {
   Itinerary,
   Leg,
   Place,
+  PoiCollection,
   RouteRef,
   Stop,
   Vehicle,
@@ -49,6 +50,33 @@ export const city: City = {
   ],
   attribution:
     "Datos: TRANSMILENIO S.A. (GTFS) · Mapa: © OpenMapTiles © OpenStreetMap contributors",
+  // ── v1.1 ──
+  components: [
+    { id: "trunk", label: "Troncal", color: "#D32F2F", icon: "brt" },
+    { id: "feeder", label: "Alimentador", color: "#2E7D4F", icon: "bus" },
+    { id: "dual", label: "Dual", color: "#8E24AA", icon: "bus" },
+    { id: "zonal", label: "Zonal", color: "#1565C0", icon: "bus" },
+    { id: "cable", label: "TransMiCable", color: "#6A1B9A", icon: "cable" },
+  ],
+  fares: { currency: "COP", base: 3200, transfer: 0, transferWindowMinutes: 110, maxTransfers: 2, note: "Valores configurables; verificar con tarifa vigente", estimated: true },
+  config: {
+    vehiclePollSeconds: 15,
+    departuresRefreshSeconds: 20,
+    features: { liveVehicles: true, board: true, pois: true, followAlong: true, bike: true, next: true, favorites: true, alerts: true },
+    minAppVersion: { ios: "1.0.0", android: "1.0.0" },
+    maintenance: { active: false, message: null },
+  },
+  links: {
+    pqrs: "https://www.transmilenio.gov.co/publicaciones/147212/pqrs/",
+    recharge: "https://www.tullaveplus.gov.co/",
+    support: "https://www.transmilenio.gov.co/",
+    fares: "https://www.transmilenio.gov.co/publicaciones/151283/tarifas/",
+    privacy: null,
+  },
+  services: [
+    { id: "recharge", label: "Recargar tullave", icon: "card", url: "https://www.tullaveplus.gov.co/", kind: "external" },
+    { id: "pqrs", label: "PQRS", icon: "chat", url: "https://www.transmilenio.gov.co/publicaciones/147212/pqrs/", kind: "external" },
+  ],
 };
 
 // ── Stations along the corridors ────────────────────────────────────────────
@@ -138,6 +166,11 @@ const mkStop = ([id, name, lat, lon, component, station]: S): Stop => ({
   component,
   wheelchair: station ? "accessible" : "unknown",
   parentStationId: null,
+  accessibility: station
+    ? ["7001", "7215", "7012"].includes(id)
+      ? { wheelchair: "accessible", source: "osm", verified: true, note: null }
+      : { wheelchair: "accessible", source: "gtfs", verified: false, note: "Dato del feed no verificado" }
+    : { wheelchair: "unknown", source: "none", verified: false, note: null },
 });
 
 export const stops: Stop[] = [...NORTE, ...CARACAS, ...NQS, ...ZONAL, ...CABLE].map(mkStop);
@@ -161,7 +194,15 @@ const R = (
   mode,
   agencyId: { trunk: "1", feeder: "2", dual: "3", zonal: "4", cable: "7", rail: "1", other: "1" }[component],
   component,
+  serviceWindow: windowFor(component),
 });
+
+function windowFor(component: Component): RouteRef["serviceWindow"] {
+  const h = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: TZ }).format(new Date()));
+  const [start, end] = component === "cable" ? ["04:30", "22:00"] : component === "zonal" ? ["04:00", "22:30"] : ["04:00", "23:00"];
+  const active = h >= Number(start.slice(0, 2)) && h < Number(end.slice(0, 2));
+  return { start, end, active, nextStart: active ? null : start, source: "gtfs" };
+}
 
 export const routes: RouteRef[] = [
   R("B13", "B13", "Portal Norte – Portal Sur", "trunk", "#D32F2F"),
@@ -335,9 +376,21 @@ function itinerary(id: string, legs: Leg[]): Itinerary {
     walkTimeSeconds: walkTime,
     waitingTimeSeconds: Math.max(0, duration - walkTime - ride),
     transfers: Math.max(0, transit.length - 1),
-    fare: null,
+    fare: fareFor(transit.length),
     accessible: null,
     legs,
+  };
+}
+
+function fareFor(transitLegs: number): Itinerary["fare"] {
+  const f = city.fares!;
+  if (!transitLegs) return { amount: 0, currency: f.currency, estimated: true, breakdown: [] };
+  const transfers = Math.min(transitLegs - 1, f.maxTransfers);
+  return {
+    amount: f.base + transfers * f.transfer,
+    currency: f.currency,
+    estimated: true,
+    breakdown: [{ label: "Pasaje", amount: f.base }, ...Array.from({ length: transfers }, () => ({ label: "Transbordo", amount: f.transfer }))],
   };
 }
 
@@ -537,3 +590,31 @@ export function corridorFor(stopId: string): { routes: RouteRef[]; headsigns: st
 }
 
 export const corridors = { NORTE, CARACAS, NQS, ZONAL, CABLE };
+
+
+// ── Station services (POIs) ─────────────────────────────────────────────────
+const poiAt = (id: string, type: PoiCollection["features"][number]["properties"]["type"], name: string, stop: string, dLon: number, dLat: number, wc: "yes" | "no" | "limited" | null = null) => {
+  const s = sById(stop);
+  return {
+    type: "Feature" as const,
+    geometry: { type: "Point" as const, coordinates: [s.lon + dLon, s.lat + dLat] as [number, number] },
+    properties: { id, type, name, source: "osm" as const, osmId: `node/${id}`, wheelchair: wc },
+  };
+};
+export const pois: PoiCollection = {
+  type: "FeatureCollection",
+  features: [
+    poiAt("p1", "bike_parking", "Cicloparqueadero Portal Norte", "7001", 0.0006, 0.0003, "yes"),
+    poiAt("p2", "toilets", "Baños Portal Norte", "7001", -0.0004, 0.0002, "yes"),
+    poiAt("p3", "atm", "Cajero Portal Norte", "7001", 0.0002, -0.0004, null),
+    poiAt("p4", "library", "BiblioEstación Portal Norte", "7001", -0.0007, -0.0002, "limited"),
+    poiAt("p5", "bike_parking", "Cicloparqueadero Calle 100", "7012", 0.0005, 0.0002, "yes"),
+    poiAt("p6", "health", "Punto de salud Calle 100", "7012", -0.0004, -0.0003, null),
+    poiAt("p7", "bike_parking", "Cicloparqueadero Portal Sur", "7215", 0.0006, 0.0002, "yes"),
+    poiAt("p8", "toilets", "Baños Portal Sur", "7215", -0.0004, 0.0003, "no"),
+    poiAt("p9", "atm", "Cajero Ricaurte", "7206", 0.0003, 0.0003, null),
+    poiAt("p10", "bike_parking", "Cicloparqueadero Portal Tunal", "9001", 0.0005, 0.0002, "yes"),
+    poiAt("p11", "toilets", "Baños Calle 26", "7110", 0.0004, -0.0002, "yes"),
+    poiAt("p12", "library", "BiblioEstación Calle 26", "7110", -0.0005, 0.0003, "yes"),
+  ],
+};

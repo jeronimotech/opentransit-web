@@ -5,8 +5,11 @@ import { ApiRequestError } from "@/lib/api/client";
 import { encodeGeometry, haversineMeters } from "@/lib/geo";
 import { toIsoWithOffset } from "@/lib/format";
 import type {
+  BoardResponse,
   Departure,
+  Freshness,
   GeocodeResult,
+  NextResponse,
   Place,
   StopDetail,
   VehicleDetail,
@@ -21,6 +24,7 @@ import {
   corridorFor,
   corridors,
   currentVehicles,
+  pois,
   routeById,
   routes,
   shapes,
@@ -69,11 +73,19 @@ const POIS: GeocodeResult[] = [
   { id: "photon:8", name: "Unicentro", label: "Centro comercial · Usaquén", lat: 4.7027, lon: -74.0413, type: "poi", stopId: null, component: null, source: "photon" },
 ];
 
-function geocode(q: string, limit: number): GeocodeResult[] {
+function geocode(q: string, limit: number, near?: { lat: number; lon: number }): GeocodeResult[] {
   const n = normalize(q);
+  const dist = (s: { lat: number; lon: number }) => (near ? haversineMeters(near, s) : Infinity);
   const fromStops: GeocodeResult[] = stops
     .filter((s) => normalize(s.name).includes(n))
-    .sort((a, b) => (a.locationType === "station" ? -1 : 1) - (b.locationType === "station" ? -1 : 1))
+    .sort((a, b) => {
+      // nearby-first: stops within 800 m rank first, then stations, then the rest
+      const na = dist(a) <= 800 ? 0 : 1,
+        nb = dist(b) <= 800 ? 0 : 1;
+      if (na !== nb) return na - nb;
+      if (na === 0) return dist(a) - dist(b);
+      return (a.locationType === "station" ? -1 : 1) - (b.locationType === "station" ? -1 : 1);
+    })
     .map((s) => ({
       id: `stop:${s.id}`,
       name: s.name,
@@ -157,6 +169,8 @@ export async function mockRequest<T>(path: string, q: Q): Promise<T> {
     await delay(500);
     const from = placeFor(num(q, "fromLat"), num(q, "fromLon"));
     const to = placeFor(num(q, "toLat"), num(q, "toLon"));
+    if (q.fromName && !from.stopId) from.name = String(q.fromName);
+    if (q.toName && !to.stopId) to.name = String(q.toName);
     const time = q.time ? new Date(String(q.time)) : new Date();
     const itineraries = buildItineraries(from, to, time, q.arriveBy === true || q.arriveBy === "true");
     return {
@@ -167,7 +181,10 @@ export async function mockRequest<T>(path: string, q: Q): Promise<T> {
       warnings: [],
     } as T;
   }
-  if (p === "/geocode") return { results: geocode(str(q, "q"), num(q, "limit", 8)) } as T;
+  if (p === "/geocode") {
+    const near = q.lat != null && q.lon != null && q.lat !== "" ? { lat: num(q, "lat"), lon: num(q, "lon") } : undefined;
+    return { results: geocode(str(q, "q"), num(q, "limit", 8), near) } as T;
+  }
   if (p === "/reverse") {
     const pl = placeFor(num(q, "lat"), num(q, "lon"));
     return { name: pl.stopId ? pl.name : "Calle 26 # 13-19", lat: pl.lat, lon: pl.lon } as T;
@@ -184,7 +201,84 @@ export async function mockRequest<T>(path: string, q: Q): Promise<T> {
       .slice(0, num(q, "limit", 30));
     return { stops: out } as T;
   }
-  let m = p.match(/^\/stops\/([^/]+)\/departures$/);
+  const freshness = (): Freshness => ({ realtime: true, ageSeconds: 15 + Math.floor(Math.random() * 10), stale: false });
+
+  let m = p.match(/^\/stops\/([^/]+)\/board$/);
+  if (m) {
+    const s = stopById.get(decodeURIComponent(m[1]));
+    if (!s) throw new ApiRequestError(404, "STOP_NOT_FOUND", "Stop not found");
+    const per = num(q, "perRoute", 3);
+    const deps = departures(s.id, 40);
+    const rows = new Map<string, BoardResponse["rows"][number]>();
+    for (const d of deps) {
+      if (d.canceled) continue;
+      const row = rows.get(d.route.id) ?? { route: d.route, headsign: d.headsign, next: [] };
+      if (row.next.length < per) {
+        const time = d.realtimeTime ?? d.scheduledTime;
+        row.next.push({ time, minutes: Math.max(0, Math.round((new Date(time).getTime() - Date.now()) / 60000)), realtime: d.realtime, delaySeconds: d.delaySeconds, tripId: d.tripId, vehicleId: d.vehicleId });
+      }
+      rows.set(d.route.id, row);
+    }
+    const out: BoardResponse = {
+      stop: s,
+      generatedAt: iso(new Date()),
+      freshness: freshness(),
+      rows: [...rows.values()].sort((a, b) => (a.next[0]?.minutes ?? 99) - (b.next[0]?.minutes ?? 99)),
+    };
+    return out as T;
+  }
+  m = p.match(/^\/stops\/([^/]+)\/routes\/([^/]+)\/next$/);
+  if (m) {
+    const s = stopById.get(decodeURIComponent(m[1]));
+    const r = routeById.get(decodeURIComponent(m[2]));
+    if (!s) throw new ApiRequestError(404, "STOP_NOT_FOUND", "Stop not found");
+    if (!r) throw new ApiRequestError(404, "ROUTE_NOT_FOUND", "Route not found");
+    const limit = num(q, "limit", 3);
+    // live rows: vehicles on this route, ordered by distance to the stop
+    const live = currentVehicles()
+      .filter((v) => v.routeId === r.id)
+      .map((v) => ({ v, d: haversineMeters(v, s) }))
+      .sort((a, b) => a.d - b.d)
+      .slice(0, Math.min(2, limit))
+      .map(({ v, d }, i) => {
+        const minutes = Math.max(1, Math.round(d / 350) + i); // ~21 km/h commercial speed
+        return {
+          minutes,
+          time: iso(new Date(Date.now() + minutes * 60000)),
+          source: "live" as const,
+          vehicle: v,
+          stopsAway: Math.max(1, Math.round(d / 600)),
+          distanceMeters: Math.round(d),
+          tripId: v.tripId,
+        };
+      });
+    const sched = departures(s.id, 30)
+      .filter((d) => d.route.id === r.id && !d.canceled)
+      .map((d) => ({
+        minutes: Math.max(0, Math.round((new Date(d.scheduledTime).getTime() - Date.now()) / 60000)),
+        time: d.scheduledTime,
+        source: "scheduled" as const,
+        vehicle: null,
+        stopsAway: null,
+        distanceMeters: null,
+        tripId: d.tripId,
+      }))
+      .filter((x) => !live.some((l) => Math.abs(l.minutes - x.minutes) < 2));
+    const out: NextResponse = { stop: s, route: r, freshness: freshness(), next: [...live, ...sched].sort((a, b) => a.minutes - b.minutes).slice(0, limit) };
+    return out as T;
+  }
+  if (p === "/pois") {
+    const bbox = str(q, "bbox").split(",").map(Number);
+    const types = str(q, "type") ? str(q, "type").split(",") : null;
+    const features = pois.features.filter((f) => {
+      const [lon, lat] = f.geometry.coordinates;
+      const inBox = bbox.length === 4 ? lon >= bbox[0] && lon <= bbox[2] && lat >= bbox[1] && lat <= bbox[3] : true;
+      return inBox && (!types || types.includes(f.properties.type));
+    });
+    return { type: "FeatureCollection", features } as T;
+  }
+
+  m = p.match(/^\/stops\/([^/]+)\/departures$/);
   if (m) {
     const s = stopById.get(decodeURIComponent(m[1]));
     if (!s) throw new ApiRequestError(404, "STOP_NOT_FOUND", "Stop not found");
@@ -277,7 +371,7 @@ export async function mockRequest<T>(path: string, q: Q): Promise<T> {
   if (p === "/health") {
     return {
       static: { feedVersion: "GTFS_20260904", fetchedAt: iso(new Date(Date.now() - 3600_000)), routes: 1024, stops: 8309 },
-      realtime: { lastFetchAt: iso(new Date()), entityAgeP50Seconds: 18, vehicles: 220, pctTripResolved: 88.9, alerts: 3 },
+      realtime: { enabled: true, lastFetchAt: iso(new Date()), entityAgeP50Seconds: 18, vehicles: 220, pctTripResolved: 88.9, alerts: 3, stale: false, staleSeconds: null },
       router: { up: true, version: "2.10.0", graphBuiltAt: iso(new Date(Date.now() - 86400_000)) },
     } as T;
   }

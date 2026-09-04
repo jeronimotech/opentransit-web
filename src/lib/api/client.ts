@@ -1,6 +1,7 @@
 import type {
   AlertsResponse,
   ApiError,
+  BoardResponse,
   City,
   CityHealth,
   DeparturesResponse,
@@ -9,7 +10,9 @@ import type {
   Mode,
   NearbyResponse,
   NetworkResponse,
+  NextResponse,
   PlanParams,
+  PoiCollection,
   PlanResponse,
   ReverseResponse,
   RouteDetail,
@@ -93,6 +96,8 @@ export const api = {
       numItineraries: p.numItineraries,
       maxWalkDistance: p.maxWalkDistance,
       locale: p.locale,
+      fromName: p.fromName,
+      toName: p.toName,
     }),
 
   geocode: (city: string, q: string, near?: { lat: number; lon: number }, limit = 8) =>
@@ -115,6 +120,19 @@ export const api = {
       { limit, minutes },
     ),
 
+  /** v1.1 — arrival board grouped by route (stations aggregate their platforms). */
+  board: (city: string, stopId: string, minutes = 60, perRoute = 3) =>
+    request<BoardResponse>(`${c(city)}/stops/${encodeURIComponent(stopId)}/board`, { minutes, perRoute }),
+  /** v1.1 — "Ubica tu bus": next buses of one route at one stop, live first. */
+  nextBuses: (city: string, stopId: string, routeId: string, limit = 3) =>
+    request<NextResponse>(
+      `${c(city)}/stops/${encodeURIComponent(stopId)}/routes/${encodeURIComponent(routeId)}/next`,
+      { limit },
+    ),
+  /** v1.1 — station services (bike parking, toilets…) as GeoJSON. */
+  pois: (city: string, bbox: string, types?: string[]) =>
+    request<PoiCollection>(`${c(city)}/pois`, { bbox, type: types?.join(",") }),
+
   routes: (city: string, component?: string, q?: string) =>
     request<RoutesResponse>(`${c(city)}/routes`, { component, q }),
   route: (city: string, routeId: string) =>
@@ -127,7 +145,8 @@ export const api = {
   ) => request<VehicleFrame>(`${c(city)}/vehicles`, f),
   vehicle: (city: string, id: string) =>
     request<VehicleDetail>(`${c(city)}/vehicles/${encodeURIComponent(id)}`),
-  vehicleStreamUrl: (city: string) => `${API_URL}${c(city)}/vehicles/stream?deltas=true`,
+  vehicleStreamUrl: (city: string, f?: { bbox?: string; routeIds?: string[] }) =>
+    `${API_URL}${c(city)}/vehicles/stream${qs({ deltas: true, bbox: f?.bbox, routeIds: f?.routeIds?.join(",") })}`,
 
   alerts: (city: string, f?: { routeId?: string; stopId?: string; active?: boolean }) =>
     request<AlertsResponse>(`${c(city)}/alerts`, f),

@@ -65,6 +65,39 @@ export function useStop(city: string, stopId: string) {
   });
 }
 
+/** v1.1 arrival board; a 404 means the API predates v1.1 or the stop has no times → caller falls back. */
+export function useBoard(city: string, stopId: string, refreshMs = 20_000, enabled = true) {
+  return useQuery({
+    queryKey: ["board", city, stopId],
+    queryFn: () => api.board(city, stopId, 90, 4),
+    enabled,
+    refetchInterval: (q) => (q.state.error ? false : refreshMs),
+    retry: retryPolicy,
+    staleTime: 10_000,
+  });
+}
+
+export function useNextBuses(city: string, stopId: string | null, routeId: string | null, refreshMs = 15_000) {
+  return useQuery({
+    queryKey: ["next", city, stopId, routeId],
+    queryFn: () => api.nextBuses(city, stopId!, routeId!, 4),
+    enabled: !!stopId && !!routeId,
+    refetchInterval: (q) => (q.state.error ? false : refreshMs),
+    retry: retryPolicy,
+    staleTime: 5_000,
+  });
+}
+
+export function usePois(city: string, bbox: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ["pois", city, bbox],
+    queryFn: () => api.pois(city, bbox!),
+    enabled: enabled && !!bbox,
+    staleTime: 10 * 60_000,
+    placeholderData: (prev) => prev,
+  });
+}
+
 export function useDepartures(city: string, stopId: string, refreshMs = 20_000) {
   return useQuery({
     queryKey: ["departures", city, stopId],
