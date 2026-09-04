@@ -1,26 +1,201 @@
 @import "tailwindcss";
+@import "maplibre-gl/dist/maplibre-gl.css" layer(base);
 
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ── Tokens ─────────────────────────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #f4f5f1;
+  --paper-2: #ffffff;
+  --paper-3: #e9ebe5;
+  --ink: #1a1d21;
+  --ink-2: #4a5160;
+  --ink-3: #7b8394;
+  --line: #d9dcd4;
+  --line-2: #c6cabf;
+  --signal: #0b5cd5;
+  --signal-ink: #ffffff;
+  --signal-soft: #e3ecfb;
+  --amber: #f2b41b;
+  --amber-ink: #1a1d21;
+  --moss: #2e7d4f;
+  --moss-soft: #e2f1e7;
+  --brick: #c62828;
+  --brick-soft: #fbe5e5;
+  --shadow: 0 1px 2px rgb(20 22 26 / 0.06), 0 8px 24px -12px rgb(20 22 26 / 0.25);
+  --radius: 10px;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --paper: #121518;
+  --paper-2: #1b1f24;
+  --paper-3: #23282e;
+  --ink: #eef0ec;
+  --ink-2: #b7bdc9;
+  --ink-3: #8a91a0;
+  --line: #2c3239;
+  --line-2: #3a414a;
+  --signal: #5b9cff;
+  --signal-ink: #0b1220;
+  --signal-soft: #17273f;
+  --amber: #f2b41b;
+  --amber-ink: #1a1d21;
+  --moss: #63c48b;
+  --moss-soft: #16301f;
+  --brick: #ff6b6b;
+  --brick-soft: #3a1a1a;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -12px rgb(0 0 0 / 0.7);
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-paper-3: var(--paper-3);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-signal: var(--signal);
+  --color-signal-ink: var(--signal-ink);
+  --color-signal-soft: var(--signal-soft);
+  --color-amber: var(--amber);
+  --color-amber-ink: var(--amber-ink);
+  --color-moss: var(--moss);
+  --color-moss-soft: var(--moss-soft);
+  --color-brick: var(--brick);
+  --color-brick-soft: var(--brick-soft);
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --radius-card: var(--radius);
+  --shadow-card: var(--shadow);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* ── Base ───────────────────────────────────────────────────────────────── */
+html,
+body {
+  height: 100%;
+}
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "tnum" 1, "cv11" 1;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ── MapLibre chrome ────────────────────────────────────────────────────── */
+.maplibregl-ctrl-group {
+  background: var(--paper-2) !important;
+  box-shadow: var(--shadow) !important;
+  border-radius: 8px !important;
+}
+.maplibregl-ctrl-group button {
+  background-color: transparent !important;
+}
+.maplibregl-ctrl-group button + button {
+  border-top-color: var(--line) !important;
+}
+:root[data-theme="dark"] .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: invert(1);
+}
+.maplibregl-ctrl-attrib {
+  background: color-mix(in srgb, var(--paper-2) 80%, transparent) !important;
+  color: var(--ink-2) !important;
+  font-family: var(--font-sans);
+  font-size: 11px;
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--ink-2) !important;
+}
+.maplibregl-popup-content {
+  background: var(--paper-2);
+  color: var(--ink);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  font-family: var(--font-sans);
+  padding: 8px 10px;
+}
+.maplibregl-popup-tip {
+  border-top-color: var(--paper-2) !important;
+  border-bottom-color: var(--paper-2) !important;
+}
+
+/* ── Live pulse (only place with non-triggered motion) ──────────────────── */
+@keyframes pulse-dot {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--amber) 60%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 8px transparent;
+  }
+}
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--amber);
+  animation: pulse-dot 1.8s ease-out infinite;
+}
+
+/* ── Scrollbars in panels ───────────────────────────────────────────────── */
+.panel-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-2) transparent;
+}
+
+/* ── Route strip (itinerary diagram) ────────────────────────────────────── */
+.strip {
+  display: flex;
+  align-items: stretch;
+  height: 30px;
+  gap: 2px;
+}
+.strip > * {
+  min-width: 6px;
+}
+.strip-walk {
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--ink-3) 0 4px,
+    transparent 4px 8px
+  );
+  background-size: 8px 3px;
+  background-repeat: repeat-x;
+  background-position: center;
+}
+
+.marker-vehicle {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid var(--paper-2);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.25);
+}
+
+/* Pin for origin/destination */
+.pin {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px 999px 999px 0;
+  transform: rotate(-45deg);
+  border: 3px solid var(--paper-2);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.35);
 }
