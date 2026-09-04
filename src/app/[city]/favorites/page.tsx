@@ -1,5 +1,7 @@
 "use client";
 
+import { cleanHeadsign } from "@/lib/text";
+
 import Link from "next/link";
 import { useState } from "react";
 import { useCityCtx } from "@/components/shell/CityContext";
@@ -211,7 +213,7 @@ function StopCard({ fav, city, refreshMs, boardEnabled, onRemove }: { fav: FavSt
             {board.data.rows.slice(0, 3).map((row) => (
               <li key={row.route.id} className="flex items-center gap-2">
                 <RouteChip route={row.route} size="sm" />
-                <span className="truncate">{row.headsign ?? row.route.longName}</span>
+                <span className="truncate">{cleanHeadsign(row.headsign) ?? cleanHeadsign(row.route.longName)}</span>
                 <span className="ml-auto flex shrink-0 items-center gap-1 tabular-nums">
                   {row.next
                     .slice(0, 3)
@@ -243,7 +245,7 @@ function RouteCard({ fav, city, onRemove }: { fav: FavRoute; city: string; onRem
       </Link>
       <div className="min-w-0 flex-1">
         <Link href={`/${city}/routes/${encodeURIComponent(fav.routeId)}`} className="block truncate text-sm font-bold hover:underline">
-          {fav.longName}
+          {cleanHeadsign(fav.longName)}
         </Link>
         {svc.label ? <p className={`text-xs ${svc.active ? "text-moss" : "font-semibold text-brick"}`}>{svc.label}</p> : null}
       </div>

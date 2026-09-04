@@ -7,6 +7,8 @@
  *
  * Set SUFFIX=live-api to name the files after a run against the real API,
  * and STOP=bogota:2000 / ROUTE=bogota:12873 to point at real ids.
+ * Shots: hub (sheet peeking), hub-expanded (sheet pulled up), hub-zoom (street zoom with live buses),
+ * planner (form), results, itinerary, next (Ubica tu bus), stop (board above the fold), favorites, live.
  */
 import { chromium } from "@playwright/test";
 import { mkdirSync } from "node:fs";
@@ -20,14 +22,18 @@ const ROUTE = process.env.ROUTE ?? "bogota:B13";
 const trip = "from=4.75460,-74.04590&fromName=Portal%20Norte&to=4.59780,-74.16160&toName=Portal%20Sur";
 
 const ONLY = process.env.SHOTS ? process.env.SHOTS.split(",") : null;
+/** [name, path, action] — action runs before the capture (interaction, camera). */
 const shots = [
-  ["hub", "/bogota"],
-  ["planner", `/bogota?${trip}`],
-  ["itinerary", `/bogota?${trip}&it=1`],
-  ["next", `/bogota/next?stop=${encodeURIComponent(STATION)}&route=${encodeURIComponent(ROUTE)}`],
-  ["stop", `/bogota/stops/${encodeURIComponent(STOP)}`],
-  ["favorites", "/bogota/favorites"],
-  ["live", `/bogota/live?stop=${encodeURIComponent(STATION)}`],
+  ["hub", "/bogota", null],
+  ["hub-expanded", "/bogota", "expand"],
+  ["hub-zoom", "/bogota", "zoom"],
+  ["planner", "/bogota?view=plan", null],
+  ["results", `/bogota?${trip}`, null],
+  ["itinerary", `/bogota?${trip}&it=1`, null],
+  ["next", `/bogota/next?stop=${encodeURIComponent(STATION)}&route=${encodeURIComponent(ROUTE)}`, null],
+  ["stop", `/bogota/stops/${encodeURIComponent(STOP)}`, null],
+  ["favorites", "/bogota/favorites", null],
+  ["live", `/bogota/live?stop=${encodeURIComponent(STATION)}`, "zoom"],
 ].filter(([n]) => !ONLY || ONLY.includes(n));
 const viewports = process.env.VIEWPORTS
   ? Object.fromEntries(process.env.VIEWPORTS.split(",").map((v) => [v, v === "mobile" ? { width: 390, height: 844 } : { width: 1280, height: 800 }]))
@@ -45,11 +51,21 @@ const seed = `(() => {
   try { localStorage.setItem(k, JSON.stringify(s)); } catch {}
 })();`;
 
+const settle = (page) =>
+  page
+    .waitForFunction(
+      () => {
+        const m = window.__otMap;
+        return !!m && m.areTilesLoaded() && !m.isMoving();
+      },
+      null,
+      { timeout: 30_000 },
+    )
+    .catch(() => console.warn("map not settled - capturing anyway"));
+
 mkdirSync(OUT, { recursive: true });
 const browser = await chromium.launch();
 try {
-  // Warm up: the dev server compiles each route on first hit, which would otherwise
-  // show up as a loading spinner in the first capture of every page.
   const warm = await browser.newPage();
   for (const [, path] of shots) {
     await warm.goto(`${BASE}${path}`).catch(() => {});
@@ -57,29 +73,44 @@ try {
   }
   await warm.close();
   for (const [vpName, vp] of Object.entries(viewports)) {
-    const ctx = await browser.newContext({ viewport: vp, locale: "es-CO", geolocation: { latitude: 4.6534, longitude: -74.0836 }, permissions: ["geolocation"] });
+    const ctx = await browser.newContext({ viewport: vp, locale: "es-CO", geolocation: { latitude: 4.7546, longitude: -74.0459 }, permissions: ["geolocation"], hasTouch: vpName === "mobile", isMobile: vpName === "mobile" });
     await ctx.addInitScript(seed);
     const page = await ctx.newPage();
-    for (const [name, path] of shots) {
+    for (const [name, path, action] of shots) {
       await page.goto(`${BASE}${path}`);
-      // the city layout shows a spinner until the City query resolves
-      await page.waitForFunction(() => !!document.querySelector("h1"), null, { timeout: 30_000 }).catch(() => {});
-      const hasMap = !["favorites"].includes(name);
-      if (hasMap) {
-        // tiles + a still camera is enough; `loaded()` flickers while live layers update
-        await page
-          .waitForFunction(
-            () => {
-              const m = window.__otMap;
-              return !!m && m.areTilesLoaded() && !m.isMoving();
-            },
-            null,
-            { timeout: 30_000 },
-          )
-          .catch(() => console.warn("map not settled for", name, "- capturing anyway"));
+      const content = () => page.waitForFunction(() => !!document.querySelector("h1, h2, form"), null, { timeout: 15_000 }).then(() => true, () => false);
+      if (!(await content())) {
+        // the dev server occasionally leaves a chunk request hanging; a reload clears it
+        console.warn("no content for", name, "- reloading");
+        await page.reload();
+        await content();
       }
-      // let boards/streams settle
-      await page.waitForTimeout(name === "live" || name === "next" ? 5_000 : 1_500);
+      const hasMap = !["favorites"].includes(name);
+      if (hasMap) await settle(page);
+      if (name.startsWith("hub")) {
+        // "Cerca de ti" needs a position: press the locate control (it is granted above)
+        const locate = page.getByRole("button", { name: /Mi ubicación|My location|Ver qué hay cerca/ }).first();
+        if (await locate.count()) await locate.click().catch(() => {});
+        await page.waitForTimeout(800);
+      }
+      if (action === "expand") {
+        if (vpName === "mobile") {
+          const handle = page.locator("[data-sheet-handle]");
+          const box = await handle.boundingBox();
+          if (box) {
+            await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+            await page.mouse.down();
+            await page.mouse.move(box.x + box.width / 2, box.y - 380, { steps: 12 });
+            await page.mouse.up();
+          }
+        }
+      }
+      if (action === "zoom") {
+        await page.evaluate(() => window.__otMap?.jumpTo({ center: [-74.0459, 4.7546], zoom: 16.2 }));
+        await page.waitForTimeout(400);
+        if (hasMap) await settle(page);
+      }
+      await page.waitForTimeout(name === "live" || name === "next" || name.startsWith("hub") ? 4_000 : 1_500);
       const file = `${OUT}/${name}-${vpName}${SUFFIX ? `-${SUFFIX}` : ""}.png`;
       await page.screenshot({ path: file });
       console.log("saved", file);

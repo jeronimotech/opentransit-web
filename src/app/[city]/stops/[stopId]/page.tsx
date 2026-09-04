@@ -10,7 +10,7 @@ import { EtaLegend, MapToggle, PoisLayer, StopsLayer, VehiclesLayer, useMapBound
 import { ArrivalBoard } from "@/components/stops/ArrivalBoard";
 import { DeparturesBoard } from "@/components/stops/DeparturesBoard";
 import { AlertCard } from "@/components/alerts/AlertCard";
-import { Badge, EmptyState, Icon, LinkButton, Spinner } from "@/components/ui/primitives";
+import { EmptyState, Icon, LinkButton, Spinner } from "@/components/ui/primitives";
 import { RouteChip } from "@/components/ui/RouteChip";
 import { FavoriteButton } from "@/components/ui/FavoriteButton";
 import { QrPanel } from "@/components/ui/QrPanel";
@@ -23,6 +23,11 @@ import { useI18n } from "@/lib/i18n/provider";
 import { resolveConfig, componentOf, componentsOf, stopComponent } from "@/lib/city-config";
 import type { Stop, StopDetail } from "@/lib/api/types";
 
+/**
+ * Stop / station page (UX audit D): header → arrival board first → "Ubica tu bus" as a
+ * text link in the board header → routes collapsed → accessibility as one muted line.
+ * Phones get a short map strip with "Ver en mapa"; desktop keeps the side-by-side map.
+ */
 export default function StopPage({ params }: { params: Promise<{ stopId: string }> }) {
   const { stopId: raw } = use(params);
   const stopId = decodeURIComponent(raw);
@@ -38,6 +43,8 @@ export default function StopPage({ params }: { params: Promise<{ stopId: string 
   const alerts = useAlerts(city.id, { stopId });
   const nearby = useNearbyStops(city.id, stop.data ? { lat: stop.data.lat, lon: stop.data.lon } : null, 400);
   const [showPois, setShowPois] = useState(false);
+  const [routesOpen, setRoutesOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const s = stop.data;
 
   const others = useMemo(() => (nearby.data?.stops ?? []).filter((x) => x.id !== stopId), [nearby.data, stopId]);
@@ -76,6 +83,8 @@ export default function StopPage({ params }: { params: Promise<{ stopId: string 
     for (const r of s?.routes ?? []) if (!seen.has(r.shortName)) seen.set(r.shortName, r);
     return [...seen.values()];
   }, [s]);
+  const access = s ? (s.accessibility ?? { wheelchair: s.wheelchair, source: s.wheelchair === "unknown" ? "none" : "gtfs", verified: false, note: null }) : null;
+  const accessLabel = !access ? null : access.wheelchair === "accessible" ? t.access.accessible : access.wheelchair === "not_accessible" ? t.access.notAccessible : t.access.unknown;
 
   const panel = (
     <div className="flex flex-col gap-4 p-4">
@@ -83,6 +92,7 @@ export default function StopPage({ params }: { params: Promise<{ stopId: string 
       {stop.error ? <EmptyState title={t.common.error} hint={(stop.error as Error).message} /> : null}
       {s ? (
         <>
+          {/* header */}
           <div className="flex items-start gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-white" style={{ background: comp.color }}>
               <ComponentIcon icon={comp.icon} width={20} height={20} />
@@ -105,25 +115,19 @@ export default function StopPage({ params }: { params: Promise<{ stopId: string 
             {cfg.features.favorites ? <FavoriteButton city={city.id} item={{ kind: "stop", id: s.id, stopId: s.id, name: s.name, component: s.component }} /> : null}
           </div>
 
-          <div className="flex gap-2">
-            <LinkButton href={`/${city.id}${q("from")}`} variant="primary" size="sm" className="flex-1">
-              {t.stop.planFrom}
-            </LinkButton>
-            <LinkButton href={`/${city.id}${q("to")}`} size="sm" className="flex-1">
-              {t.stop.planTo}
-            </LinkButton>
-          </div>
-
-          {alerts.data?.alerts.map((a) => (
+          {alerts.data?.alerts.slice(0, 2).map((a) => (
             <AlertCard key={a.id} alert={a} tz={city.timezone} compact city={city.id} links={city.links} />
           ))}
 
-          <section>
-            <div className="mb-2 flex items-baseline justify-between">
-              <h2 className="text-sm font-semibold text-ink-2">{boardMissing ? t.stop.departures : t.board.title}</h2>
+          {/* 1 · arrival board first */}
+          <section aria-labelledby="board-title">
+            <div className="mb-2 flex items-baseline justify-between gap-2">
+              <h2 id="board-title" className="text-sm font-bold">
+                {boardMissing ? t.stop.departures : t.board.title}
+              </h2>
               {cfg.features.next && routesDedup.length ? (
-                <Link href={`/${city.id}/next?stop=${encodeURIComponent(s.id)}`} className="text-xs font-semibold text-signal">
-                  {t.next.title} →
+                <Link href={`/${city.id}/next?stop=${encodeURIComponent(s.id)}`} className="inline-flex h-10 items-center gap-1 text-xs font-semibold text-signal">
+                  <Icon.Bus width={14} height={14} /> {t.next.title} →
                 </Link>
               ) : null}
             </div>
@@ -138,57 +142,99 @@ export default function StopPage({ params }: { params: Promise<{ stopId: string 
             ) : (
               <DeparturesBoard departures={legacy.departures} tz={city.timezone} city={city.id} generatedAt={legacy.generatedAt} refreshing={legacy.isFetching} />
             )}
-            {city.features.tripUpdates ? <p className="mt-2 text-xs text-ink-3">{t.stop.liveOnly}</p> : null}
+            {city.features.tripUpdates ? <p className="mt-2 text-[11px] text-ink-3">{t.stop.liveOnly}</p> : null}
           </section>
 
+          {/* 2 · plan from / to */}
+          <div className="flex gap-2">
+            <LinkButton href={`/${city.id}${q("from")}`} variant="primary" size="md" className="h-11 flex-1">
+              {t.stop.planFrom}
+            </LinkButton>
+            <LinkButton href={`/${city.id}${q("to")}`} size="md" className="h-11 flex-1">
+              {t.stop.planTo}
+            </LinkButton>
+          </div>
+
+          {/* 3 · routes, collapsed */}
           {routesDedup.length ? (
             <section>
-              <h2 className="mb-2 text-sm font-semibold text-ink-2">{t.stop.routes}</h2>
-              <div className="flex flex-wrap gap-1.5">
-                {routesDedup.map((r) => (
-                  <Link key={r.id} href={`/${city.id}/routes/${encodeURIComponent(r.id)}`} title={r.longName}>
-                    <RouteChip route={r} />
-                  </Link>
-                ))}
+              <button type="button" onClick={() => setRoutesOpen((o) => !o)} aria-expanded={routesOpen} className="flex h-11 w-full items-center justify-between text-sm font-bold">
+                <span>{t.stop.routesCount(routesDedup.length)}</span>
+                <Icon.Chevron width={16} height={16} className={`text-ink-3 transition-transform ${routesOpen ? "rotate-90" : ""}`} />
+              </button>
+              {routesOpen ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {routesDedup.map((r) => (
+                    <Link key={r.id} href={`/${city.id}/routes/${encodeURIComponent(r.id)}`} title={r.longName} className="inline-flex min-h-11 items-center">
+                      <RouteChip route={r} />
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5" aria-hidden>
+                  {routesDedup.slice(0, 8).map((r) => (
+                    <RouteChip key={r.id} route={r} size="sm" />
+                  ))}
+                  {routesDedup.length > 8 ? <span className="text-xs text-ink-3">+{routesDedup.length - 8}</span> : null}
+                </div>
+              )}
+            </section>
+          ) : null}
+
+          {/* 4 · accessibility, one muted line */}
+          {access && accessLabel ? (
+            <p className="flex items-center gap-2 text-xs text-ink-3" title={access.wheelchair !== "unknown" && !access.verified ? t.access.unverifiedHint : undefined}>
+              <Icon.Wheelchair width={16} height={16} />
+              <span>
+                {accessLabel}
+                {access.wheelchair !== "unknown" ? ` · ${access.verified ? t.access.verifiedBy(access.source === "osm" ? t.access.osm : t.access.gtfs) : t.access.unverified}` : ""}
+              </span>
+            </p>
+          ) : null}
+
+          {/* 5 · everything else, folded */}
+          <section>
+            <button type="button" onClick={() => setMoreOpen((o) => !o)} aria-expanded={moreOpen} className="flex h-11 w-full items-center justify-between text-sm font-bold">
+              <span>{t.stop.more}</span>
+              <Icon.Chevron width={16} height={16} className={`text-ink-3 transition-transform ${moreOpen ? "rotate-90" : ""}`} />
+            </button>
+            {moreOpen ? (
+              <div className="flex flex-col gap-4">
+                {alerts.data && alerts.data.alerts.length > 2 ? alerts.data.alerts.slice(2).map((a) => <AlertCard key={a.id} alert={a} tz={city.timezone} compact city={city.id} links={city.links} />) : null}
+                {s.children.length ? (
+                  <div>
+                    <h3 className="mb-1 text-xs font-semibold text-ink-2">{t.stop.platforms}</h3>
+                    <ul className="flex flex-col gap-1 text-sm">
+                      {s.children.map((c) => (
+                        <li key={c.id}>
+                          <Link className="inline-flex min-h-9 items-center hover:underline" href={`/${city.id}/stops/${encodeURIComponent(c.id)}`}>
+                            {c.name}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {others.length ? (
+                  <div>
+                    <h3 className="mb-1 text-xs font-semibold text-ink-2">{t.stop.nearby}</h3>
+                    <ul className="divide-y divide-line rounded-card border border-line">
+                      {others.slice(0, 8).map((o) => (
+                        <li key={o.id}>
+                          <Link href={`/${city.id}/stops/${encodeURIComponent(o.id)}`} className="flex min-h-11 items-center justify-between px-3 py-2 text-sm hover:bg-paper-3">
+                            <span className="truncate font-semibold">{o.name}</span>
+                            <span className="shrink-0 tabular-nums text-ink-3">{Math.round(o.distanceMeters)} m</span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                <QrPanel path={`/${city.id}/stops/${encodeURIComponent(s.id)}`} title={s.name} />
+                <PqrsLink city={city} compact />
               </div>
-            </section>
-          ) : null}
-
-          <AccessibilityBlock stop={s} />
-
-          {s.children.length ? (
-            <section>
-              <h2 className="mb-2 text-sm font-semibold text-ink-2">{t.stop.platforms}</h2>
-              <ul className="flex flex-col gap-1 text-sm">
-                {s.children.map((c) => (
-                  <li key={c.id}>
-                    <Link className="hover:underline" href={`/${city.id}/stops/${encodeURIComponent(c.id)}`}>
-                      {c.name}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          {others.length ? (
-            <section>
-              <h2 className="mb-2 text-sm font-semibold text-ink-2">{t.stop.nearby}</h2>
-              <ul className="divide-y divide-line rounded-card border border-line">
-                {others.slice(0, 8).map((o) => (
-                  <li key={o.id}>
-                    <Link href={`/${city.id}/stops/${encodeURIComponent(o.id)}`} className="flex items-center justify-between px-3 py-2 text-sm hover:bg-paper-3">
-                      <span className="truncate font-semibold">{o.name}</span>
-                      <span className="shrink-0 tabular-nums text-ink-3">{Math.round(o.distanceMeters)} m</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          <QrPanel path={`/${city.id}/stops/${encodeURIComponent(s.id)}`} title={s.name} />
-          <PqrsLink city={city} compact />
+            ) : null}
+          </section>
         </>
       ) : null}
     </div>
@@ -196,13 +242,15 @@ export default function StopPage({ params }: { params: Promise<{ stopId: string 
 
   return (
     <SplitLayout
+      mode="strip"
+      stripLabels={{ expand: t.stop.viewOnMap, collapse: t.stop.viewDetails }}
       panel={panel}
       map={
         <MapView center={[s?.lon ?? city.center.lon, s?.lat ?? city.center.lat]} zoom={s ? 15 : city.defaultZoom} attribution={city.attribution} className="h-full w-full">
           <StopsLayer stops={mapStops} onClick={(x) => router.push(`/${city.id}/stops/${encodeURIComponent(x.id)}`)} />
           {s ? <Center lat={s.lat} lon={s.lon} /> : null}
-          {vehicles.length ? <VehiclesLayer vehicles={vehicles} etaById={etaById.size ? etaById : null} colors={compColors} onClick={(v) => router.push(`/${city.id}/live?vehicle=${encodeURIComponent(v.id)}`)} /> : null}
-          {etaById.size ? <EtaLegend labels={{ title: t.live.legend, now: t.live.bucketNow, soon: t.live.bucketSoon, later: t.live.bucketLater, far: t.live.bucketFar }} /> : null}
+          {vehicles.length ? <VehiclesLayer vehicles={vehicles} etaById={etaById.size ? etaById : null} colors={compColors} focus onClick={(v) => router.push(`/${city.id}/live?vehicle=${encodeURIComponent(v.id)}`)} /> : null}
+          {etaById.size ? <EtaLegend labels={{ title: t.live.legend, now: t.live.bucketNow, soon: t.live.bucketSoon, later: t.live.bucketLater, far: t.live.bucketFar }} className="hidden md:block" /> : null}
           {cfg.features.pois ? <PoisInView city={city.id} enabled={showPois} /> : null}
           {cfg.features.pois ? <MapToggle on={showPois} onClick={() => setShowPois((v) => !v)} label={showPois ? t.pois.hide : t.pois.show} icon={<Icon.Services width={18} height={18} />} /> : null}
         </MapView>
@@ -215,27 +263,6 @@ function PoisInView({ city, enabled }: { city: string; enabled: boolean }) {
   const bbox = useMapBounds();
   const pois = usePois(city, bbox ? bbox.join(",") : null, enabled);
   return enabled ? <PoisLayer pois={pois.data} /> : null;
-}
-
-/** Honest accessibility: says when the feed value is a blanket default. */
-function AccessibilityBlock({ stop }: { stop: StopDetail }) {
-  const { t } = useI18n();
-  const a = stop.accessibility ?? { wheelchair: stop.wheelchair, source: stop.wheelchair === "unknown" ? "none" : "gtfs", verified: false, note: null };
-  const label = a.wheelchair === "accessible" ? t.access.accessible : a.wheelchair === "not_accessible" ? t.access.notAccessible : t.access.unknown;
-  const tone = a.wheelchair === "unknown" ? "neutral" : a.verified ? (a.wheelchair === "accessible" ? "ok" : "bad") : "warn";
-  return (
-    <section>
-      <h2 className="mb-2 text-sm font-semibold text-ink-2">{t.access.title}</h2>
-      <div className="rounded-card border border-line bg-paper-2 p-3 text-sm">
-        <div className="flex flex-wrap items-center gap-2">
-          <Icon.Wheelchair width={18} height={18} className="text-ink-2" />
-          <span className="font-semibold">{label}</span>
-          {a.wheelchair !== "unknown" ? <Badge tone={tone}>{a.verified ? t.access.verifiedBy(a.source === "osm" ? t.access.osm : t.access.gtfs) : t.access.unverified}</Badge> : null}
-        </div>
-        {a.wheelchair !== "unknown" && !a.verified ? <p className="mt-1.5 text-xs text-ink-3">{t.access.unverifiedHint}</p> : null}
-      </div>
-    </section>
-  );
 }
 
 function Center({ lat, lon }: { lat: number; lon: number }) {

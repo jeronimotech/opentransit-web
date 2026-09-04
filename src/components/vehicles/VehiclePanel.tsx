@@ -1,5 +1,7 @@
 "use client";
 
+import { cleanHeadsign } from "@/lib/text";
+
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n/provider";
 import { useVehicle } from "@/lib/api/hooks";
@@ -43,10 +45,10 @@ export function VehiclePanel({ city, id, onClose }: { city: City; id: string; on
             <span className="text-sm text-ink-2">
               {data.trip.headsign ? (
                 <>
-                  {t.planner.towards} <span className="font-semibold text-ink">{data.trip.headsign}</span>
+                  {t.planner.towards} <span className="font-semibold text-ink">{cleanHeadsign(data.trip.headsign)}</span>
                 </>
               ) : (
-                data.route?.longName
+                cleanHeadsign(data.route?.longName)
               )}
             </span>
             <FreshnessBadge freshness={fresh} realtime={!fresh.stale} className="ml-auto" />

@@ -12,7 +12,8 @@
     "screenshots": "node scripts/screenshots.mjs",
     "postinstall": "node scripts/copy-maplibre-worker.mjs",
     "predev": "node scripts/copy-maplibre-worker.mjs",
-    "prebuild": "node scripts/copy-maplibre-worker.mjs"
+    "prebuild": "node scripts/copy-maplibre-worker.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "@mapbox/polyline": "^1.2.1",
@@ -36,7 +37,8 @@
     "eslint": "^9",
     "eslint-config-next": "15.5.25",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   },
   "license": "MIT",
   "description": "Open-source multimodal trip planner — web client"

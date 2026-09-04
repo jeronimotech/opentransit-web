@@ -127,12 +127,15 @@ function Live() {
 
   return (
     <SplitLayout
+      defaultSnap="peek"
       panel={panel}
       map={
         <MapView center={[city.center.lon, city.center.lat]} zoom={city.defaultZoom} attribution={city.attribution} className="h-full w-full">
           {selectedDetail.data?.shape ? <LineLayer id="vehicle-shape" geometry={selectedDetail.data.shape} color={compColors[selectedDetail.data.component] ?? "#667085"} width={3} /> : null}
           {stop.data ? <StopsLayer stops={[stop.data]} /> : null}
           <Fleet
+            routeQ={routeQ.trim()}
+            component={component}
             vehicles={vehicles}
             colors={compColors}
             etaById={etaById}
@@ -154,10 +157,10 @@ function Live() {
 }
 
 /** Interpolates only what is in the viewport (cap 500), the rest renders static. */
-function Fleet({ vehicles, colors, etaById, selectedId, onClick }: { vehicles: Vehicle[]; colors: Record<string, string>; etaById: Map<string, number> | null; selectedId: string | null; onClick: (v: Vehicle) => void }) {
+function Fleet({ vehicles, colors, etaById, selectedId, onClick, routeQ, component }: { vehicles: Vehicle[]; colors: Record<string, string>; etaById: Map<string, number> | null; selectedId: string | null; onClick: (v: Vehicle) => void; routeQ: string; component: string }) {
   const bbox = useMapBounds();
   const animated = useInterpolatedVehicles(vehicles, { bbox, cap: 500 });
-  return <VehiclesLayer vehicles={animated} colors={colors} etaById={etaById} dimOthers={!!etaById} selectedId={selectedId} onClick={onClick} />;
+  return <VehiclesLayer vehicles={animated} colors={colors} etaById={etaById} dimOthers={!!etaById} selectedId={selectedId} focus={!!etaById || !!routeQ || !!component} onClick={onClick} />;
 }
 
 function PoisInView({ city, enabled }: { city: string; enabled: boolean }) {

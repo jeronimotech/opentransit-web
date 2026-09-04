@@ -1,5 +1,7 @@
 "use client";
 
+import { cleanHeadsign } from "@/lib/text";
+
 import Link from "next/link";
 import { useState } from "react";
 import { useI18n } from "@/lib/i18n/provider";
@@ -161,10 +163,10 @@ function LegRow({ leg, city, tz, last, current, done }: { leg: Leg; city: City; 
               <span className="text-sm text-ink-2">
                 {leg.headsign ? (
                   <>
-                    {t.planner.towards} <span className="font-semibold text-ink">{leg.headsign}</span>
+                    {t.planner.towards} <span className="font-semibold text-ink">{cleanHeadsign(leg.headsign)}</span>
                   </>
                 ) : (
-                  leg.route?.longName
+                  cleanHeadsign(leg.route?.longName)
                 )}
               </span>
             </div>

@@ -1,21 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/provider";
-import { useAlerts, useNearbyStops } from "@/lib/api/hooks";
+import { useAlerts, useBoard, useNearbyStops } from "@/lib/api/hooks";
 import { useFavorites } from "@/lib/favorites";
 import { resolveConfig, componentOf } from "@/lib/city-config";
 import { Icon, Spinner } from "@/components/ui/primitives";
 import { ComponentIcon } from "@/components/ui/ComponentIcon";
+import { RouteChip } from "@/components/ui/RouteChip";
+import { StatusText } from "@/components/ui/FreshnessBadge";
 import { AlertCarousel } from "./AlertCarousel";
-import type { City } from "@/lib/api/types";
-import type { ReactNode } from "react";
+import type { City, NearbyStop } from "@/lib/api/types";
 
 /**
- * Question-led home (TransMi App's "Hola, ¿qué quieres consultar?" + Maas's
- * "¿A dónde quieres ir?" and nearby card, merged). Feature flags from the city
- * config hide modules; the planner is one tap away and shareable URLs still work.
+ * Map-first home (UX audit A). The sheet peeks with only what the nav does not already
+ * offer: three action chips and "Cerca de ti". Casa/Trabajo, recents, notices and
+ * service hand-offs appear once the sheet is pulled up (`expanded`).
  */
 export function Hub({
   city,
@@ -24,6 +25,8 @@ export function Hub({
   pos,
   locating,
   onUsePlace,
+  expanded,
+  showSearch = true,
 }: {
   city: City;
   onPlan: () => void;
@@ -31,6 +34,9 @@ export function Hub({
   pos: { lat: number; lon: number } | null;
   locating: boolean;
   onUsePlace: (p: { lat: number; lon: number; name: string }, kind: "to" | "from") => void;
+  expanded: boolean;
+  /** Desktop renders the search pill inside the panel; phones float it over the map. */
+  showSearch?: boolean;
 }) {
   const { t } = useI18n();
   const cfg = resolveConfig(city);
@@ -41,83 +47,41 @@ export function Hub({
   const home = fav.places.find((p) => p.placeKind === "home");
   const work = fav.places.find((p) => p.placeKind === "work");
 
-  const tiles = useMemo(
-    () =>
-      (
-        [
-          { key: "plan", show: true, href: null, icon: <Icon.Route />, title: t.hub.plan, hint: t.hub.planHint },
-          { key: "next", show: cfg.features.next, href: `${base}/next`, icon: <Icon.Bus />, title: t.hub.next, hint: t.hub.nextHint },
-          { key: "nearby", show: true, href: null, icon: <Icon.Locate />, title: t.hub.nearby, hint: t.hub.nearbyHint },
-          { key: "routes", show: true, href: `${base}/routes`, icon: <Icon.Search />, title: t.hub.routes, hint: t.hub.routesHint },
-          { key: "live", show: cfg.features.liveVehicles, href: `${base}/live`, icon: <Icon.Map />, title: t.hub.live, hint: t.hub.liveHint },
-          { key: "alerts", show: cfg.features.alerts, href: `${base}/alerts`, icon: <Icon.Alert />, title: t.hub.alerts, hint: t.hub.alertsHint },
-          { key: "favorites", show: cfg.features.favorites, href: `${base}/favorites`, icon: <Icon.Star />, title: t.hub.favorites, hint: t.hub.favoritesHint },
-        ] as { key: string; show: boolean; href: string | null; icon: ReactNode; title: string; hint: string }[]
-      ).filter((x) => x.show),
-    [t, cfg.features, base],
-  );
+  // three equal chips, icon above a one-line label, 56 px tall (≥ 44 px target)
+  const chipBase = "flex h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl border px-1 text-[12px] font-bold leading-none";
+  const chip = `${chipBase} border-line bg-paper-2 text-ink hover:border-ink`;
+  const chipPrimary = `${chipBase} border-ink bg-ink text-paper`;
 
   return (
-    <div className="flex flex-col gap-5 p-4">
-      <div>
-        <h1 className="text-xl font-extrabold tracking-tight">{t.hub.greeting}</h1>
-        <button
-          type="button"
-          onClick={onPlan}
-          className="mt-3 flex h-12 w-full items-center gap-3 rounded-xl border border-line bg-paper px-3 text-left text-[15px] text-ink-3 shadow-sm hover:border-line-2"
-        >
+    <div className="flex flex-col gap-4 px-4 pb-4 pt-1 md:pt-4">
+      {showSearch ? (
+        <button type="button" onClick={onPlan} className="hidden h-12 w-full items-center gap-3 rounded-xl border border-line bg-paper px-3 text-left text-[15px] text-ink-3 shadow-sm hover:border-line-2 md:flex">
           <Icon.Search className="text-ink-2" />
           <span className="flex-1">{t.hub.searchPlaceholder}</span>
           <span className="rounded-md bg-signal px-2 py-1 text-xs font-bold text-signal-ink">{t.planner.search}</span>
         </button>
-        {home || work ? (
-          <div className="mt-2 flex gap-2">
-            {home ? (
-              <button type="button" onClick={() => onUsePlace(home, "to")} className="inline-flex h-8 items-center gap-1.5 rounded-full border border-line bg-paper-2 px-3 text-xs font-semibold text-ink-2 hover:border-ink hover:text-ink">
-                <Icon.Home width={14} height={14} /> {t.favorites.goHome}
-              </button>
-            ) : null}
-            {work ? (
-              <button type="button" onClick={() => onUsePlace(work, "to")} className="inline-flex h-8 items-center gap-1.5 rounded-full border border-line bg-paper-2 px-3 text-xs font-semibold text-ink-2 hover:border-ink hover:text-ink">
-                <Icon.Work width={14} height={14} /> {t.favorites.goWork}
-              </button>
-            ) : null}
-          </div>
+      ) : null}
+
+      {/* 1 · three actions, one line */}
+      <div className="flex gap-2" role="group" aria-label={t.hub.greeting}>
+        <button type="button" onClick={onPlan} className={chipPrimary}>
+          <Icon.Route width={20} height={20} /> <span className="whitespace-nowrap">{t.hub.plan}</span>
+        </button>
+        {cfg.features.next ? (
+          <Link href={`${base}/next`} className={chip}>
+            <Icon.Bus width={20} height={20} /> <span className="whitespace-nowrap">{t.hub.next}</span>
+          </Link>
         ) : null}
+        <Link href={`${base}/routes`} className={chip}>
+          <Icon.Search width={20} height={20} /> <span className="whitespace-nowrap">{t.hub.routes}</span>
+        </Link>
       </div>
 
-      <ul className="grid grid-cols-2 gap-2" aria-label={t.hub.greeting}>
-        {tiles.map((tile) => {
-          const inner = (
-            <>
-              <span className="grid h-9 w-9 place-items-center rounded-lg bg-paper-3 text-ink">{tile.icon}</span>
-              <span className="mt-2 block text-sm font-bold leading-tight">{tile.title}</span>
-              <span className="mt-0.5 block text-[11px] leading-snug text-ink-3">{tile.hint}</span>
-            </>
-          );
-          const cls = "block h-full w-full rounded-card border border-line bg-paper-2 p-3 text-left transition-colors hover:border-ink";
-          return (
-            <li key={tile.key}>
-              {tile.href ? (
-                <Link href={tile.href} className={cls}>
-                  {inner}
-                </Link>
-              ) : (
-                <button type="button" onClick={tile.key === "plan" ? onPlan : onLocate} className={cls}>
-                  {inner}
-                </button>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-
-      {cfg.features.alerts ? <AlertCarousel city={city.id} alerts={alerts.data?.alerts ?? []} /> : null}
-
+      {/* 2 · Cerca de ti */}
       <section aria-labelledby="nearby-title">
         <div className="mb-1.5 flex items-baseline justify-between">
-          <h2 id="nearby-title" className="text-sm font-semibold text-ink-2">
-            {t.hub.nearbyTitle}
+          <h2 id="nearby-title" className="text-sm font-bold">
+            {t.hub.nearYou}
           </h2>
           {pos ? (
             <button type="button" onClick={onLocate} className="text-xs font-semibold text-signal">
@@ -126,86 +90,143 @@ export function Hub({
           ) : null}
         </div>
         {!pos ? (
-          <button type="button" onClick={onLocate} className="flex w-full items-center gap-3 rounded-card border border-dashed border-line-2 p-3 text-left text-sm hover:border-ink">
+          <button type="button" onClick={onLocate} className="flex h-[76px] w-full items-center gap-3 rounded-xl border border-dashed border-line-2 px-3 text-left text-sm hover:border-ink">
             {locating ? <Spinner /> : <Icon.Locate className="text-signal" />}
-            <span className="font-semibold">{locating ? t.planner.locating : t.hub.nearbyLocate}</span>
+            <span>
+              <span className="block font-semibold">{locating ? t.planner.locating : t.hub.nearbyLocate}</span>
+              <span className="block text-xs text-ink-3">{t.hub.nearYouHint}</span>
+            </span>
           </button>
         ) : nearby.isLoading ? (
-          <Spinner />
+          <div className="flex h-[76px] items-center">
+            <Spinner />
+          </div>
         ) : !nearby.data?.stops.length ? (
           <p className="text-sm text-ink-3">{t.hub.nearbyEmpty}</p>
         ) : (
-          <ul className="divide-y divide-line rounded-card border border-line bg-paper-2">
-            {nearby.data.stops.slice(0, 6).map((s) => {
-              const comp = componentOf(city, s.component);
-              return (
-                <li key={s.id}>
-                  <Link href={`${base}/stops/${encodeURIComponent(s.id)}`} className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-paper-3">
-                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-white" style={{ background: comp.color }}>
-                      <ComponentIcon icon={comp.icon} width={16} height={16} />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-semibold">{s.name}</span>
-                      <span className="block truncate text-xs text-ink-3">
-                        {s.locationType === "station" ? t.common.station : t.common.stop} · {comp.label}
-                      </span>
-                    </span>
-                    <span className="shrink-0 tabular-nums text-xs text-ink-3">{Math.round(s.distanceMeters)} m</span>
-                  </Link>
-                </li>
-              );
-            })}
+          <ul className="rail -mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-1">
+            {nearby.data.stops.slice(0, 8).map((s) => (
+              <NearbyCard key={s.id} city={city} stop={s} refreshMs={cfg.departuresRefreshSeconds * 1000} boardEnabled={cfg.features.board} />
+            ))}
           </ul>
         )}
       </section>
 
-      {fav.recents.length ? (
-        <section>
-          <div className="mb-1.5 flex items-baseline justify-between">
-            <h2 className="text-sm font-semibold text-ink-2">{t.hub.recent}</h2>
-            <button type="button" onClick={fav.clearRecents} className="text-xs font-semibold text-ink-3 hover:text-ink">
-              {t.hub.clearRecent}
-            </button>
-          </div>
-          <ul className="flex flex-col gap-1">
-            {fav.recents.slice(0, 4).map((r) => (
-              <li key={r.id}>
-                <Link
-                  href={`${base}?from=${r.from.lat.toFixed(5)},${r.from.lon.toFixed(5)}&fromName=${encodeURIComponent(r.from.name ?? "")}&to=${r.to.lat.toFixed(5)},${r.to.lon.toFixed(5)}&toName=${encodeURIComponent(r.to.name ?? "")}`}
-                  className="flex items-center gap-2 rounded-lg border border-line bg-paper-2 px-3 py-2 text-sm hover:border-ink"
-                >
-                  <Icon.Clock width={16} height={16} className="shrink-0 text-ink-3" />
-                  <span className="truncate">
-                    <span className="font-semibold">{r.from.name ?? "…"}</span> → <span className="font-semibold">{r.to.name ?? "…"}</span>
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+      {!expanded ? <p className="text-center text-[11px] text-ink-3 md:hidden">{t.hub.dragHint}</p> : null}
 
-      {city.services?.length ? (
-        <section>
-          <h2 className="mb-1.5 text-sm font-semibold text-ink-2">{t.hub.services}</h2>
-          <ul className="flex flex-wrap gap-2">
-            {city.services.map((sv) => (
-              <li key={sv.id}>
-                <a
-                  href={sv.url}
-                  target={sv.kind === "external" ? "_blank" : undefined}
-                  rel="noreferrer noopener"
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-paper-2 px-3 text-sm font-semibold text-ink-2 hover:border-ink hover:text-ink"
-                  title={sv.kind === "external" ? t.links.external : undefined}
-                >
-                  {sv.label}
-                  {sv.kind === "external" ? <Icon.External width={12} height={12} className="text-ink-3" /> : null}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
+      {expanded ? (
+        <>
+          {home || work ? (
+            <div className="flex gap-2">
+              {home ? (
+                <button type="button" onClick={() => onUsePlace(home, "to")} className="inline-flex h-11 items-center gap-1.5 rounded-full border border-line bg-paper-2 px-4 text-sm font-semibold text-ink-2 hover:border-ink hover:text-ink">
+                  <Icon.Home width={16} height={16} /> {t.favorites.goHome}
+                </button>
+              ) : null}
+              {work ? (
+                <button type="button" onClick={() => onUsePlace(work, "to")} className="inline-flex h-11 items-center gap-1.5 rounded-full border border-line bg-paper-2 px-4 text-sm font-semibold text-ink-2 hover:border-ink hover:text-ink">
+                  <Icon.Work width={16} height={16} /> {t.favorites.goWork}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {fav.recents.length ? (
+            <section>
+              <div className="mb-1.5 flex items-baseline justify-between">
+                <h2 className="text-sm font-bold">{t.hub.recent}</h2>
+                <button type="button" onClick={fav.clearRecents} className="text-xs font-semibold text-ink-3 hover:text-ink">
+                  {t.hub.clearRecent}
+                </button>
+              </div>
+              <ul className="flex flex-col gap-1">
+                {fav.recents.slice(0, 4).map((r) => (
+                  <li key={r.id}>
+                    <Link
+                      href={`${base}?from=${r.from.lat.toFixed(5)},${r.from.lon.toFixed(5)}&fromName=${encodeURIComponent(r.from.name ?? "")}&to=${r.to.lat.toFixed(5)},${r.to.lon.toFixed(5)}&toName=${encodeURIComponent(r.to.name ?? "")}`}
+                      className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-paper-2 px-3 py-2 text-sm hover:border-ink"
+                    >
+                      <Icon.Clock width={16} height={16} className="shrink-0 text-ink-3" />
+                      <span className="truncate">
+                        <span className="font-semibold">{r.from.name ?? "…"}</span> → <span className="font-semibold">{r.to.name ?? "…"}</span>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {cfg.features.alerts ? <AlertCarousel city={city.id} alerts={alerts.data?.alerts ?? []} /> : null}
+
+          {city.services?.length ? (
+            <section>
+              <h2 className="mb-1.5 text-sm font-bold">{t.hub.services}</h2>
+              <ul className="flex flex-wrap gap-2">
+                {city.services.map((sv) => (
+                  <li key={sv.id}>
+                    <a
+                      href={sv.url}
+                      target={sv.kind === "external" ? "_blank" : undefined}
+                      rel="noreferrer noopener"
+                      className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-line bg-paper-2 px-3 text-sm font-semibold text-ink-2 hover:border-ink hover:text-ink"
+                      title={sv.kind === "external" ? t.links.external : undefined}
+                    >
+                      {sv.label}
+                      {sv.kind === "external" ? <Icon.External width={12} height={12} className="text-ink-3" /> : null}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </>
       ) : null}
     </div>
+  );
+}
+
+/** One "Cerca de ti" card: component, name, distance and the next two arrivals across routes. */
+function NearbyCard({ city, stop, refreshMs, boardEnabled }: { city: City; stop: NearbyStop; refreshMs: number; boardEnabled: boolean }) {
+  const { t } = useI18n();
+  const router = useRouter();
+  const board = useBoard(city.id, stop.id, refreshMs, boardEnabled);
+  const comp = componentOf(city, stop.component ?? board.data?.rows[0]?.route.component ?? null);
+  const next = (board.data?.rows ?? [])
+    .flatMap((r) => r.next.slice(0, 1).map((n) => ({ ...n, route: r.route })))
+    .sort((a, b) => a.minutes - b.minutes)
+    .slice(0, 2);
+  const href = `/${city.id}/stops/${encodeURIComponent(stop.id)}`;
+  return (
+    <li className="w-[196px] shrink-0 snap-start">
+      <button type="button" onClick={() => router.push(href)} className="flex h-full w-full flex-col gap-1.5 rounded-xl border border-line bg-paper-2 p-2.5 text-left hover:border-ink" aria-label={stop.name}>
+        <span className="flex items-center gap-2">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-white" style={{ background: comp.color }}>
+            <ComponentIcon icon={comp.icon} width={15} height={15} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[13px] font-bold leading-tight">{stop.name}</span>
+            <span className="block text-[11px] text-ink-3">
+              {Math.round(stop.distanceMeters)} m · {stop.locationType === "station" ? t.common.station : comp.label}
+            </span>
+          </span>
+        </span>
+        <span className="flex min-h-6 items-center gap-2 text-xs">
+          {board.isLoading ? (
+            <Spinner className="h-3 w-3" />
+          ) : next.length ? (
+            next.map((n) => (
+              <span key={`${n.route.id}-${n.time}`} className="inline-flex items-center gap-1">
+                <RouteChip route={n.route} size="sm" />
+                <span className={`tabular-nums font-bold ${n.realtime ? "text-ink" : "text-ink-2"}`}>{t.stop.inMin(n.minutes)}</span>
+                {n.realtime ? <span className="h-1.5 w-1.5 rounded-full bg-moss" aria-hidden /> : null}
+              </span>
+            ))
+          ) : (
+            <StatusText tone="scheduled" label={t.hub.noTimes} live={false} />
+          )}
+        </span>
+      </button>
+    </li>
   );
 }

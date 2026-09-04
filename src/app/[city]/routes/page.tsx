@@ -1,5 +1,7 @@
 "use client";
 
+import { cleanHeadsign } from "@/lib/text";
+
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useCityCtx } from "@/components/shell/CityContext";
@@ -66,7 +68,7 @@ export default function RoutesPage() {
                 <Link href={`/${city.id}/routes/${encodeURIComponent(r.id)}`} className="flex items-center gap-3 px-3 py-2.5 hover:bg-paper-3">
                   <RouteChip route={r} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold">{r.longName}</span>
+                    <span className="block truncate text-sm font-semibold">{cleanHeadsign(r.longName)}</span>
                     <span className={`block truncate text-xs ${svc.active === false ? "font-semibold text-brick" : "text-ink-3"}`}>{svc.label ?? t.component[r.component]}</span>
                   </span>
                 </Link>

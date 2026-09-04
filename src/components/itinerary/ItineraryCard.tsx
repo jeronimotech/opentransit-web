@@ -3,6 +3,7 @@
 import { useI18n } from "@/lib/i18n/provider";
 import { fmtDistance, fmtDuration, fmtTime } from "@/lib/format";
 import { Badge, Icon } from "@/components/ui/primitives";
+import { StatusText } from "@/components/ui/FreshnessBadge";
 import { FareTag } from "@/components/ui/FareTag";
 import { RouteStrip } from "./RouteStrip";
 import { estimateFare } from "@/lib/fare";
@@ -68,12 +69,7 @@ export function ItineraryCard({
         ) : null}
         <span className="ml-auto flex items-center gap-1">
           {canceled ? <Badge tone="bad">{t.planner.canceled}</Badge> : null}
-          {live && !canceled ? (
-            <Badge tone="live">
-              <span className="live-dot" style={{ width: 6, height: 6 }} />
-              {t.planner.realtime}
-            </Badge>
-          ) : null}
+          {live && !canceled ? <StatusText tone="live" label={t.planner.realtime} live={false} /> : null}
           {hasAlerts ? (
             <Badge tone="warn">
               <Icon.Alert width={12} height={12} />

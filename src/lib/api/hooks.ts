@@ -140,6 +140,15 @@ export function useDeparturesMulti(city: string, stopIds: string[], refreshMs = 
   };
 }
 
+export function useNetwork(city: string, enabled = true) {
+  return useQuery({
+    queryKey: ["network", city],
+    queryFn: () => api.network(city),
+    enabled,
+    staleTime: HOUR,
+  });
+}
+
 export function useRoutes(city: string, component?: string, q?: string) {
   return useQuery({
     queryKey: ["routes", city, component ?? "", q ?? ""],

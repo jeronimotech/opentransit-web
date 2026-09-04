@@ -3,9 +3,9 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useCityCtx } from "@/components/shell/CityContext";
-import { SplitLayout } from "@/components/shell/SplitLayout";
-import { MapView, useFitBounds } from "@/components/map/MapView";
-import { ItineraryLayer, MapToggle, PinMarker, PoisLayer, StopsLayer, VehiclesLayer, useMapBounds } from "@/components/map/layers";
+import { SplitLayout, type Snap } from "@/components/shell/SplitLayout";
+import { MapView, useFitBounds, useMapZoom } from "@/components/map/MapView";
+import { ItineraryLayer, LayersControl, LocateButton, NetworkLayer, PinMarker, PoisLayer, StopsLayer, VehiclesLayer, ZoomGate, useMapBounds } from "@/components/map/layers";
 import { PlannerForm } from "@/components/planner/PlannerForm";
 import { SortChips } from "@/components/planner/SortChips";
 import { ItineraryCard } from "@/components/itinerary/ItineraryCard";
@@ -13,13 +13,14 @@ import { ItineraryDetail } from "@/components/itinerary/ItineraryDetail";
 import { Hub } from "@/components/hub/Hub";
 import { EmptyState, Icon, Spinner } from "@/components/ui/primitives";
 import { useI18n } from "@/lib/i18n/provider";
-import { useNearbyStops, usePlan, usePois } from "@/lib/api/hooks";
+import { useNearbyStops, useNetwork, usePlan, usePois } from "@/lib/api/hooks";
 import { api, ApiRequestError } from "@/lib/api/client";
 import { useVehicleStream } from "@/lib/api/stream";
 import { useInterpolatedVehicles } from "@/lib/interpolate";
 import { useGeolocation } from "@/lib/use-geolocation";
 import { useFavorites } from "@/lib/favorites";
 import { resolveConfig, componentsOf } from "@/lib/city-config";
+import { LIVE_MIN_ZOOM, liveAutoOn } from "@/lib/marker-style";
 import { sortItineraries, type SortKey } from "@/lib/sort";
 import { readPlanner, toPlanParams, writePlanner, type PlannerState } from "@/lib/planner-params";
 import type { Itinerary } from "@/lib/api/types";
@@ -29,7 +30,7 @@ function FitPoints({ a, b }: { a: { lat: number; lon: number }; b: { lat: number
   const small = typeof window !== "undefined" && window.innerWidth < 768;
   useFitBounds(
     [Math.min(a.lon, b.lon), Math.min(a.lat, b.lat), Math.max(a.lon, b.lon), Math.max(a.lat, b.lat)],
-    small ? { top: 80, bottom: 320, left: 40, right: 40 } : { top: 80, bottom: 60, left: 470, right: 60 },
+    small ? { top: 80, bottom: Math.round((typeof window !== "undefined" ? window.innerHeight : 800) * 0.55) + 20, left: 40, right: 40 } : { top: 80, bottom: 60, left: 470, right: 60 },
   );
   return null;
 }
@@ -41,18 +42,54 @@ function PoisInView({ city, enabled }: { city: string; enabled: boolean }) {
   return enabled ? <PoisLayer pois={pois.data} /> : null;
 }
 
-/** Live vehicles for the selected itinerary, interpolated between frames, inside the viewport. */
-function LiveOnItinerary({ city, itinerary, enabled, onCount }: { city: string; itinerary: Itinerary | null; enabled: boolean; onCount: (n: number) => void }) {
+/** Live vehicles for the selected itinerary (focus context: always drawn, any zoom). */
+function LiveOnItinerary({ city, itinerary, enabled, onCount, colors }: { city: string; itinerary: Itinerary | null; enabled: boolean; onCount: (n: number) => void; colors: Record<string, string> }) {
   const routeIds = useMemo(() => new Set(itinerary?.legs.map((l) => l.route?.id).filter(Boolean) as string[]), [itinerary]);
   const stream = useVehicleStream(city, enabled && routeIds.size > 0);
-  const raw = useMemo(
-    () => (routeIds.size ? [...stream.vehicles.values()].filter((v) => v.routeId && routeIds.has(v.routeId)) : []),
-    [stream.vehicles, routeIds],
-  );
+  const raw = useMemo(() => (routeIds.size ? [...stream.vehicles.values()].filter((v) => v.routeId && routeIds.has(v.routeId)) : []), [stream.vehicles, routeIds]);
   const bbox = useMapBounds();
   const vehicles = useInterpolatedVehicles(raw, { bbox, cap: 300 });
   useEffect(() => onCount(raw.length), [raw.length, onCount]);
-  return vehicles.length ? <VehiclesLayer vehicles={vehicles} /> : null;
+  return vehicles.length ? <VehiclesLayer vehicles={vehicles} colors={colors} focus /> : null;
+}
+
+/** The whole fleet, only inside the viewport and only at street zoom (UX audit B). */
+function FleetInView({ city, enabled, colors, onClick }: { city: string; enabled: boolean; colors: Record<string, string>; onClick: (id: string) => void }) {
+  const zoom = useMapZoom();
+  const on = enabled && liveAutoOn(zoom);
+  const stream = useVehicleStream(city, on);
+  const bbox = useMapBounds(200);
+  const inView = useMemo(() => {
+    if (!on || !bbox) return [];
+    const pad = 0.01;
+    return [...stream.vehicles.values()].filter((v) => v.lon >= bbox[0] - pad && v.lon <= bbox[2] + pad && v.lat >= bbox[1] - pad && v.lat <= bbox[3] + pad);
+  }, [stream.vehicles, bbox, on]);
+  const vehicles = useInterpolatedVehicles(inView, { bbox, cap: 400 });
+  return on && vehicles.length ? <VehiclesLayer vehicles={vehicles} colors={colors} onClick={(v) => onClick(v.id)} /> : null;
+}
+
+function NetworkInView({ city, enabled }: { city: string; enabled: boolean }) {
+  const net = useNetwork(city, enabled);
+  return enabled && net.data ? <NetworkLayer shapes={net.data.shapes} opacity={0.3} /> : null;
+}
+
+/** Layer popover + locate button, rendered inside the map so they can read the zoom. */
+function MapControls({ city, live, setLive, pois, setPois, net, setNet, onLocate, locating }: { city: string; live: boolean; setLive: (v: boolean) => void; pois: boolean; setPois: (v: boolean) => void; net: boolean; setNet: (v: boolean) => void; onLocate: () => Promise<{ lat: number; lon: number } | null>; locating: boolean }) {
+  const { t } = useI18n();
+  const cityCfg = resolveConfig(useCityCtx());
+  const zoom = useMapZoom();
+  const items = [
+    ...(cityCfg.features.liveVehicles ? [{ key: "live", label: t.layers.live, on: live, onChange: setLive, hint: liveAutoOn(zoom) ? t.layers.liveHint : t.layers.liveZoomHint }] : []),
+    { key: "network", label: t.layers.network, on: net, onChange: setNet, hint: t.layers.networkHint },
+    ...(cityCfg.features.pois ? [{ key: "pois", label: t.layers.pois, on: pois, onChange: setPois, hint: t.layers.poisHint }] : []),
+  ];
+  return (
+    <>
+      <LayersControl items={items} label={t.layers.title} slot={1} />
+      <LocateButton onLocate={onLocate} busy={locating} label={t.layers.locate} slot={0} />
+      <span className="sr-only">{city}</span>
+    </>
+  );
 }
 
 export default function PlannerPage() {
@@ -77,9 +114,11 @@ function Planner() {
   const [draft, setDraft] = useState<PlannerState>(urlState);
   const [picking, setPicking] = useState<"from" | "to" | null>(null);
   const [locating, setLocating] = useState<"from" | "to" | "hub" | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(true);
+  const [snap, setSnap] = useState<Snap>("peek");
   const [sort, setSort] = useState<SortKey>("default");
   const [showPois, setShowPois] = useState(false);
+  const [showLive, setShowLive] = useState(true);
+  const [showNet, setShowNet] = useState(true);
   const [liveCount, setLiveCount] = useState(0);
   const geo = useGeolocation();
 
@@ -102,7 +141,13 @@ function Planner() {
   const planParams = useMemo(() => toPlanParams(urlState, lang), [urlState, lang]);
   const plan = usePlan(city.id, planParams);
   const itineraries = useMemo(() => sortItineraries(plan.data?.itineraries ?? [], sort, city.fares), [plan.data, sort, city.fares]);
-  const selected = urlState.selected !== null ? (plan.data?.itineraries ?? [])[urlState.selected] ?? null : null;
+  const selected = urlState.selected !== null ? ((plan.data?.itineraries ?? [])[urlState.selected] ?? null) : null;
+
+  // Sheet position follows the task: hub peeks, the form needs room, results/detail share the map.
+  const stage = showHub ? "hub" : selected ? "detail" : planParams ? "results" : "form";
+  useEffect(() => {
+    setSnap(stage === "hub" ? "peek" : stage === "form" ? "full" : "half");
+  }, [stage]);
 
   // remember every completed plan as a recent trip (local only)
   useEffect(() => {
@@ -116,7 +161,7 @@ function Planner() {
     setLocating(kind);
     const pos = await geo.locate();
     setLocating(null);
-    if (!pos || kind === "hub") return;
+    if (!pos || kind === "hub") return pos;
     let name: string = t.planner.myLocation;
     try {
       name = (await api.reverse(city.id, pos.lat, pos.lon)).name;
@@ -126,6 +171,7 @@ function Planner() {
     const next = { ...draft, [kind]: { ...pos, name }, selected: null };
     setDraft(next);
     if (next.from && next.to) commit(next);
+    return pos;
   };
 
   const onMapClick = async (ll: { lng: number; lat: number }) => {
@@ -140,7 +186,7 @@ function Planner() {
     }
     const next = { ...draft, [kind]: { lat: ll.lat, lon: ll.lng, name }, selected: null };
     setDraft(next);
-    setSheetOpen(true);
+    setSnap("full");
     if (next.from && next.to) commit(next);
   };
 
@@ -166,19 +212,15 @@ function Planner() {
 
   const routerDown = plan.error instanceof ApiRequestError && plan.error.status >= 500;
   const onCount = useCallback((n: number) => setLiveCount(n), []);
+  const compColors = useMemo(() => Object.fromEntries(componentsOf(city).map((c) => [c.id, c.color])), [city]);
 
   const panel = showHub ? (
-    <Hub city={city} onPlan={openPlanner} onLocate={() => locateFor("hub")} pos={geo.pos} locating={locating === "hub"} onUsePlace={usePlace} />
+    <Hub city={city} onPlan={openPlanner} onLocate={() => locateFor("hub")} pos={geo.pos} locating={locating === "hub"} onUsePlace={usePlace} expanded={snap !== "peek"} />
   ) : (
     <div className="flex flex-col">
-      {selected ? (
-        /* Compact summary while reading an itinerary; the form comes back on "edit". */
-        <button
-          type="button"
-          onClick={() => commit({ ...urlState, selected: null })}
-          className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-paper-3"
-          aria-label={t.planner.back}
-        >
+      {selected || stage === "results" ? (
+        /* Compact summary while reading results or an itinerary; tap to edit. */
+        <button type="button" onClick={() => commit({ ...urlState, selected: null }, { view: "plan" })} className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left hover:bg-paper-3" aria-label={t.planner.editTrip}>
           <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-sm">
             <span className="truncate font-semibold">
               <span className="mr-1.5 inline-grid h-4 w-4 place-items-center rounded-full bg-ink text-[9px] font-extrabold text-paper">A</span>
@@ -189,13 +231,13 @@ function Planner() {
               {draft.to?.name}
             </span>
           </span>
-          <Icon.Chevron className="shrink-0 rotate-90 text-ink-3" />
+          <span className="shrink-0 text-xs font-semibold text-signal">{t.planner.editTrip}</span>
         </button>
       ) : (
         <div className="p-4">
           <div className="mb-3 flex items-center justify-between">
             <h1 className="text-xl font-extrabold tracking-tight">{t.planner.title}</h1>
-            <button type="button" onClick={() => router.replace(pathname, { scroll: false })} className="inline-flex items-center gap-1 text-xs font-semibold text-ink-3 hover:text-ink">
+            <button type="button" onClick={() => router.replace(pathname, { scroll: false })} className="inline-flex h-10 items-center gap-1 text-xs font-semibold text-ink-3 hover:text-ink">
               <Icon.Back width={14} height={14} /> {t.nav.home}
             </button>
           </div>
@@ -203,11 +245,11 @@ function Planner() {
             city={city}
             state={draft}
             onChange={setDraft}
-            onSubmit={() => commit({ ...draft, selected: null }, { view: "plan" })}
+            onSubmit={() => commit({ ...draft, selected: null })}
             onUseLocation={locateFor}
             onPickOnMap={(k) => {
               setPicking(k);
-              setSheetOpen(false);
+              setSnap("peek");
             }}
             picking={picking}
             locating={locating === "from" || locating === "to" ? locating : null}
@@ -217,17 +259,13 @@ function Planner() {
           />
           {geo.error ? <p className="mt-2 text-xs text-brick">{t.planner.locationDenied}</p> : null}
           {picking ? <p className="mt-2 rounded-md bg-amber/30 px-2 py-1 text-xs font-semibold">{t.planner.pickOnMapHint}</p> : null}
-          {!planParams && fav.recents.length ? (
+          {fav.recents.length ? (
             <div className="mt-3">
               <p className="mb-1 text-xs font-semibold text-ink-2">{t.favorites.recents}</p>
               <ul className="flex flex-col gap-1">
                 {fav.recents.slice(0, 3).map((r) => (
                   <li key={r.id}>
-                    <button
-                      type="button"
-                      onClick={() => commit({ ...draft, from: r.from, to: r.to, selected: null }, { view: "plan" })}
-                      className="flex w-full items-center gap-2 rounded-lg border border-line bg-paper-2 px-3 py-2 text-left text-sm hover:border-ink"
-                    >
+                    <button type="button" onClick={() => commit({ ...draft, from: r.from, to: r.to, selected: null })} className="flex min-h-11 w-full items-center gap-2 rounded-lg border border-line bg-paper-2 px-3 py-2 text-left text-sm hover:border-ink">
                       <Icon.Clock width={14} height={14} className="shrink-0 text-ink-3" />
                       <span className="truncate">
                         {r.from.name ?? "…"} → {r.to.name ?? "…"}
@@ -241,21 +279,13 @@ function Planner() {
         </div>
       )}
 
-      <div className="border-t border-line" />
+      {stage !== "form" ? <div className="border-t border-line" /> : null}
 
       {selected ? (
-        <ItineraryDetail
-          itinerary={selected}
-          city={city}
-          liveCount={liveCount}
-          endpoints={{ from: draft.from?.name, to: draft.to?.name }}
-          onBack={() => commit({ ...urlState, selected: null })}
-        />
-      ) : (
+        <ItineraryDetail itinerary={selected} city={city} liveCount={liveCount} endpoints={{ from: draft.from?.name, to: draft.to?.name }} onBack={() => commit({ ...urlState, selected: null })} />
+      ) : stage === "results" ? (
         <div className="flex flex-col gap-3 p-4">
-          {!planParams ? (
-            <EmptyState title={t.planner.emptyTitle} hint={t.planner.emptyHint} icon={<Icon.Map />} />
-          ) : plan.isLoading ? (
+          {plan.isLoading ? (
             <div className="flex items-center gap-2 text-sm text-ink-2">
               <Spinner /> {t.planner.loading}
             </div>
@@ -296,29 +326,40 @@ function Planner() {
             </>
           )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 
-  const compColors = useMemo(() => Object.fromEntries(componentsOf(city).map((c) => [c.id, c.color])), [city]);
+  // Phone-only floating search pill (desktop has it inside the panel)
+  const overlay = showHub ? (
+    <button type="button" onClick={openPlanner} className="absolute left-3 right-3 top-[60px] z-10 flex h-12 items-center gap-3 rounded-2xl border border-line bg-paper-2/95 px-4 text-left text-[15px] text-ink-3 shadow-card backdrop-blur" aria-label={t.hub.searchPlaceholder}>
+      <Icon.Search className="text-ink-2" />
+      <span className="flex-1 truncate">{t.hub.searchPlaceholder}</span>
+    </button>
+  ) : null;
 
   return (
     <SplitLayout
-      sheetOpen={sheetOpen}
-      onSheetOpenChange={setSheetOpen}
+      snap={snap}
+      onSnapChange={setSnap}
+      overlay={overlay}
       panel={panel}
       map={
         <MapView center={[city.center.lon, city.center.lat]} zoom={city.defaultZoom} attribution={city.attribution} onClick={onMapClick} className={`h-full w-full ${picking ? "cursor-crosshair" : ""}`}>
+          <ZoomGate min={12} force={false}>
+            <NetworkInView city={city.id} enabled={showNet && !selected} />
+          </ZoomGate>
           {!selected && nearby.data ? <StopsLayer stops={nearby.data.stops} onClick={(s) => router.push(`/${city.id}/stops/${encodeURIComponent(s.id)}`)} /> : null}
           <ItineraryLayer itinerary={selected} />
           {!selected && draft.from && draft.to ? <FitPoints a={draft.from} b={draft.to} /> : null}
-          {cfg.features.liveVehicles ? <LiveOnItinerary city={city.id} itinerary={selected} enabled={cfg.features.liveVehicles} onCount={onCount} /> : null}
+          {cfg.features.liveVehicles && selected ? <LiveOnItinerary city={city.id} itinerary={selected} enabled colors={compColors} onCount={onCount} /> : null}
+          {cfg.features.liveVehicles && !selected ? <FleetInView city={city.id} enabled={showLive} colors={compColors} onClick={(id) => router.push(`/${city.id}/live?vehicle=${encodeURIComponent(id)}`)} /> : null}
           {cfg.features.pois ? <PoisInView city={city.id} enabled={showPois} /> : null}
           {draft.from ? <PinMarker kind="from" lat={draft.from.lat} lon={draft.from.lon} /> : null}
           {draft.to ? <PinMarker kind="to" lat={draft.to.lat} lon={draft.to.lon} /> : null}
           {geo.pos ? <PinMarker kind="user" lat={geo.pos.lat} lon={geo.pos.lon} /> : null}
-          {cfg.features.pois ? <MapToggle on={showPois} onClick={() => setShowPois((v) => !v)} label={showPois ? t.pois.hide : t.pois.show} icon={<Icon.Services width={18} height={18} />} /> : null}
-          <span className="sr-only">{Object.keys(compColors).length}</span>
+          <MapControls city={city.id} live={showLive} setLive={setShowLive} pois={showPois} setPois={setShowPois} net={showNet} setNet={setShowNet} onLocate={() => locateFor("hub")} locating={locating === "hub"} />
+          <span className="sr-only">{LIVE_MIN_ZOOM}</span>
         </MapView>
       }
     />

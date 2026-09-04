@@ -20,7 +20,15 @@ export type PlannerState = {
   selected: number | null; // itinerary index
 };
 
-export const DEFAULT_MODES: Mode[] = ["BUS", "CABLE_CAR", "RAIL", "SUBWAY", "TRAM"];
+export const DEFAULT_MODES: Mode[] = ["BUS", "CABLE_CAR", "RAIL", "SUBWAY", "TRAM", "WALK"];
+export const TRANSIT_MODES: Mode[] = ["BUS", "CABLE_CAR", "RAIL", "SUBWAY", "TRAM", "FERRY"];
+
+/** Access on foot is implied unless the person chose bike-only. */
+export function normalizeModes(modes: Mode[]): Mode[] {
+  const out = [...new Set(modes)];
+  if (!out.includes("WALK") && !out.includes("BICYCLE")) out.push("WALK");
+  return out;
+}
 
 function parsePoint(v: string | null, name: string | null): PlannerPoint | null {
   if (!v) return null;
@@ -31,9 +39,7 @@ function parsePoint(v: string | null, name: string | null): PlannerPoint | null 
 
 export function readPlanner(sp: URLSearchParams): PlannerState {
   const modesRaw = sp.get("modes");
-  const modes = modesRaw
-    ? (modesRaw.split(",").filter(Boolean) as Mode[])
-    : DEFAULT_MODES;
+  const modes = normalizeModes(modesRaw ? (modesRaw.split(",").filter(Boolean) as Mode[]) : DEFAULT_MODES);
   const it = sp.get("it");
   return {
     from: parsePoint(sp.get("from"), sp.get("fromName")),
@@ -79,7 +85,7 @@ export function toPlanParams(s: PlannerState, locale: "es" | "en"): PlanParams |
     toLon: s.to.lon,
     time: s.time ?? undefined,
     arriveBy: s.arriveBy || undefined,
-    modes: [...s.modes, "WALK", ...(s.bike ? (["BICYCLE"] as Mode[]) : [])],
+    modes: normalizeModes([...s.modes, ...(s.bike ? (["BICYCLE"] as Mode[]) : [])]),
     wheelchair: s.wheelchair || undefined,
     numItineraries: 5,
     locale,

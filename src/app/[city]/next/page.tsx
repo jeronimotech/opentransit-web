@@ -184,7 +184,7 @@ function Next() {
                   type="button"
                   onClick={() => set({ route: r.id })}
                   aria-pressed={routeId === r.id}
-                  className={`rounded-lg ring-offset-2 ring-offset-paper-2 ${routeId === r.id ? "ring-2 ring-ink" : ""} ${svc.active === false ? "opacity-50" : ""}`}
+                  className={`inline-flex min-h-11 items-center rounded-lg ring-offset-2 ring-offset-paper-2 ${routeId === r.id ? "ring-2 ring-ink" : ""} ${svc.active === false ? "opacity-50" : ""}`}
                   title={svc.label ?? r.longName}
                 >
                   <RouteChip route={r} />
@@ -215,12 +215,13 @@ function Next() {
 
   return (
     <SplitLayout
+      defaultSnap="half"
       panel={panel}
       map={
         <MapView center={[city.center.lon, city.center.lat]} zoom={city.defaultZoom} attribution={city.attribution} className="h-full w-full">
           {s ? <StopsLayer stops={[s]} /> : null}
           {s ? <Center lat={s.lat} lon={s.lon} /> : null}
-          {vehicles.length ? <VehiclesLayer vehicles={vehicles} etaById={etaById} colors={compColors} dimOthers onClick={(v) => router.push(`/${city.id}/live?vehicle=${encodeURIComponent(v.id)}`)} /> : null}
+          {vehicles.length ? <VehiclesLayer vehicles={vehicles} etaById={etaById} colors={compColors} dimOthers focus onClick={(v) => router.push(`/${city.id}/live?vehicle=${encodeURIComponent(v.id)}`)} /> : null}
           {routeId && etaById.size ? <EtaLegend labels={{ title: t.live.legend, now: t.live.bucketNow, soon: t.live.bucketSoon, later: t.live.bucketLater, far: t.live.bucketFar }} /> : null}
         </MapView>
       }

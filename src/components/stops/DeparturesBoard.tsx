@@ -1,5 +1,7 @@
 "use client";
 
+import { cleanHeadsign } from "@/lib/text";
+
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n/provider";
 import { fmtDelay, fmtTime, minutesUntil } from "@/lib/format";
@@ -45,7 +47,7 @@ export function DeparturesBoard({
                 <RouteChip route={d.route} />
               </Link>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{d.headsign}</p>
+                <p className="truncate text-sm font-semibold">{cleanHeadsign(d.headsign)}</p>
                 <p className="flex items-center gap-1.5 text-xs text-ink-3">
                   <span className="tabular-nums">{fmtTime(d.scheduledTime, tz, lang)}</span>
                   {d.platform ? <span className="truncate">· {d.platform}</span> : null}

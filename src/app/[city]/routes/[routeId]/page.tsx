@@ -1,5 +1,7 @@
 "use client";
 
+import { cleanHeadsign } from "@/lib/text";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useMemo, useState } from "react";
@@ -50,7 +52,7 @@ export default function RoutePage({ params }: { params: Promise<{ routeId: strin
           <div className="flex items-start gap-3">
             <RouteChip route={r} size="lg" />
             <div className="min-w-0 flex-1">
-              <h1 className="text-lg font-extrabold leading-tight tracking-tight">{r.longName}</h1>
+              <h1 className="text-lg font-extrabold leading-tight tracking-tight">{cleanHeadsign(r.longName)}</h1>
               <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-ink-2">
                 <Badge>
                   <ComponentIcon icon={comp.icon} width={12} height={12} /> {comp.label}
@@ -81,7 +83,7 @@ export default function RoutePage({ params }: { params: Promise<{ routeId: strin
             <div className="inline-flex rounded-lg bg-paper-3 p-0.5 text-sm font-semibold">
               {r.patterns.map((p, i) => (
                 <button key={p.id} type="button" onClick={() => setDir(i)} className={`min-w-0 flex-1 truncate rounded-md px-3 py-1.5 ${i === dir ? "bg-paper-2 text-ink shadow-sm" : "text-ink-2"}`} aria-pressed={i === dir}>
-                  {t.planner.towards} {p.headsign ?? p.stops[p.stops.length - 1]?.name ?? `${i + 1}`}
+                  {t.planner.towards} {cleanHeadsign(p.headsign) ?? p.stops[p.stops.length - 1]?.name ?? `${i + 1}`}
                 </button>
               ))}
             </div>

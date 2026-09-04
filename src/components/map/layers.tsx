@@ -3,8 +3,10 @@
 import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMap } from "./MapView";
+import { useMap, useMapZoom } from "./MapView";
 import { componentColor } from "@/lib/colors";
+import { desaturate } from "@/lib/route-color";
+import { LIVE_DETAIL_ZOOM, LIVE_MIN_ZOOM } from "@/lib/marker-style";
 import { ETA_COLORS, etaBucket } from "@/lib/eta";
 import { bboxOf, decodeGeometry, fc, normalizeHex, toLineString, toPoint, type BBox, type LngLat } from "@/lib/geo";
 import type { Geometry, Itinerary, NetworkShape, PoiCollection, PoiType, Stop, Vehicle } from "@/lib/api/types";
@@ -255,10 +257,14 @@ export function StopsLayer({ stops, onClick, id = "stops" }: { stops: Stop[]; on
 
 // ── Vehicles ────────────────────────────────────────────────────────────────
 /**
- * Fleet markers. Colored by component (from the city's taxonomy when given);
- * when `etaById` is present (a stop is selected) the fill switches to the ETA
- * bucket (≤5 / ≤10 / ≤15 min) and the component stays as the ring — TransMi App's
- * "how far is my bus" at a glance. Pass already-interpolated positions for motion.
+ * Fleet markers with the UX-audit zoom rules:
+ *   · below zoom 14 the fleet is hidden — only "highlighted" vehicles stay (a selected
+ *     route, the buses heading to a selected stop, the itinerary's routes);
+ *   · 14–16: 6 px dots at 70 % opacity; ≥ 16: 10 px dots with a bearing tick;
+ *   · component colours are desaturated 20 % so the base map stays readable;
+ *     highlighted / ETA-tinted markers keep full colour and size.
+ * `etaById` (a stop is selected) tints the fill by ETA bucket (≤5 / ≤10 / ≤15 min).
+ * Pass already-interpolated positions for motion.
  */
 export function VehiclesLayer({
   vehicles,
@@ -267,6 +273,8 @@ export function VehiclesLayer({
   etaById,
   colors,
   dimOthers = false,
+  highlightRouteIds,
+  focus = false,
 }: {
   vehicles: Vehicle[];
   onClick?: (v: Vehicle) => void;
@@ -274,6 +282,10 @@ export function VehiclesLayer({
   etaById?: Map<string, number> | null;
   colors?: Partial<Record<string, string>>;
   dimOthers?: boolean;
+  /** Routes whose vehicles are always drawn at full size/opacity, at any zoom. */
+  highlightRouteIds?: Set<string> | null;
+  /** Focus context (stop, next-buses, itinerary): every vehicle passed in is highlighted. */
+  focus?: boolean;
 }) {
   const byId = useMemo(() => new Map(vehicles.map((v) => [v.id, v])), [vehicles]);
   const data = useMemo(
@@ -284,41 +296,74 @@ export function VehiclesLayer({
           const eta = etaById?.get(v.id);
           const bucket = etaBucket(eta ?? null);
           const tinted = etaById ? bucket !== "none" : false;
+          const hl = focus || tinted || v.id === selectedId || (!!v.routeId && !!highlightRouteIds?.has(v.routeId));
           return toPoint(v.lon, v.lat, {
             id: v.id,
             label: eta != null ? `${v.routeShortName ?? ""} · ${eta} min` : (v.routeShortName ?? ""),
-            color: tinted ? ETA_COLORS[bucket] : comp,
+            color: tinted ? ETA_COLORS[bucket] : hl ? comp : desaturate(comp, 0.2),
             ring: tinted ? comp : "#ffffff",
             resolved: v.tripResolved,
             selected: v.id === selectedId,
             tinted,
+            hl,
+            hasBearing: v.bearing != null,
+            bearing: v.bearing ?? 0,
             dim: dimOthers && etaById != null && !tinted,
           });
         }),
       ),
-    [vehicles, selectedId, etaById, colors, dimOthers],
+    [vehicles, selectedId, etaById, colors, dimOthers, highlightRouteIds, focus],
   );
+  const circlePaint = (hlLayer: boolean): maplibregl.CircleLayerSpecification["paint"] => ({
+    "circle-radius": hlLayer
+      ? ["interpolate", ["linear"], ["zoom"], 10, ["case", ["get", "tinted"], 5, 4], 14, ["case", ["get", "tinted"], 8, 6], 17, ["case", ["get", "tinted"], 11, 9]]
+      : ["interpolate", ["linear"], ["zoom"], LIVE_MIN_ZOOM, 3, LIVE_DETAIL_ZOOM, 5, 18, 7],
+    "circle-color": ["get", "color"],
+    "circle-opacity": hlLayer
+      ? ["case", ["get", "dim"], 0.25, ["get", "resolved"], 1, 0.7]
+      : ["step", ["zoom"], 0.7, LIVE_DETAIL_ZOOM, 0.95],
+    "circle-stroke-color": ["case", ["get", "selected"], "#f2b41b", ["get", "ring"]],
+    "circle-stroke-width": hlLayer ? ["case", ["get", "selected"], 4, ["get", "tinted"], 2.5, 1.5] : ["step", ["zoom"], 0.5, LIVE_DETAIL_ZOOM, 1.5],
+    "circle-stroke-opacity": ["case", ["get", "dim"], 0.3, 1],
+  });
   useGeoJsonLayer(
     "vehicles",
     data,
     [
       {
-        id: "vehicles-circle",
+        id: "vehicles-fleet",
         type: "circle",
-        paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, ["case", ["get", "tinted"], 5, 3], 14, ["case", ["get", "tinted"], 8, 6], 17, ["case", ["get", "tinted"], 11, 9]],
-          "circle-color": ["get", "color"],
-          "circle-opacity": ["case", ["get", "dim"], 0.25, ["get", "resolved"], 1, 0.6],
-          "circle-stroke-color": ["case", ["get", "selected"], "#f2b41b", ["get", "ring"]],
-          "circle-stroke-width": ["case", ["get", "selected"], 4, ["get", "tinted"], 2.5, 1.5],
-          "circle-stroke-opacity": ["case", ["get", "dim"], 0.3, 1],
+        minzoom: LIVE_MIN_ZOOM,
+        filter: ["!", ["get", "hl"]],
+        paint: circlePaint(false),
+      },
+      {
+        id: "vehicles-focus",
+        type: "circle",
+        filter: ["get", "hl"],
+        paint: circlePaint(true),
+      },
+      {
+        id: "vehicles-tick",
+        type: "symbol",
+        minzoom: LIVE_DETAIL_ZOOM,
+        filter: ["all", ["get", "hasBearing"], ["!", ["get", "dim"]]],
+        layout: {
+          "text-field": "▲",
+          "text-size": ["case", ["get", "hl"], 9, 7],
+          "text-font": ["Noto Sans Bold"],
+          "text-rotate": ["get", "bearing"],
+          "text-rotation-alignment": "map",
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
         },
+        paint: { "text-color": "#ffffff", "text-opacity": 0.95 },
       },
       {
         id: "vehicles-label",
         type: "symbol",
-        minzoom: 13.5,
-        filter: ["!", ["get", "dim"]],
+        minzoom: LIVE_DETAIL_ZOOM,
+        filter: ["all", ["!", ["get", "dim"]], ["any", ["get", "hl"], [">=", ["zoom"], 17]]],
         layout: {
           "text-field": ["get", "label"],
           "text-size": 10,
@@ -331,7 +376,7 @@ export function VehiclesLayer({
       },
     ],
     {
-      clickLayers: ["vehicles-circle"],
+      clickLayers: ["vehicles-fleet", "vehicles-focus"],
       onClick: (f) => {
         const v = byId.get(String(f.properties?.id));
         if (v) onClick?.(v);
@@ -427,7 +472,20 @@ export function useMapBounds(debounceMs = 300): BBox | null {
   return bbox;
 }
 
-/** Floating toggle rendered over the map (top-right, below the header). */
+/**
+ * Overlay buttons share one position rule: top-right below the header on desktop,
+ * bottom-right just above the sheet on phones (`--sheet-h` is set by SplitLayout).
+ */
+export const overlayBtn =
+  "grid h-11 w-11 place-items-center rounded-xl border shadow-card md:h-9 md:w-9 md:rounded-lg";
+export function overlayPos(slot: number): React.CSSProperties {
+  return {
+    // phones: stacked upward from the sheet edge
+    bottom: `calc(var(--sheet-h, 0px) + ${12 + slot * 52}px)`,
+  };
+}
+
+/** Floating toggle rendered over the map (kept for pages that only need one). */
 export function MapToggle({ on, onClick, label, icon, top = 76 }: { on: boolean; onClick: () => void; label: string; icon: React.ReactNode; top?: number }) {
   return (
     <button
@@ -444,6 +502,90 @@ export function MapToggle({ on, onClick, label, icon, top = 76 }: { on: boolean;
   );
 }
 
+export type LayerItem = { key: string; label: string; on: boolean; onChange: (on: boolean) => void; hint?: string | null; disabled?: boolean };
+
+/** One "Capas" button → popover with layer toggles (live buses, services, network). */
+export function LayersControl({ items, label, slot = 1 }: { items: LayerItem[]; label: string; slot?: number }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", onDoc);
+    return () => document.removeEventListener("pointerdown", onDoc);
+  }, [open]);
+  const anyOn = items.some((i) => i.on);
+  return (
+    <div ref={ref} className="absolute right-3 z-10 md:bottom-auto md:right-4 md:top-[76px]" style={overlayPos(slot)}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        title={label}
+        aria-label={label}
+        className={`${overlayBtn} ${open || anyOn ? "border-ink bg-ink text-paper" : "border-line bg-paper-2/95 text-ink-2 backdrop-blur hover:text-ink"}`}
+      >
+        <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+          <path d="M10 3l7 4-7 4-7-4 7-4Z" />
+          <path d="M3 10.5l7 4 7-4M3 14l7 4 7-4" />
+        </svg>
+      </button>
+      {open ? (
+        <div role="dialog" aria-label={label} className="absolute bottom-full right-0 mb-2 w-60 rounded-xl border border-line bg-paper-2 p-2 shadow-card md:bottom-auto md:top-full md:mt-2">
+          <p className="px-2 pb-1 pt-1 text-xs font-bold text-ink-2">{label}</p>
+          <ul className="flex flex-col">
+            {items.map((it) => (
+              <li key={it.key}>
+                <label className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-paper-3 ${it.disabled ? "opacity-60" : ""}`}>
+                  <input type="checkbox" className="h-4 w-4 accent-[var(--signal)]" checked={it.on} disabled={it.disabled} onChange={(e) => it.onChange(e.target.checked)} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold">{it.label}</span>
+                    {it.hint ? <span className="block text-[11px] leading-snug text-ink-3">{it.hint}</span> : null}
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** "Mi ubicación" button: locates, then eases the map to the position. */
+export function LocateButton({ onLocate, busy, label, slot = 0 }: { onLocate: () => Promise<{ lat: number; lon: number } | null> | void; busy?: boolean; label: string; slot?: number }) {
+  const { map } = useMap();
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        const pos = await onLocate();
+        if (pos && map) map.easeTo({ center: [pos.lon, pos.lat], zoom: Math.max(map.getZoom(), 15.5), duration: 600 });
+      }}
+      title={label}
+      aria-label={label}
+      aria-busy={busy}
+      className={`${overlayBtn} absolute right-3 z-10 border-line bg-paper-2/95 text-ink-2 backdrop-blur hover:text-ink md:bottom-auto md:right-4 md:top-[120px]`}
+      style={overlayPos(slot)}
+    >
+      <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" className={busy ? "animate-pulse" : ""}>
+        <circle cx="10" cy="10" r="5" />
+        <circle cx="10" cy="10" r="1.5" fill="currentColor" />
+        <path d="M10 2v3M10 15v3M2 10h3M15 10h3" />
+      </svg>
+    </button>
+  );
+}
+
+/** Renders children only when the map is at or above `min` zoom (or `force`). */
+export function ZoomGate({ min, force = false, children }: { min: number; force?: boolean; children: React.ReactNode }) {
+  const z = useMapZoom();
+  return force || z >= min ? <>{children}</> : null;
+}
+
 /** Small legend for ETA-tinted markers. */
 export function EtaLegend({ labels, className = "" }: { labels: { now: string; soon: string; later: string; far: string; title: string }; className?: string }) {
   const items: [keyof typeof ETA_COLORS, string][] = [
@@ -453,7 +595,7 @@ export function EtaLegend({ labels, className = "" }: { labels: { now: string; s
     ["far", labels.far],
   ];
   return (
-    <div className={`pointer-events-none absolute bottom-10 left-1/2 z-10 -translate-x-1/2 rounded-lg border border-line bg-paper-2/95 px-2.5 py-1.5 text-[11px] shadow-card md:bottom-4 md:left-auto md:right-14 md:translate-x-0 ${className}`}>
+    <div className={`pointer-events-none absolute left-3 z-10 rounded-lg border border-line bg-paper-2/95 px-2.5 py-1.5 text-[11px] shadow-card md:bottom-4 md:left-auto md:right-14 ${className}`} style={{ bottom: "calc(var(--sheet-h, 0px) + 12px)" }}>
       <span className="mr-2 font-semibold text-ink-2">{labels.title}</span>
       {items.map(([k, l]) => (
         <span key={k} className="mr-2 inline-flex items-center gap-1">

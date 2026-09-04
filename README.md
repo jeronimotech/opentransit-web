@@ -7,14 +7,14 @@ This repo is the browser UI only. It talks to [`opentransit-api`](../opentransit
 else with [`opentransit-mobile`](../opentransit-mobile) (Flutter) besides the API contract.
 
 <p>
-  <img src="docs/screenshots/hub-desktop.png" alt="Home hub: question-led tiles, nearby stops, notices" width="640">
+  <img src="docs/screenshots/hub-mobile.png" alt="Map-first home on a phone: full-bleed map, search pill, sheet peeking with three actions and nearby stops" width="150">
+  <img src="docs/screenshots/hub-expanded-mobile.png" alt="Home with the sheet pulled up: Casa/Trabajo, recent trips, notices" width="150">
+  <img src="docs/screenshots/hub-zoom-mobile.png" alt="Street zoom: live buses appear with bearing ticks" width="150">
+  <img src="docs/screenshots/stop-mobile.png" alt="Stop page: arrival board above the fold, map strip with Ver en mapa" width="150">
+  <img src="docs/screenshots/next-mobile.png" alt="Ubica tu bus on mobile" width="150">
 </p>
 <p>
-  <img src="docs/screenshots/hub-mobile.png" alt="Home hub on mobile" width="150">
-  <img src="docs/screenshots/next-mobile.png" alt="Ubica tu bus on mobile" width="150">
-  <img src="docs/screenshots/stop-mobile.png" alt="Arrival board on mobile" width="150">
-  <img src="docs/screenshots/itinerary-mobile.png" alt="Itinerary with estimated fare on mobile" width="150">
-  <img src="docs/screenshots/favorites-mobile.png" alt="Favorites on mobile" width="150">
+  <img src="docs/screenshots/hub-desktop.png" alt="Desktop home: side panel with search, three actions and nearby stops next to a full map" width="640">
 </p>
 <p>
   <img src="docs/screenshots/next-desktop.png" alt="Ubica tu bus: station, route, next buses with live/scheduled labels and ETA-tinted markers" width="640">
@@ -22,6 +22,19 @@ else with [`opentransit-mobile`](../opentransit-mobile) (Flutter) besides the AP
 
 The shots above use mock data (`pnpm screenshots`). `docs/screenshots/*-live-api.png` are taken against a running
 `opentransit-api` with the live Bogotá GTFS + GTFS-Realtime feeds.
+
+### Design rules (v1.1.1 "map first")
+
+The map is the product. Every screen with a map gives it ≥ 65 % of a phone viewport by default; sheets peek
+(24 %), can be dragged to 55 % or 92 %, and never duplicate what the nav already offers. Details in
+[`UX-AUDIT.md`](../UX-AUDIT.md):
+
+- **Home**: full-bleed map, floating search pill, one *Capas* layers popover (live buses, services, network) and a locate button. The sheet peeks with three actions (Planear viaje · Ubica tu bus · Buscar ruta) and a "Cerca de ti" rail of the nearest stops with their next two arrivals.
+- **Live fleet by zoom**: hidden below zoom 14 (unless a route/stop is in focus), small translucent dots at 14–16, full dots with a bearing tick at ≥ 16; component colours are desaturated 20 % on the map.
+- **Planner form**: one time control (`Ahora ▾` → Salir a las / Llegar antes de + picker), one mode row that fits (Bus · Cable · Bici · A pie), advanced toggles under *Más opciones*, CTA pinned at the bottom.
+- **Stop page**: header → arrival board → routes collapsed → accessibility as one muted line; phones get a map strip with *Ver en mapa*.
+- **Route chips**: feed colours blended 35 % toward the component colour and clamped to ≥ 4.5:1 contrast; neon `#FF0000`-style feed colours fall back to the component colour. Headsigns render as `A → B`.
+- 44 px touch targets, `prefers-reduced-motion` respected for marker motion, freshness/ETA text announced via `aria-live`.
 
 ## What it does
 
@@ -115,7 +128,7 @@ re-add their sources when the basemap style reloads (theme switch).
 | Command | What |
 |---|---|
 | `pnpm dev` / `pnpm dev:mock` | dev server (real API / fixtures) |
-| `pnpm lint` · `pnpm typecheck` · `pnpm build` | what CI runs |
+| `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm build` | what CI runs (`test` = vitest unit tests for colour blending, headsign cleanup, marker zoom rules) |
 | `pnpm screenshots` | regenerate `docs/screenshots/` from a running `dev:mock` (needs `npx playwright install chromium`) |
 
 ## Contributing

@@ -7,6 +7,7 @@ import { EmptyState, Spinner } from "@/components/ui/primitives";
 import { RouteChip } from "@/components/ui/RouteChip";
 import { FreshnessBadge } from "@/components/ui/FreshnessBadge";
 import { serviceStatus } from "@/lib/service-window";
+import { cleanHeadsign } from "@/lib/text";
 import type { BoardResponse } from "@/lib/api/types";
 
 /**
@@ -31,22 +32,22 @@ export function ArrivalBoard({ board, city, refreshing, onPickRoute }: { board: 
           const [first, ...rest] = row.next;
           const svc = serviceStatus(t, row.route);
           return (
-            <li key={row.route.id} className="flex items-start gap-3 px-3 py-2.5">
+            <li key={row.route.id} className="flex items-start gap-3 px-3 py-2">
               {onPickRoute ? (
-                <button type="button" onClick={() => onPickRoute(row.route.id)} className="shrink-0" aria-label={row.route.shortName}>
+                <button type="button" onClick={() => onPickRoute(row.route.id)} className="inline-flex min-h-11 shrink-0 items-center" aria-label={row.route.shortName}>
                   <RouteChip route={row.route} />
                 </button>
               ) : (
-                <Link href={`/${city}/routes/${encodeURIComponent(row.route.id)}`} className="shrink-0">
+                <Link href={`/${city}/routes/${encodeURIComponent(row.route.id)}`} className="inline-flex min-h-11 shrink-0 items-center">
                   <RouteChip route={row.route} />
                 </Link>
               )}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{row.headsign ?? row.route.longName}</p>
+                <p className="truncate text-sm font-semibold">{cleanHeadsign(row.headsign) ?? cleanHeadsign(row.route.longName)}</p>
                 {first ? (
                   <p className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 text-xs text-ink-2">
                     <span>{t.board.nextIn}</span>
-                    <span className={`text-base font-extrabold tabular-nums ${first.realtime ? "text-ink" : "text-ink-2"}`}>{t.stop.inMin(first.minutes)}</span>
+                    <span className={`text-base font-extrabold tabular-nums ${first.realtime ? "text-ink" : "text-ink-2"}`} aria-live="polite">{t.stop.inMin(first.minutes)}</span>
                     <FreshnessBadge freshness={board.freshness} realtime={first.realtime} />
                     {first.realtime && first.delaySeconds != null && Math.abs(first.delaySeconds) >= 60 ? (
                       <span className="text-ink-3">({fmtDelay(first.delaySeconds, lang)})</span>

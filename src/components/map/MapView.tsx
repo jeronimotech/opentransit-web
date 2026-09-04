@@ -2,14 +2,7 @@
 
 import * as maplibregl from "maplibre-gl";
 import type { LngLatBoundsLike, Map as MLMap, MapMouseEvent } from "maplibre-gl";
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTheme } from "@/lib/theme";
 
 export const STYLE_LIGHT = "https://tiles.openfreemap.org/styles/liberty";
@@ -29,6 +22,22 @@ export function useMap() {
   return useContext(Ctx);
 }
 
+/** Current zoom (0.1 steps), updated while the camera moves. */
+export function useMapZoom(): number {
+  const { map } = useMap();
+  const [z, setZ] = useState(() => (map ? Math.round(map.getZoom() * 10) / 10 : 0));
+  useEffect(() => {
+    if (!map) return;
+    const on = () => setZ(Math.round(map.getZoom() * 10) / 10);
+    on();
+    map.on("zoom", on);
+    return () => {
+      map.off("zoom", on);
+    };
+  }, [map]);
+  return z;
+}
+
 type Props = {
   center: [number, number]; // lon, lat
   zoom: number;
@@ -41,15 +50,7 @@ type Props = {
   padding?: { top: number; bottom: number; left: number; right: number };
 };
 
-export function MapView({
-  center,
-  zoom,
-  maxBounds,
-  attribution,
-  onClick,
-  className = "",
-  children,
-}: Props) {
+export function MapView({ center, zoom, maxBounds, attribution, onClick, className = "", children }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<MLMap | null>(null);
   const [styleVersion, setStyleVersion] = useState(0);
@@ -68,21 +69,20 @@ export function MapView({
       attributionControl: false,
       cooperativeGestures: false,
     });
-    m.addControl(
-      new maplibregl.AttributionControl({
-        compact: true,
-        customAttribution: attribution,
-      }),
-      "bottom-right",
-    );
-    m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+    m.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: attribution }), "bottom-right");
+    // Zoom buttons only where there is no pinch: phones keep the map chrome to a minimum.
+    if (window.innerWidth >= 768) m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
     m.on("style.load", () => setStyleVersion((v) => v + 1));
     m.on("click", (e: MapMouseEvent) => onClickRef.current?.(e.lngLat));
     if (process.env.NODE_ENV !== "production") {
-      (window as unknown as { __otMap?: MLMap }).__otMap = m; // handy in devtools
+      (window as unknown as { __otMap?: MLMap }).__otMap = m; // handy in devtools and screenshots
     }
     setMap(m);
+    // Container size changes (strip ↔ full map, sheet drag) must reach MapLibre.
+    const ro = new ResizeObserver(() => m.resize());
+    ro.observe(el.current);
     return () => {
+      ro.disconnect();
       m.remove();
       setMap(null);
     };
@@ -122,7 +122,7 @@ export function useFitBounds(
         center: [minLon, minLat],
         zoom: 15,
         duration: 500,
-        padding: small ? { top: 60, bottom: Math.round(window.innerHeight * 0.6), left: 0, right: 0 } : { top: 0, bottom: 0, left: 440, right: 0 },
+        padding: small ? { top: 60, bottom: Math.round(window.innerHeight * 0.55), left: 0, right: 0 } : { top: 0, bottom: 0, left: 440, right: 0 },
       });
       return;
     }
@@ -135,4 +135,10 @@ export function useFitBounds(
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, bounds?.join(","), ...deps]);
+}
+
+/** Ease the camera to a point (used by "Cerca de ti" cards and locate). */
+export function useFlyTo() {
+  const { map } = useMap();
+  return (lon: number, lat: number, zoom = 16) => map?.easeTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), zoom), duration: 600 });
 }
