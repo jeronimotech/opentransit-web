@@ -7,31 +7,47 @@ This repo is the browser UI only. It talks to [`opentransit-api`](../opentransit
 else with [`opentransit-mobile`](../opentransit-mobile) (Flutter) besides the API contract.
 
 <p>
-  <img src="docs/screenshots/planner-desktop.png" alt="Planner with itineraries" width="640">
+  <img src="docs/screenshots/hub-desktop.png" alt="Home hub: question-led tiles, nearby stops, notices" width="640">
 </p>
 <p>
-  <img src="docs/screenshots/itinerary-mobile.png" alt="Itinerary detail on mobile" width="180">
-  <img src="docs/screenshots/planner-mobile.png" alt="Planner on mobile" width="180">
-  <img src="docs/screenshots/live-mobile.png" alt="Live buses on mobile" width="180">
-  <img src="docs/screenshots/stop-mobile.png" alt="Stop departures on mobile" width="180">
+  <img src="docs/screenshots/hub-mobile.png" alt="Home hub on mobile" width="150">
+  <img src="docs/screenshots/next-mobile.png" alt="Ubica tu bus on mobile" width="150">
+  <img src="docs/screenshots/stop-mobile.png" alt="Arrival board on mobile" width="150">
+  <img src="docs/screenshots/itinerary-mobile.png" alt="Itinerary with estimated fare on mobile" width="150">
+  <img src="docs/screenshots/favorites-mobile.png" alt="Favorites on mobile" width="150">
+</p>
+<p>
+  <img src="docs/screenshots/next-desktop.png" alt="Ubica tu bus: station, route, next buses with live/scheduled labels and ETA-tinted markers" width="640">
 </p>
 
-The shots above use mock data. `docs/screenshots/*-live-api.png` were taken against a running
-`opentransit-api` with the live Bogotá GTFS + GTFS-Realtime feeds (5 real itineraries, ~5,900 buses on the stream).
+The shots above use mock data (`pnpm screenshots`). `docs/screenshots/*-live-api.png` are taken against a running
+`opentransit-api` with the live Bogotá GTFS + GTFS-Realtime feeds.
 
 ## What it does
 
 | Route | Screen |
 |---|---|
 | `/` | City picker (auto-redirects when the API serves one city) |
-| `/{city}` | Map + planner: origin/destination with autocomplete, "use my location", pick on map, depart/arrive time, mode chips, accessible trips, itinerary cards, itinerary detail with leg timeline, walk directions, realtime badges and alerts; live buses on the itinerary's routes |
-| `/{city}/stops/{stopId}` | Stop/station page with departures (auto-refresh every 20 s), routes, nearby stops |
-| `/{city}/routes/{routeId}` | Route patterns on the map, stop list, live vehicles, alerts |
-| `/{city}/live` | Whole fleet in real time (SSE stream with deltas), filter by component or route, click a bus for details |
-| `/{city}/alerts` | Service alerts, most severe first |
+| `/{city}` | **Home hub** ("Hola, ¿qué quieres consultar?"): tiles for every module, Casa/Trabajo shortcuts, "mensajes de interés" carousel (severity-sorted, dismissible, capped impressions), nearby stations card, recent trips, agency services |
+| `/{city}?view=plan` | **Planner**: origin/destination with nearby-first autocomplete, "use my location", pick on map, depart/arrive time, mode chips, accessible trips, "Llegar en bici a la estación", sorting chips (más rápido · menos transbordos · menos caminata · más económico · salida más próxima), itinerary cards with **Tarifa estimada**, itinerary detail with leg timeline, walk directions, live/scheduled badges, service-hours warnings, alerts, **Iniciar viaje** follow-along; live buses on the itinerary's routes, interpolated between frames |
+| `/{city}/next` | **Ubica tu bus**: station → route → next buses, each row labeled En vivo / Por programación / Estimado, buses on the map tinted by ETA bucket (≤5 / ≤10 / ≤15 min) |
+| `/{city}/stops/{stopId}` | **Arrival board** grouped by route ("Siguiente en 5 min · luego 10, 15 y 20"), freshness label, ETA-tinted buses heading here, routes, honest accessibility block ("dato no verificado" when the feed value is a blanket default), platforms, nearby stops, QR code, PQRS link, favorite star |
+| `/{city}/routes` | Route finder by code or name, filtered by component, with service hours |
+| `/{city}/routes/{routeId}` | Route patterns on the map, stop list, live vehicles, service window ("Fuera de horario · próximo 04:00"), alerts, QR code, favorite star |
+| `/{city}/live` | Whole fleet in real time (SSE stream with deltas, interpolated motion), filter by component or route, `?stop=` tints buses by ETA to that stop, click a bus for details |
+| `/{city}/favorites` | Casa, Trabajo and custom places, favorite stops with their next departures, favorite routes with service hours, recent trips — all local to the browser |
+| `/{city}/alerts` | Service alerts, most severe first, with the agency's official PQRS channel |
 | `/about` | Project, stack, data attribution |
 
-Planner state lives in the URL (`?from=lat,lon&fromName=…&to=…&time=…&arriveBy=1&modes=…&wheelchair=1&it=0`),
+Every map has a **Servicios** toggle (bike parking, toilets, ATMs, health points, libraries from `/pois`).
+Component taxonomy (Troncal, Alimentador, Dual, Zonal, Cable…) with its icons and colors comes from `city.components`.
+Remote config from `/v1/cities/{city}` drives poll intervals, feature flags (modules disappear from the nav and the hub),
+and a maintenance banner. Deep links (`/{city}/stops/{id}`, `/{city}/routes/{id}`, `/{city}/plan…`) are the canonical
+URLs printed in the QR codes; the mobile app claims them as App Links.
+
+Where these ideas come from: the v1.1 feature plan in `../ROADMAP-v1.1.md` (TransMi App and Maas by Vettica, analysed in `../REFERENCE-APPS.md`).
+
+Planner state lives in the URL (`?from=lat,lon&fromName=…&to=…&time=…&arriveBy=1&modes=…&wheelchair=1&bike=1&it=0&view=plan`),
 so every plan is a shareable link. Spanish by default, English with one click. Light/dark theme. PWA manifest.
 
 Nothing city-specific is hardcoded: name, colors, timezone, modes, feature flags and attribution come from the
@@ -45,6 +61,7 @@ cp .env.example .env.local
 
 pnpm dev:mock     # realistic Bogotá fixtures, no backend needed → http://localhost:3000
 pnpm dev          # against NEXT_PUBLIC_API_URL (default http://localhost:8001)
+# if 3000 is taken: pnpm dev:mock -p 3100
 ```
 
 `pnpm build && pnpm start` for production, or `docker build -t opentransit-web .`
@@ -63,9 +80,10 @@ Both are inlined at build time (they are `NEXT_PUBLIC_*`), so the Docker image b
 
 `NEXT_PUBLIC_MOCK=1` swaps the fetch layer for `src/mocks/handlers.ts`, which answers every contract endpoint with
 Bogotá-shaped data: 60 stops along the real Autopista Norte / Av. Caracas / NQS corridors, 12 routes, three
-itineraries Portal Norte → Portal Sur (direct, one transfer, zonal + trunk), 220 vehicles that move along their
-shapes every 4 s through the same SSE consumer the real stream uses, departures, and three alerts.
-It's what CI builds against and what `pnpm screenshots` uses.
+itineraries Portal Norte → Portal Sur (direct, one transfer, zonal + trunk) with estimated fares, 220 vehicles that
+move along their shapes every 4 s through the same SSE consumer the real stream uses, departures, the v1.1 arrival
+board and "next buses" endpoints, station POIs, service windows, accessibility flags, remote config and three alerts.
+It's what CI builds against and what `pnpm screenshots` uses (`BASE_URL=http://localhost:3100 pnpm screenshots`).
 
 ## How it talks to the API
 
