@@ -58,7 +58,7 @@ export function ArrivalBoard({ board, city, refreshing, onPickRoute }: { board: 
                   <p className="mt-0.5 text-xs text-ink-3">
                     {t.board.then}{" "}
                     {rest.map((n, i) => (
-                      <span key={n.time}>
+                      <span key={`${n.tripId ?? i}-${n.time}`}>
                         <span className={`tabular-nums ${n.realtime ? "font-semibold text-ink-2" : ""}`} title={n.realtime ? t.freshness.live : t.freshness.scheduled}>
                           {n.minutes}
                           {n.realtime ? <span className="live-dot ml-0.5 inline-block align-middle" style={{ width: 4, height: 4 }} /> : null}

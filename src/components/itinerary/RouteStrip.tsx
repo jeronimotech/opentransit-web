@@ -1,5 +1,5 @@
 import { componentColor } from "@/lib/colors";
-import { contrastText, normalizeHex } from "@/lib/geo";
+import { routeChipColors } from "@/lib/route-color";
 import type { Itinerary } from "@/lib/api/types";
 
 /**
@@ -16,8 +16,7 @@ export function RouteStrip({ itinerary, height = 30 }: { itinerary: Itinerary; h
         if (!leg.transit) {
           return <span key={i} className="strip-walk self-center" style={{ flex: `${share} 1 0`, height: 3 }} />;
         }
-        const bg = leg.route ? normalizeHex(leg.route.color, componentColor(leg.route.component)) : "#667085";
-        const fg = leg.route?.textColor ? normalizeHex(leg.route.textColor, contrastText(bg)) : contrastText(bg);
+        const { bg, fg } = leg.route ? routeChipColors(leg.route.color, componentColor(leg.route.component)) : { bg: "#667085", fg: "#ffffff" };
         const code = leg.route?.shortName ?? leg.mode;
         return (
           <span

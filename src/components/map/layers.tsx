@@ -5,10 +5,10 @@ import type { GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMap, useMapZoom } from "./MapView";
 import { componentColor } from "@/lib/colors";
-import { desaturate } from "@/lib/route-color";
+import { desaturate, routeChipColors } from "@/lib/route-color";
 import { LIVE_DETAIL_ZOOM, LIVE_MIN_ZOOM } from "@/lib/marker-style";
 import { ETA_COLORS, etaBucket } from "@/lib/eta";
-import { bboxOf, decodeGeometry, fc, normalizeHex, toLineString, toPoint, type BBox, type LngLat } from "@/lib/geo";
+import { bboxOf, decodeGeometry, fc, toLineString, toPoint, type BBox, type LngLat } from "@/lib/geo";
 import type { Geometry, Itinerary, NetworkShape, PoiCollection, PoiType, Stop, Vehicle } from "@/lib/api/types";
 import type { FeatureCollection } from "geojson";
 
@@ -95,7 +95,7 @@ export function ItineraryLayer({ itinerary, dim = false }: { itinerary: Itinerar
       toLineString(decodeGeometry(leg.geometry), {
         i,
         walk: !leg.transit,
-        color: leg.route ? normalizeHex(leg.route.color, componentColor(leg.route.component)) : "#667085",
+        color: leg.route ? routeChipColors(leg.route.color, componentColor(leg.route.component)).bg : "#667085",
       }),
     );
     const stops = itinerary.legs.flatMap((leg) =>
@@ -103,7 +103,7 @@ export function ItineraryLayer({ itinerary, dim = false }: { itinerary: Itinerar
         ? [leg.from, ...leg.intermediateStops, leg.to].map((p, j, arr) =>
             toPoint(p.lon, p.lat, {
               end: j === 0 || j === arr.length - 1,
-              color: leg.route ? normalizeHex(leg.route.color, componentColor(leg.route.component)) : "#667085",
+              color: leg.route ? routeChipColors(leg.route.color, componentColor(leg.route.component)).bg : "#667085",
             }),
           )
         : [],
@@ -187,14 +187,34 @@ export function LineLayer({ id, geometry, color, width = 4, fit = false }: { id:
 }
 
 // ── Network (all shapes, thin) ──────────────────────────────────────────────
-export function NetworkLayer({ shapes, opacity = 0.35 }: { shapes: NetworkShape[]; opacity?: number }) {
+/**
+ * Every route shape as a quiet backdrop. Feeds ship neon colours and hundreds of
+ * overlapping shapes on the same corridor, so lines use the desaturated component
+ * colour, stay ≤ 2 px and sit well below the labels.
+ */
+export function NetworkLayer({ shapes, opacity = 0.3 }: { shapes: NetworkShape[]; opacity?: number }) {
   const data = useMemo(
-    () => fc(shapes.map((s) => toLineString(decodeGeometry(s.geometry), { color: normalizeHex(s.color, componentColor(s.component)), c: s.component }))),
+    () => fc(shapes.map((s) => toLineString(decodeGeometry(s.geometry), { color: desaturate(routeChipColors(s.color, componentColor(s.component)).bg, 0.35), c: s.component }))),
     [shapes],
   );
-  useGeoJsonLayer("network", data, [
-    { id: "network-line", type: "line", layout: { "line-join": "round" }, paint: { "line-color": ["get", "color"], "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1, 14, 2.5], "line-opacity": opacity } },
-  ]);
+  useGeoJsonLayer(
+    "network",
+    data,
+    [
+      {
+        id: "network-line",
+        type: "line",
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: {
+          "line-color": ["get", "color"],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.5, 14, 1.1, 17, 2],
+          // fades in with zoom: at city scale a thousand shapes would otherwise cover the basemap
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 11, opacity * 0.35, 13.5, opacity * 0.7, 15, opacity],
+        },
+      },
+    ],
+    { before: "waterway_name" },
+  );
   return null;
 }
 

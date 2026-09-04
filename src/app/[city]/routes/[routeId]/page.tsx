@@ -20,7 +20,7 @@ import { useRoute } from "@/lib/api/hooks";
 import { useVehicleStream } from "@/lib/api/stream";
 import { useInterpolatedVehicles } from "@/lib/interpolate";
 import { useI18n } from "@/lib/i18n/provider";
-import { normalizeHex } from "@/lib/geo";
+import { routeChipColors } from "@/lib/route-color";
 import { resolveConfig, componentOf, componentsOf } from "@/lib/city-config";
 import { serviceStatus } from "@/lib/service-window";
 import type { Vehicle } from "@/lib/api/types";
@@ -36,7 +36,7 @@ export default function RoutePage({ params }: { params: Promise<{ routeId: strin
   const [dir, setDir] = useState(0);
   const pattern = r?.patterns[dir] ?? r?.patterns[0] ?? null;
   const comp = componentOf(city, r?.component);
-  const color = r ? normalizeHex(r.color, comp.color) : "#667085";
+  const color = r ? routeChipColors(r.color, comp.color).bg : "#667085";
   const svc = serviceStatus(t, r);
 
   const stream = useVehicleStream(city.id, cfg.features.liveVehicles);

@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useI18n } from "@/lib/i18n/provider";
 import { fmtDelay, fmtDistance, fmtDuration, fmtTime } from "@/lib/format";
 import { componentColor } from "@/lib/colors";
-import { normalizeHex } from "@/lib/geo";
+import { routeChipColors } from "@/lib/route-color";
 import { Badge, Button, Icon } from "@/components/ui/primitives";
 import { RouteChip } from "@/components/ui/RouteChip";
 import { FareTag } from "@/components/ui/FareTag";
@@ -123,7 +123,7 @@ export function ItineraryDetail({
 function LegRow({ leg, city, tz, last, current, done }: { leg: Leg; city: City; tz: string; last: boolean; current: boolean; done: boolean }) {
   const { t, lang } = useI18n();
   const [open, setOpen] = useState(false);
-  const color = leg.transit ? normalizeHex(leg.route?.color, componentColor(leg.route?.component)) : "var(--ink-3)";
+  const color = leg.transit ? routeChipColors(leg.route?.color, componentColor(leg.route?.component)).bg : "var(--ink-3)";
   const delay = fmtDelay(leg.delaySeconds, lang);
   const nStops = leg.intermediateStops.length + 1;
   const svc = serviceStatus(t, leg.route);
