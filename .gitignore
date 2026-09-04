@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# copied from node_modules by scripts/copy-maplibre-worker.mjs
+/public/vendor/
+
+# playwright mcp artifacts
+.playwright-mcp/
+
+# keep the example env file
+!.env.example
