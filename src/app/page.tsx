@@ -1,103 +1,93 @@
-import Image from "next/image";
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo } from "react";
+import { useCities } from "@/lib/api/hooks";
+import { useI18n } from "@/lib/i18n/provider";
+import { Wordmark } from "@/components/shell/CityHeader";
+import { Spinner } from "@/components/ui/primitives";
+import { MOCK } from "@/lib/api/client";
+
+const LAST_CITY = "opentransit.city";
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const { t, lang, setLang } = useI18n();
+  const { data, isLoading, error } = useCities();
+  const router = useRouter();
+  const cities = useMemo(() => data?.cities ?? [], [data]);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+  useEffect(() => {
+    if (cities.length === 1) router.replace(`/${cities[0].id}`);
+  }, [cities, router]);
+
+  return (
+    <main className="mx-auto flex min-h-dvh max-w-3xl flex-col px-5 py-8">
+      <div className="flex items-center justify-between">
+        <Wordmark className="text-lg" />
+        <button
+          type="button"
+          onClick={() => setLang(lang === "es" ? "en" : "es")}
+          className="rounded-lg px-2 py-1 text-xs font-bold text-ink-2 hover:bg-paper-3"
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
+          {lang === "es" ? "EN" : "ES"}
+        </button>
+      </div>
+
+      <section className="mt-14 md:mt-24">
+        <h1 className="max-w-[18ch] text-4xl font-extrabold leading-[1.05] tracking-tight md:text-6xl">{t.tagline}</h1>
+        <p className="mt-4 max-w-prose text-base text-ink-2 md:text-lg">{t.chooseCityHint}</p>
+      </section>
+
+      <section className="mt-10" aria-labelledby="cities">
+        <h2 id="cities" className="text-sm font-semibold text-ink-2">
+          {t.chooseCity}
+        </h2>
+        {isLoading ? (
+          <div className="mt-4">
+            <Spinner />
+          </div>
+        ) : null}
+        {error ? <p className="mt-4 text-sm text-brick">{t.common.error}</p> : null}
+        <ul className="mt-3 grid gap-3 sm:grid-cols-2">
+          {cities.map((c) => (
+            <li key={c.id}>
+              <Link
+                href={`/${c.id}`}
+                onClick={() => {
+                  try {
+                    localStorage.setItem(LAST_CITY, c.id);
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+                className="group flex items-center gap-4 rounded-card border border-line bg-paper-2 p-4 shadow-card transition-colors hover:border-ink"
+              >
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl text-lg font-extrabold text-white" style={{ background: c.branding.primaryColor }}>
+                  {c.name.slice(0, 1)}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-lg font-bold">{c.name}</span>
+                  <span className="block truncate text-xs text-ink-3">
+                    {c.agencies.length} {lang === "es" ? "operadores" : "agencies"} · {c.features.realtimeVehicles ? (lang === "es" ? "tiempo real" : "realtime") : lang === "es" ? "horarios" : "timetable"}
+                  </span>
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <footer className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1 pt-16 text-xs text-ink-3">
+        <Link href="/about" className="font-semibold text-ink-2 hover:underline">
+          {t.nav.about}
+        </Link>
+        <a href="https://github.com/opentransit" className="font-semibold text-ink-2 hover:underline" rel="noreferrer" target="_blank">
+          GitHub
         </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+        <span>{t.openSource} · MIT</span>
+        {MOCK ? <span className="rounded bg-amber px-1.5 py-0.5 font-bold text-amber-ink">{t.common.mock}</span> : null}
       </footer>
-    </div>
+    </main>
   );
 }
