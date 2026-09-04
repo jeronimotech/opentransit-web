@@ -15,6 +15,10 @@ export const dict = {
       poisHint: "Cicloparqueaderos, baños, cajeros, salud",
       network: "Red de rutas",
       networkHint: "Trazados de todas las rutas",
+      networkTrunk: "Red troncal",
+      networkTrunkHint: "Troncales y cable",
+      networkZonal: "Rutas zonales",
+      networkZonalHint: "Zonales, duales y alimentadores (cientos de trazados)",
       locate: "Mi ubicación",
     },
     hub: {
@@ -424,6 +428,10 @@ export const dict = {
       poisHint: "Bike parking, toilets, ATMs, health",
       network: "Route network",
       networkHint: "Shapes of every route",
+      networkTrunk: "Trunk network",
+      networkTrunkHint: "BRT trunk lines and cable",
+      networkZonal: "Zonal routes",
+      networkZonalHint: "Zonal, dual and feeder routes (hundreds of shapes)",
       locate: "My location",
     },
     hub: {

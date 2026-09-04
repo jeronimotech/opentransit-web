@@ -68,19 +68,26 @@ function FleetInView({ city, enabled, colors, onClick }: { city: string; enabled
   return on && vehicles.length ? <VehiclesLayer vehicles={vehicles} colors={colors} onClick={(v) => onClick(v.id)} /> : null;
 }
 
-function NetworkInView({ city, enabled }: { city: string; enabled: boolean }) {
-  const net = useNetwork(city, enabled);
-  return enabled && net.data ? <NetworkLayer shapes={net.data.shapes} opacity={0.3} /> : null;
+function NetworkInView({ city, trunk, zonal }: { city: string; trunk: boolean; zonal: boolean }) {
+  const net = useNetwork(city, trunk || zonal);
+  if (!net.data) return null;
+  return (
+    <>
+      {zonal ? <NetworkLayer shapes={net.data.shapes} group="zonal" /> : null}
+      {trunk ? <NetworkLayer shapes={net.data.shapes} group="trunk" /> : null}
+    </>
+  );
 }
 
 /** Layer popover + locate button, rendered inside the map so they can read the zoom. */
-function MapControls({ city, live, setLive, pois, setPois, net, setNet, onLocate, locating }: { city: string; live: boolean; setLive: (v: boolean) => void; pois: boolean; setPois: (v: boolean) => void; net: boolean; setNet: (v: boolean) => void; onLocate: () => Promise<{ lat: number; lon: number } | null>; locating: boolean }) {
+function MapControls({ city, live, setLive, pois, setPois, net, setNet, zonal, setZonal, onLocate, locating }: { city: string; live: boolean; setLive: (v: boolean) => void; pois: boolean; setPois: (v: boolean) => void; net: boolean; setNet: (v: boolean) => void; zonal: boolean; setZonal: (v: boolean) => void; onLocate: () => Promise<{ lat: number; lon: number } | null>; locating: boolean }) {
   const { t } = useI18n();
   const cityCfg = resolveConfig(useCityCtx());
   const zoom = useMapZoom();
   const items = [
     ...(cityCfg.features.liveVehicles ? [{ key: "live", label: t.layers.live, on: live, onChange: setLive, hint: liveAutoOn(zoom) ? t.layers.liveHint : t.layers.liveZoomHint }] : []),
-    { key: "network", label: t.layers.network, on: net, onChange: setNet, hint: t.layers.networkHint },
+    { key: "network", label: t.layers.networkTrunk, on: net, onChange: setNet, hint: t.layers.networkTrunkHint },
+    { key: "zonal", label: t.layers.networkZonal, on: zonal, onChange: setZonal, hint: t.layers.networkZonalHint },
     ...(cityCfg.features.pois ? [{ key: "pois", label: t.layers.pois, on: pois, onChange: setPois, hint: t.layers.poisHint }] : []),
   ];
   return (
@@ -119,6 +126,7 @@ function Planner() {
   const [showPois, setShowPois] = useState(false);
   const [showLive, setShowLive] = useState(true);
   const [showNet, setShowNet] = useState(true);
+  const [showZonal, setShowZonal] = useState(false);
   const [liveCount, setLiveCount] = useState(0);
   const geo = useGeolocation();
 
@@ -347,7 +355,7 @@ function Planner() {
       map={
         <MapView center={[city.center.lon, city.center.lat]} zoom={city.defaultZoom} attribution={city.attribution} onClick={onMapClick} className={`h-full w-full ${picking ? "cursor-crosshair" : ""}`}>
           <ZoomGate min={12} force={false}>
-            <NetworkInView city={city.id} enabled={showNet && !selected} />
+            <NetworkInView city={city.id} trunk={showNet && !selected} zonal={showZonal && !selected} />
           </ZoomGate>
           {!selected && nearby.data ? <StopsLayer stops={nearby.data.stops} onClick={(s) => router.push(`/${city.id}/stops/${encodeURIComponent(s.id)}`)} /> : null}
           <ItineraryLayer itinerary={selected} />
@@ -358,7 +366,7 @@ function Planner() {
           {draft.from ? <PinMarker kind="from" lat={draft.from.lat} lon={draft.from.lon} /> : null}
           {draft.to ? <PinMarker kind="to" lat={draft.to.lat} lon={draft.to.lon} /> : null}
           {geo.pos ? <PinMarker kind="user" lat={geo.pos.lat} lon={geo.pos.lon} /> : null}
-          <MapControls city={city.id} live={showLive} setLive={setShowLive} pois={showPois} setPois={setShowPois} net={showNet} setNet={setShowNet} onLocate={() => locateFor("hub")} locating={locating === "hub"} />
+          <MapControls city={city.id} live={showLive} setLive={setShowLive} pois={showPois} setPois={setShowPois} net={showNet} setNet={setShowNet} zonal={showZonal} setZonal={setShowZonal} onLocate={() => locateFor("hub")} locating={locating === "hub"} />
           <span className="sr-only">{LIVE_MIN_ZOOM}</span>
         </MapView>
       }

@@ -9,7 +9,7 @@ import { desaturate, routeChipColors } from "@/lib/route-color";
 import { LIVE_DETAIL_ZOOM, LIVE_MIN_ZOOM } from "@/lib/marker-style";
 import { ETA_COLORS, etaBucket } from "@/lib/eta";
 import { bboxOf, decodeGeometry, fc, toLineString, toPoint, type BBox, type LngLat } from "@/lib/geo";
-import type { Geometry, Itinerary, NetworkShape, PoiCollection, PoiType, Stop, Vehicle } from "@/lib/api/types";
+import type { Component, Geometry, Itinerary, NetworkShape, PoiCollection, PoiType, Stop, Vehicle } from "@/lib/api/types";
 import type { FeatureCollection } from "geojson";
 
 type DistributiveOmit<T, K extends keyof never> = T extends unknown ? Omit<T, K> : never;
@@ -192,24 +192,37 @@ export function LineLayer({ id, geometry, color, width = 4, fit = false }: { id:
  * overlapping shapes on the same corridor, so lines use the desaturated component
  * colour, stay ≤ 2 px and sit well below the labels.
  */
-export function NetworkLayer({ shapes, opacity = 0.3 }: { shapes: NetworkShape[]; opacity?: number }) {
+export const NETWORK_GROUPS = {
+  /** "Red troncal": the backbone (BRT + cable). ON by default. */
+  trunk: { components: ["trunk", "cable", "rail"] as Component[], width: 2.5, opacity: 0.5 },
+  /** "Rutas zonales": zonal + dual + feeder — hundreds of overlapping shapes, OFF by default. */
+  zonal: { components: ["zonal", "dual", "feeder", "other"] as Component[], width: 1.5, opacity: 0.18 },
+};
+
+export function NetworkLayer({ shapes, group = "trunk" }: { shapes: NetworkShape[]; group?: keyof typeof NETWORK_GROUPS }) {
+  const g = NETWORK_GROUPS[group];
   const data = useMemo(
-    () => fc(shapes.map((s) => toLineString(decodeGeometry(s.geometry), { color: desaturate(routeChipColors(s.color, componentColor(s.component)).bg, 0.35), c: s.component }))),
-    [shapes],
+    () =>
+      fc(
+        shapes
+          .filter((s) => g.components.includes(s.component))
+          .map((s) => toLineString(decodeGeometry(s.geometry), { color: desaturate(routeChipColors(s.color, componentColor(s.component)).bg, 0.3), c: s.component })),
+      ),
+    [shapes, g],
   );
   useGeoJsonLayer(
-    "network",
+    `network-${group}`,
     data,
     [
       {
-        id: "network-line",
+        id: `network-${group}-line`,
         type: "line",
         layout: { "line-join": "round", "line-cap": "round" },
         paint: {
           "line-color": ["get", "color"],
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.5, 14, 1.1, 17, 2],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, g.width * 0.4, 14, g.width * 0.7, 17, g.width],
           // fades in with zoom: at city scale a thousand shapes would otherwise cover the basemap
-          "line-opacity": ["interpolate", ["linear"], ["zoom"], 11, opacity * 0.35, 13.5, opacity * 0.7, 15, opacity],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 11, g.opacity * 0.5, 14, g.opacity],
         },
       },
     ],
@@ -243,16 +256,17 @@ export function StopsLayer({ stops, onClick, id = "stops" }: { stops: Stop[]; on
         id: `${id}-circle`,
         type: "circle",
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, ["case", ["get", "station"], 4, 2], 15, ["case", ["get", "station"], 8, 5]],
+          // < 15: 4 px dots (2 px radius, thin ring, no label); ≥ 15: full markers
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, ["case", ["get", "station"], 2.5, 1.5], 14.9, ["case", ["get", "station"], 3, 2], 15, ["case", ["get", "station"], 8, 5]],
           "circle-color": "#ffffff",
           "circle-stroke-color": ["get", "color"],
-          "circle-stroke-width": ["case", ["get", "station"], 3, 2],
+          "circle-stroke-width": ["step", ["zoom"], ["case", ["get", "station"], 1.5, 1], 15, ["case", ["get", "station"], 3, 2]],
         },
       },
       {
         id: `${id}-label`,
         type: "symbol",
-        minzoom: 13.5,
+        minzoom: 15,
         layout: {
           "text-field": ["get", "name"],
           "text-size": 11,
