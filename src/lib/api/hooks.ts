@@ -98,10 +98,11 @@ export function usePois(city: string, bbox: string | null, enabled: boolean) {
   });
 }
 
-export function useDepartures(city: string, stopId: string, refreshMs = 20_000) {
+export function useDepartures(city: string, stopId: string, refreshMs = 20_000, enabled = true) {
   return useQuery({
     queryKey: ["departures", city, stopId],
     queryFn: () => api.departures(city, stopId, 30, 90),
+    enabled,
     // keep polling while it works; a 4xx (e.g. a station with no stop times) stays put
     refetchInterval: (q) => (q.state.error ? false : refreshMs),
     retry: retryPolicy,

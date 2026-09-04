@@ -19,6 +19,7 @@ const STATION = process.env.STATION ?? "bogota:7001";
 const ROUTE = process.env.ROUTE ?? "bogota:B13";
 const trip = "from=4.75460,-74.04590&fromName=Portal%20Norte&to=4.59780,-74.16160&toName=Portal%20Sur";
 
+const ONLY = process.env.SHOTS ? process.env.SHOTS.split(",") : null;
 const shots = [
   ["hub", "/bogota"],
   ["planner", `/bogota?${trip}`],
@@ -27,7 +28,7 @@ const shots = [
   ["stop", `/bogota/stops/${encodeURIComponent(STOP)}`],
   ["favorites", "/bogota/favorites"],
   ["live", `/bogota/live?stop=${encodeURIComponent(STATION)}`],
-];
+].filter(([n]) => !ONLY || ONLY.includes(n));
 const viewports = process.env.VIEWPORTS
   ? Object.fromEntries(process.env.VIEWPORTS.split(",").map((v) => [v, v === "mobile" ? { width: 390, height: 844 } : { width: 1280, height: 800 }]))
   : { desktop: { width: 1280, height: 800 }, mobile: { width: 390, height: 844 } };

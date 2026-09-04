@@ -20,7 +20,7 @@ import { isNotFound, useAlerts, useBoard, useDepartures, useDeparturesMulti, use
 import { useVehicleStream } from "@/lib/api/stream";
 import { useInterpolatedVehicles } from "@/lib/interpolate";
 import { useI18n } from "@/lib/i18n/provider";
-import { resolveConfig, componentOf, componentsOf } from "@/lib/city-config";
+import { resolveConfig, componentOf, componentsOf, stopComponent } from "@/lib/city-config";
 import type { Stop, StopDetail } from "@/lib/api/types";
 
 export default function StopPage({ params }: { params: Promise<{ stopId: string }> }) {
@@ -34,7 +34,7 @@ export default function StopPage({ params }: { params: Promise<{ stopId: string 
   const refreshMs = cfg.departuresRefreshSeconds * 1000;
   const board = useBoard(city.id, stopId, refreshMs, cfg.features.board);
   const boardMissing = !cfg.features.board || !!board.error; // v1 API or no times → legacy departures
-  const deps = useDepartures(city.id, stopId, refreshMs);
+  const deps = useDepartures(city.id, stopId, refreshMs, boardMissing);
   const alerts = useAlerts(city.id, { stopId });
   const nearby = useNearbyStops(city.id, stop.data ? { lat: stop.data.lat, lon: stop.data.lon } : null, 400);
   const [showPois, setShowPois] = useState(false);
@@ -70,7 +70,7 @@ export default function StopPage({ params }: { params: Promise<{ stopId: string 
   const compColors = useMemo(() => Object.fromEntries(componentsOf(city).map((c) => [c.id, c.color])), [city]);
 
   const q = (kind: "from" | "to") => (s ? `?${kind}=${s.lat.toFixed(5)},${s.lon.toFixed(5)}&${kind}Name=${encodeURIComponent(s.name)}&view=plan` : "");
-  const comp = componentOf(city, s?.component);
+  const comp = componentOf(city, stopComponent(s));
   const routesDedup = useMemo(() => {
     const seen = new Map<string, StopDetail["routes"][number]>();
     for (const r of s?.routes ?? []) if (!seen.has(r.shortName)) seen.set(r.shortName, r);

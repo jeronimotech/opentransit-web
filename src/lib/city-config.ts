@@ -92,3 +92,23 @@ export function componentOf(city: City, id: Component | null | undefined): CityC
 export function faresOf(city: City): CityFares | null {
   return city.fares ?? null;
 }
+
+/**
+ * Stations in some feeds (Bogotá) come with `component: null`; the platforms and routes
+ * know. Pick the most common component among the routes, else the stop's own value.
+ */
+export function stopComponent(stop: { component: Component | null; routes?: { component: Component }[] } | null | undefined): Component | null {
+  if (!stop) return null;
+  if (stop.component) return stop.component;
+  const counts = new Map<Component, number>();
+  for (const r of stop.routes ?? []) counts.set(r.component, (counts.get(r.component) ?? 0) + 1);
+  let best: Component | null = null;
+  let n = 0;
+  for (const [c, k] of counts) {
+    if (k > n) {
+      best = c;
+      n = k;
+    }
+  }
+  return best;
+}

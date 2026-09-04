@@ -16,7 +16,7 @@ import { useGeocode, useNextBuses, useStop } from "@/lib/api/hooks";
 import { useVehicleStream } from "@/lib/api/stream";
 import { useInterpolatedVehicles } from "@/lib/interpolate";
 import { useGeolocation } from "@/lib/use-geolocation";
-import { resolveConfig, componentOf, componentsOf } from "@/lib/city-config";
+import { resolveConfig, componentOf, componentsOf, stopComponent } from "@/lib/city-config";
 import { serviceStatus } from "@/lib/service-window";
 import type { GeocodeResult } from "@/lib/api/types";
 
@@ -104,7 +104,7 @@ function Next() {
         {s && !open ? (
           <div className="flex items-center gap-3 rounded-card border border-line bg-paper-2 p-3">
             {(() => {
-              const c = componentOf(city, s.component);
+              const c = componentOf(city, stopComponent(s));
               return (
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white" style={{ background: c.color }}>
                   <ComponentIcon icon={c.icon} width={18} height={18} />
