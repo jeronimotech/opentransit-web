@@ -199,3 +199,36 @@ body {
   border: 3px solid var(--paper-2);
   box-shadow: 0 2px 6px rgb(0 0 0 / 0.35);
 }
+
+/* ── Print: only the QR panel when one is open ──────────────────────────── */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-qr,
+  .print-qr * {
+    visibility: visible;
+  }
+  .print-qr {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+  }
+  .print-qr .print-title {
+    display: block !important;
+  }
+  .print-qr svg {
+    width: 60vmin;
+    height: 60vmin;
+  }
+}
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

@@ -3,8 +3,10 @@
 import { useI18n } from "@/lib/i18n/provider";
 import { fmtDistance, fmtDuration, fmtTime } from "@/lib/format";
 import { Badge, Icon } from "@/components/ui/primitives";
+import { FareTag } from "@/components/ui/FareTag";
 import { RouteStrip } from "./RouteStrip";
-import type { Itinerary } from "@/lib/api/types";
+import { estimateFare } from "@/lib/fare";
+import type { CityFares, Itinerary } from "@/lib/api/types";
 
 export function ItineraryCard({
   itinerary,
@@ -12,14 +14,18 @@ export function ItineraryCard({
   selected,
   onSelect,
   index,
+  fares,
 }: {
   itinerary: Itinerary;
   tz: string;
   selected: boolean;
   onSelect: () => void;
   index: number;
+  fares?: CityFares | null;
 }) {
   const { t, lang } = useI18n();
+  const fare = estimateFare(itinerary, fares);
+  const bike = itinerary.legs.some((l) => l.mode === "BICYCLE");
   const live = itinerary.legs.some((l) => l.realtime);
   const hasAlerts = itinerary.legs.some((l) => l.alerts.length);
   const canceled = itinerary.legs.some((l) => l.realtimeState === "CANCELED");
@@ -55,6 +61,11 @@ export function ItineraryCard({
             {fmtDuration(itinerary.waitingTimeSeconds, lang)} {t.planner.wait}
           </span>
         ) : null}
+        {bike ? (
+          <span className="inline-flex items-center gap-1 text-moss">
+            <Icon.Bike width={14} height={14} /> {t.mode.BICYCLE}
+          </span>
+        ) : null}
         <span className="ml-auto flex items-center gap-1">
           {canceled ? <Badge tone="bad">{t.planner.canceled}</Badge> : null}
           {live && !canceled ? (
@@ -70,6 +81,9 @@ export function ItineraryCard({
           ) : null}
           {itinerary.accessible ? <Badge tone="info">{t.planner.accessible}</Badge> : null}
         </span>
+      </div>
+      <div className="mt-2">
+        <FareTag fare={fare} interactive={false} />
       </div>
       <span className="sr-only">
         {t.planner.results} {index + 1}

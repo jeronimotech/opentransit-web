@@ -6,29 +6,40 @@ import { use, useMemo, useState } from "react";
 import { useCityCtx } from "@/components/shell/CityContext";
 import { SplitLayout } from "@/components/shell/SplitLayout";
 import { MapView } from "@/components/map/MapView";
-import { LineLayer, StopsLayer, VehiclesLayer } from "@/components/map/layers";
+import { LineLayer, StopsLayer, VehiclesLayer, useMapBounds } from "@/components/map/layers";
 import { AlertCard } from "@/components/alerts/AlertCard";
 import { Badge, EmptyState, Spinner } from "@/components/ui/primitives";
 import { RouteChip } from "@/components/ui/RouteChip";
+import { FavoriteButton } from "@/components/ui/FavoriteButton";
+import { QrPanel } from "@/components/ui/QrPanel";
+import { PqrsLink } from "@/components/ui/AgencyLinks";
+import { ComponentIcon } from "@/components/ui/ComponentIcon";
 import { useRoute } from "@/lib/api/hooks";
 import { useVehicleStream } from "@/lib/api/stream";
+import { useInterpolatedVehicles } from "@/lib/interpolate";
 import { useI18n } from "@/lib/i18n/provider";
-import { componentColor } from "@/lib/colors";
 import { normalizeHex } from "@/lib/geo";
+import { resolveConfig, componentOf, componentsOf } from "@/lib/city-config";
+import { serviceStatus } from "@/lib/service-window";
+import type { Vehicle } from "@/lib/api/types";
 
 export default function RoutePage({ params }: { params: Promise<{ routeId: string }> }) {
-  const { routeId: raw } = use(params);
-  const routeId = decodeURIComponent(raw);
+  const { routeId: rawId } = use(params);
+  const routeId = decodeURIComponent(rawId);
   const city = useCityCtx();
+  const cfg = resolveConfig(city);
   const { t } = useI18n();
   const router = useRouter();
   const { data: r, isLoading, error } = useRoute(city.id, routeId);
   const [dir, setDir] = useState(0);
   const pattern = r?.patterns[dir] ?? r?.patterns[0] ?? null;
-  const color = r ? normalizeHex(r.color, componentColor(r.component)) : "#667085";
+  const comp = componentOf(city, r?.component);
+  const color = r ? normalizeHex(r.color, comp.color) : "#667085";
+  const svc = serviceStatus(t, r);
 
-  const stream = useVehicleStream(city.id, city.features.realtimeVehicles);
-  const vehicles = useMemo(() => [...stream.vehicles.values()].filter((v) => v.routeId === routeId), [stream.vehicles, routeId]);
+  const stream = useVehicleStream(city.id, cfg.features.liveVehicles);
+  const raw = useMemo(() => [...stream.vehicles.values()].filter((v) => v.routeId === routeId), [stream.vehicles, routeId]);
+  const compColors = useMemo(() => Object.fromEntries(componentsOf(city).map((c) => [c.id, c.color])), [city]);
 
   const panel = (
     <div className="flex flex-col gap-4 p-4">
@@ -38,24 +49,30 @@ export default function RoutePage({ params }: { params: Promise<{ routeId: strin
         <>
           <div className="flex items-start gap-3">
             <RouteChip route={r} size="lg" />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <h1 className="text-lg font-extrabold leading-tight tracking-tight">{r.longName}</h1>
               <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-ink-2">
-                <Badge>{t.component[r.component]}</Badge>
+                <Badge>
+                  <ComponentIcon icon={comp.icon} width={12} height={12} /> {comp.label}
+                </Badge>
                 <span>{t.mode[r.mode]}</span>
-                {city.features.realtimeVehicles ? (
+                {cfg.features.liveVehicles ? (
                   <span className="inline-flex items-center gap-1">
-                    <span className="live-dot" style={{ width: 6, height: 6 }} /> {t.route.liveVehicles(vehicles.length)}
+                    <span className="live-dot" style={{ width: 6, height: 6 }} /> {t.route.liveVehicles(raw.length)}
                   </span>
                 ) : null}
               </div>
+              {svc.label ? <p className={`mt-1.5 text-sm ${svc.active ? "text-moss" : "font-semibold text-brick"}`}>{svc.label}</p> : null}
             </div>
+            {cfg.features.favorites ? (
+              <FavoriteButton city={city.id} item={{ kind: "route", id: r.id, routeId: r.id, shortName: r.shortName, longName: r.longName, color: color, component: r.component }} />
+            ) : null}
           </div>
 
           {r.alerts.length ? (
             <div className="flex flex-col gap-2">
               {r.alerts.map((a) => (
-                <AlertCard key={a.id} alert={a} tz={city.timezone} compact />
+                <AlertCard key={a.id} alert={a} tz={city.timezone} compact city={city.id} links={city.links} />
               ))}
             </div>
           ) : null}
@@ -63,13 +80,7 @@ export default function RoutePage({ params }: { params: Promise<{ routeId: strin
           {r.patterns.length > 1 ? (
             <div className="inline-flex rounded-lg bg-paper-3 p-0.5 text-sm font-semibold">
               {r.patterns.map((p, i) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setDir(i)}
-                  className={`min-w-0 flex-1 truncate rounded-md px-3 py-1.5 ${i === dir ? "bg-paper-2 text-ink shadow-sm" : "text-ink-2"}`}
-                  aria-pressed={i === dir}
-                >
+                <button key={p.id} type="button" onClick={() => setDir(i)} className={`min-w-0 flex-1 truncate rounded-md px-3 py-1.5 ${i === dir ? "bg-paper-2 text-ink shadow-sm" : "text-ink-2"}`} aria-pressed={i === dir}>
                   {t.planner.towards} {p.headsign ?? p.stops[p.stops.length - 1]?.name ?? `${i + 1}`}
                 </button>
               ))}
@@ -97,6 +108,9 @@ export default function RoutePage({ params }: { params: Promise<{ routeId: strin
               </ol>
             </section>
           ) : null}
+
+          <QrPanel path={`/${city.id}/routes/${encodeURIComponent(r.id)}`} title={`${r.shortName} · ${r.longName}`} />
+          <PqrsLink city={city} compact />
         </>
       ) : null}
     </div>
@@ -109,9 +123,15 @@ export default function RoutePage({ params }: { params: Promise<{ routeId: strin
         <MapView center={[city.center.lon, city.center.lat]} zoom={city.defaultZoom} attribution={city.attribution} className="h-full w-full">
           {pattern ? <LineLayer id="pattern" geometry={pattern.geometry} color={color} width={5} fit /> : null}
           {pattern ? <StopsLayer stops={pattern.stops} onClick={(s) => router.push(`/${city.id}/stops/${encodeURIComponent(s.id)}`)} /> : null}
-          {vehicles.length ? <VehiclesLayer vehicles={vehicles} onClick={(v) => router.push(`/${city.id}/live?vehicle=${encodeURIComponent(v.id)}`)} /> : null}
+          <RouteVehicles vehicles={raw} colors={compColors} onClick={(v) => router.push(`/${city.id}/live?vehicle=${encodeURIComponent(v.id)}`)} />
         </MapView>
       }
     />
   );
+}
+
+function RouteVehicles({ vehicles, colors, onClick }: { vehicles: Vehicle[]; colors: Record<string, string>; onClick: (v: Vehicle) => void }) {
+  const bbox = useMapBounds();
+  const animated = useInterpolatedVehicles(vehicles, { bbox, cap: 300 });
+  return animated.length ? <VehiclesLayer vehicles={animated} colors={colors} onClick={onClick} /> : null;
 }

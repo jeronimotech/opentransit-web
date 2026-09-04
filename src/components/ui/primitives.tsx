@@ -43,10 +43,12 @@ export function Badge({
   tone = "neutral",
   children,
   className = "",
+  title,
 }: {
   tone?: "neutral" | "live" | "ok" | "warn" | "bad" | "info";
   children: ReactNode;
   className?: string;
+  title?: string;
 }) {
   const tones = {
     neutral: "bg-paper-3 text-ink-2",
@@ -58,6 +60,7 @@ export function Badge({
   };
   return (
     <span
+      title={title}
       className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold leading-tight ${tones[tone]} ${className}`}
     >
       {children}
@@ -230,6 +233,63 @@ export const Icon = {
   Check: (p: ComponentProps<"svg">) => (
     <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" {...p}>
       <path d="M4 10.5l4 4 8-9" />
+    </svg>
+  ),
+  Star: (p: ComponentProps<"svg">) => (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" {...p}>
+      <path d="M10 2.5l2.4 4.9 5.4.8-3.9 3.8.9 5.4L10 14.9l-4.8 2.5.9-5.4L2.2 8.2l5.4-.8L10 2.5Z" />
+    </svg>
+  ),
+  Fare: (p: ComponentProps<"svg">) => (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}>
+      <rect x="2" y="5" width="16" height="10" rx="2" />
+      <circle cx="10" cy="10" r="2.5" />
+      <path d="M5 10h.5M14.5 10h.5" />
+    </svg>
+  ),
+  Qr: (p: ComponentProps<"svg">) => (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}>
+      <rect x="3" y="3" width="5" height="5" /><rect x="12" y="3" width="5" height="5" /><rect x="3" y="12" width="5" height="5" />
+      <path d="M12 12h2v2h-2zM16 12h1v1M12 16h1v1M15 15h2v2" />
+    </svg>
+  ),
+  Flag: (p: ComponentProps<"svg">) => (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" {...p}>
+      <path d="M5 18V3M5 3h10l-2 4 2 4H5" />
+    </svg>
+  ),
+  External: (p: ComponentProps<"svg">) => (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}>
+      <path d="M11 4h5v5M16 4l-7 7M8 6H5v9h9v-3" />
+    </svg>
+  ),
+  Home: (p: ComponentProps<"svg">) => (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" {...p}>
+      <path d="M3 9.5L10 3l7 6.5V17H3V9.5ZM8 17v-5h4v5" />
+    </svg>
+  ),
+  Work: (p: ComponentProps<"svg">) => (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}>
+      <rect x="2.5" y="6" width="15" height="10" rx="2" />
+      <path d="M7 6V4h6v2M2.5 10h15" />
+    </svg>
+  ),
+  Bike: (p: ComponentProps<"svg">) => (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}>
+      <circle cx="5" cy="14" r="3" /><circle cx="15" cy="14" r="3" />
+      <path d="M5 14l3-7h4l3 7M8 7h-2M12 7l1-2h2M8 7l3 7" />
+    </svg>
+  ),
+  Services: (p: ComponentProps<"svg">) => (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}>
+      <rect x="3" y="3" width="6" height="6" rx="1.5" /><rect x="11" y="3" width="6" height="6" rx="1.5" />
+      <rect x="3" y="11" width="6" height="6" rx="1.5" /><rect x="11" y="11" width="6" height="6" rx="1.5" />
+    </svg>
+  ),
+  Route: (p: ComponentProps<"svg">) => (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}>
+      <circle cx="5" cy="5" r="2" /><circle cx="15" cy="15" r="2" />
+      <path d="M7 5h5a3 3 0 0 1 0 6H8a3 3 0 0 0 0 6h5" />
     </svg>
   ),
   Search: (p: ComponentProps<"svg">) => (

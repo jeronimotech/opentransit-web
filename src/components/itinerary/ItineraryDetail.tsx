@@ -3,14 +3,20 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useI18n } from "@/lib/i18n/provider";
-import { fmtDelay, fmtDistance, fmtDuration, fmtMoney, fmtTime } from "@/lib/format";
+import { fmtDelay, fmtDistance, fmtDuration, fmtTime } from "@/lib/format";
 import { componentColor } from "@/lib/colors";
 import { normalizeHex } from "@/lib/geo";
 import { Badge, Button, Icon } from "@/components/ui/primitives";
 import { RouteChip } from "@/components/ui/RouteChip";
+import { FareTag } from "@/components/ui/FareTag";
 import { RouteStrip } from "./RouteStrip";
+import { FollowAlong } from "./FollowAlong";
 import { AlertCard } from "@/components/alerts/AlertCard";
-import type { Itinerary, Leg } from "@/lib/api/types";
+import { estimateFare } from "@/lib/fare";
+import { useFollowAlong } from "@/lib/follow";
+import { resolveConfig } from "@/lib/city-config";
+import { serviceStatus } from "@/lib/service-window";
+import type { City, Itinerary, Leg } from "@/lib/api/types";
 import type { Dict } from "@/lib/i18n/dict";
 
 const GENERIC_NAMES = new Set(["origin", "destination", "origen", "destino"]);
@@ -19,8 +25,8 @@ const GENERIC_NAMES = new Set(["origin", "destination", "origen", "destino"]);
 function withEndpointNames(it: Itinerary, from?: string | null, to?: string | null): Itinerary {
   const legs = it.legs.map((leg, i) => {
     const l = { ...leg };
-    if (i === 0 && from && GENERIC_NAMES.has(leg.from.name.toLowerCase())) l.from = { ...leg.from, name: from };
-    if (i === it.legs.length - 1 && to && GENERIC_NAMES.has(leg.to.name.toLowerCase())) l.to = { ...leg.to, name: to };
+    if (i === 0 && from && (!leg.from.name || GENERIC_NAMES.has(leg.from.name.toLowerCase()))) l.from = { ...leg.from, name: from };
+    if (i === it.legs.length - 1 && to && (!leg.to.name || GENERIC_NAMES.has(leg.to.name.toLowerCase()))) l.to = { ...leg.to, name: to };
     return l;
   });
   return { ...it, legs };
@@ -29,21 +35,24 @@ function withEndpointNames(it: Itinerary, from?: string | null, to?: string | nu
 export function ItineraryDetail({
   itinerary: raw,
   city,
-  tz,
   onBack,
   liveCount,
   endpoints,
 }: {
   itinerary: Itinerary;
-  city: string;
-  tz: string;
+  city: City;
   onBack: () => void;
   liveCount?: number;
   endpoints?: { from?: string | null; to?: string | null };
 }) {
   const { t, lang } = useI18n();
+  const tz = city.timezone;
+  const cfg = resolveConfig(city);
   const [copied, setCopied] = useState(false);
+  const [following, setFollowing] = useState(false);
   const itinerary = withEndpointNames(raw, endpoints?.from, endpoints?.to);
+  const follow = useFollowAlong(itinerary, following);
+  const fare = estimateFare(itinerary, city.fares);
 
   const share = async () => {
     const url = window.location.href;
@@ -83,14 +92,12 @@ export function ItineraryDetail({
         <div className="mt-2">
           <RouteStrip itinerary={itinerary} height={34} />
         </div>
-        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-2">
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-ink-2">
           <span className="font-semibold text-ink">{t.planner.transfers(itinerary.transfers)}</span>
           <span>
             {fmtDistance(itinerary.walkDistanceMeters, lang)} {t.planner.walk}
           </span>
-          <span>
-            {t.planner.fare}: {itinerary.fare ? fmtMoney(itinerary.fare.amount, itinerary.fare.currency, lang) : <span className="text-ink-3">{t.planner.fareUnknown}</span>}
-          </span>
+          <FareTag fare={fare} />
           {liveCount ? (
             <span className="inline-flex items-center gap-1">
               <span className="live-dot" style={{ width: 6, height: 6 }} />
@@ -100,24 +107,27 @@ export function ItineraryDetail({
         </div>
       </div>
 
+      {cfg.features.followAlong ? <FollowAlong itinerary={itinerary} state={follow} active={following} onToggle={() => setFollowing((f) => !f)} /> : null}
+
       <ol className="relative flex flex-col">
         {itinerary.legs.map((leg, i) => (
-          <LegRow key={i} leg={leg} city={city} tz={tz} last={i === itinerary.legs.length - 1} />
+          <LegRow key={i} leg={leg} city={city} tz={tz} last={i === itinerary.legs.length - 1} current={following && follow.legIndex === i} done={following && follow.legIndex !== null && i < follow.legIndex} />
         ))}
       </ol>
     </div>
   );
 }
 
-function LegRow({ leg, city, tz, last }: { leg: Leg; city: string; tz: string; last: boolean }) {
+function LegRow({ leg, city, tz, last, current, done }: { leg: Leg; city: City; tz: string; last: boolean; current: boolean; done: boolean }) {
   const { t, lang } = useI18n();
   const [open, setOpen] = useState(false);
   const color = leg.transit ? normalizeHex(leg.route?.color, componentColor(leg.route?.component)) : "var(--ink-3)";
   const delay = fmtDelay(leg.delaySeconds, lang);
   const nStops = leg.intermediateStops.length + 1;
+  const svc = serviceStatus(t, leg.route);
 
   return (
-    <li className="grid grid-cols-[52px_20px_1fr] gap-x-2">
+    <li className={`grid grid-cols-[52px_20px_1fr] gap-x-2 rounded-lg ${current ? "-mx-2 bg-signal-soft/70 px-2 py-1" : ""} ${done ? "opacity-50" : ""}`}>
       {/* time */}
       <div className="pt-0.5 text-right text-sm font-bold tabular-nums leading-tight">
         {fmtTime(leg.startTime, tz, lang)}
@@ -135,12 +145,13 @@ function LegRow({ leg, city, tz, last }: { leg: Leg; city: string; tz: string; l
       <div className={`min-w-0 ${last ? "pb-1" : "pb-5"}`}>
         <p className="truncate text-sm font-bold">
           {leg.from.stopId ? (
-            <Link href={`/${city}/stops/${encodeURIComponent(leg.from.stopId)}`} className="hover:underline">
+            <Link href={`/${city.id}/stops/${encodeURIComponent(leg.from.stopId)}`} className="hover:underline">
               {leg.from.name}
             </Link>
           ) : (
             leg.from.name
           )}
+          {current ? <Badge tone="info" className="ml-2 align-middle">{t.follow.currentLeg}</Badge> : null}
         </p>
 
         {leg.transit ? (
@@ -165,10 +176,14 @@ function LegRow({ leg, city, tz, last }: { leg: Leg; city: string; tz: string; l
               {leg.realtimeState === "CANCELED" ? (
                 <Badge tone="bad">{t.planner.canceled}</Badge>
               ) : leg.realtime ? (
-                <Badge tone={leg.delaySeconds && leg.delaySeconds > 180 ? "warn" : "ok"}>{delay ?? t.planner.realtime}</Badge>
+                <Badge tone={leg.delaySeconds && leg.delaySeconds > 180 ? "warn" : "ok"} title={t.freshness.liveHint}>
+                  <span className="live-dot" style={{ width: 5, height: 5 }} />
+                  {delay ?? t.freshness.live}
+                </Badge>
               ) : (
-                <Badge>{t.planner.scheduled}</Badge>
+                <Badge title={t.freshness.scheduledHint}>{t.freshness.scheduled}</Badge>
               )}
+              {svc.active === false ? <Badge tone="bad">{svc.label}</Badge> : null}
             </div>
             {open ? (
               <ul className="ml-1 flex flex-col gap-1 border-l-2 pl-3 text-xs text-ink-2" style={{ borderColor: color }}>
@@ -181,13 +196,13 @@ function LegRow({ leg, city, tz, last }: { leg: Leg; city: string; tz: string; l
               </ul>
             ) : null}
             {leg.alerts.map((a) => (
-              <AlertCard key={a.id} alert={a} tz={tz} compact />
+              <AlertCard key={a.id} alert={a} tz={tz} compact city={city.id} links={city.links} />
             ))}
           </div>
         ) : (
           <div className="mt-1 text-xs text-ink-2">
             <button type="button" onClick={() => setOpen((o) => !o)} className="inline-flex items-center gap-1 font-semibold" aria-expanded={open}>
-              <Icon.Walk width={14} height={14} />
+              {leg.mode === "BICYCLE" ? <Icon.Bike width={14} height={14} /> : <Icon.Walk width={14} height={14} />}
               {fmtDuration(leg.durationSeconds, lang)} · {fmtDistance(leg.distanceMeters, lang)}
               {leg.steps.length ? <Icon.Chevron width={14} height={14} className={`transition-transform ${open ? "rotate-90" : ""}`} /> : null}
             </button>

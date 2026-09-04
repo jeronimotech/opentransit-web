@@ -6,12 +6,18 @@ import { useVehicle } from "@/lib/api/hooks";
 import { fmtDelay, fmtDuration, fmtTime } from "@/lib/format";
 import { Badge, Button, Icon, Spinner } from "@/components/ui/primitives";
 import { RouteChip } from "@/components/ui/RouteChip";
+import { FreshnessBadge } from "@/components/ui/FreshnessBadge";
+import { PqrsLink } from "@/components/ui/AgencyLinks";
 import { AlertCard } from "@/components/alerts/AlertCard";
+import { freshnessFromAge } from "@/lib/freshness";
+import type { City } from "@/lib/api/types";
 
-export function VehiclePanel({ city, id, tz, onClose }: { city: string; id: string; tz: string; onClose: () => void }) {
+export function VehiclePanel({ city, id, onClose }: { city: City; id: string; onClose: () => void }) {
   const { t, lang } = useI18n();
-  const { data, isLoading, error } = useVehicle(city, id);
-  const occ = data?.occupancy ? t.live.occupancy + ": " + data.occupancy.toLowerCase().replaceAll("_", " ") : null;
+  const tz = city.timezone;
+  const { data, isLoading, error } = useVehicle(city.id, id);
+  const age = data ? Math.max(0, Math.round((Date.now() - new Date(data.timestamp).getTime()) / 1000)) : null;
+  const fresh = freshnessFromAge(age);
 
   return (
     <div className="flex flex-col gap-3 p-4">
@@ -30,7 +36,7 @@ export function VehiclePanel({ city, id, tz, onClose }: { city: string; id: stri
         <>
           <div className="flex flex-wrap items-center gap-2">
             {data.route ? (
-              <Link href={`/${city}/routes/${encodeURIComponent(data.route.id)}`}>
+              <Link href={`/${city.id}/routes/${encodeURIComponent(data.route.id)}`}>
                 <RouteChip route={data.route} size="lg" />
               </Link>
             ) : null}
@@ -43,13 +49,14 @@ export function VehiclePanel({ city, id, tz, onClose }: { city: string; id: stri
                 data.route?.longName
               )}
             </span>
+            <FreshnessBadge freshness={fresh} realtime={!fresh.stale} className="ml-auto" />
           </div>
           {!data.tripResolved ? <p className="text-xs text-ink-3">{t.live.unresolved}</p> : null}
 
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-card border border-line bg-paper p-3 text-sm">
             <Row label={t.live.nextStop}>
               {data.nextStop ? (
-                <Link className="font-semibold hover:underline" href={`/${city}/stops/${encodeURIComponent(data.nextStop.id)}`}>
+                <Link className="font-semibold hover:underline" href={`/${city.id}/stops/${encodeURIComponent(data.nextStop.id)}`}>
                   {data.nextStop.name}
                 </Link>
               ) : (
@@ -58,20 +65,17 @@ export function VehiclePanel({ city, id, tz, onClose }: { city: string; id: stri
             </Row>
             <Row label={t.live.eta}>{data.etaSeconds !== null ? fmtDuration(data.etaSeconds, lang) : "—"}</Row>
             <Row label={t.live.delay}>
-              {data.delaySeconds !== null ? (
-                <Badge tone={data.delaySeconds > 180 ? "warn" : "ok"}>{fmtDelay(data.delaySeconds, lang)}</Badge>
-              ) : (
-                "—"
-              )}
+              {data.delaySeconds !== null ? <Badge tone={data.delaySeconds > 180 ? "warn" : "ok"}>{fmtDelay(data.delaySeconds, lang)}</Badge> : "—"}
             </Row>
             <Row label={t.live.speed}>{data.history.avgKmh !== null ? `${data.history.avgKmh} km/h` : "—"}</Row>
             <Row label={t.live.age}>{fmtTime(data.timestamp, tz, lang)}</Row>
-            {occ ? <Row label={t.live.occupancy}>{data.occupancy?.toLowerCase().replaceAll("_", " ")}</Row> : null}
+            {data.occupancy ? <Row label={t.live.occupancy}>{data.occupancy.toLowerCase().replaceAll("_", " ")}</Row> : null}
           </dl>
 
           {data.alerts.map((a) => (
-            <AlertCard key={a.id} alert={a} tz={tz} compact />
+            <AlertCard key={a.id} alert={a} tz={tz} compact city={city.id} links={city.links} />
           ))}
+          <PqrsLink city={city} compact />
         </>
       ) : null}
     </div>

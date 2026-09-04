@@ -26,8 +26,9 @@ type Props = {
   compact?: boolean;
 };
 
-export function PlannerForm({ city, state, onChange, onSubmit, onUseLocation, onPickOnMap, picking, locating, userPos, compact }: Props) {
+export function PlannerForm({ city, state, onChange, onSubmit, onUseLocation, onPickOnMap, picking, locating, userPos, compact, bikeEnabled = true }: Props & { bikeEnabled?: boolean }) {
   const { t, lang } = useI18n();
+  const canBike = bikeEnabled && city.modes.includes("BICYCLE");
   const [showTime, setShowTime] = useState(!!state.time);
   const transitModes = city.modes.filter((m) => m !== "WALK" && m !== "BICYCLE" && m !== "CAR");
 
@@ -160,6 +161,18 @@ export function PlannerForm({ city, state, onChange, onSubmit, onUseLocation, on
           <Icon.Wheelchair />
           {t.planner.wheelchair}
         </button>
+        {canBike ? (
+          <button
+            type="button"
+            aria-pressed={state.bike}
+            onClick={() => set({ bike: !state.bike })}
+            title={t.bike.hint}
+            className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold ${state.bike ? "border-moss bg-moss-soft text-moss" : "border-line bg-paper-2 text-ink-2 hover:border-line-2"}`}
+          >
+            <Icon.Bike />
+            {t.bike.toStation}
+          </button>
+        ) : null}
       </div>
 
       <Button type="submit" variant="primary" size="lg" disabled={!state.from || !state.to} className="w-full">

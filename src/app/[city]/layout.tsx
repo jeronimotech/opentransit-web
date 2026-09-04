@@ -8,6 +8,8 @@ import { CityProvider } from "@/components/shell/CityContext";
 import { CityHeader, Wordmark } from "@/components/shell/CityHeader";
 import { Spinner } from "@/components/ui/primitives";
 import { ApiRequestError } from "@/lib/api/client";
+import { resolveConfig } from "@/lib/city-config";
+import { Icon } from "@/components/ui/primitives";
 
 export default function CityLayout({ children, params }: { children: React.ReactNode; params: Promise<{ city: string }> }) {
   const { city } = use(params);
@@ -44,9 +46,18 @@ export default function CityLayout({ children, params }: { children: React.React
     );
   }
 
+  const cfg = resolveConfig(data);
   return (
     <CityProvider city={data}>
       <CityHeader city={data} />
+      {cfg.maintenance.active ? (
+        <div role="status" className="pointer-events-none fixed inset-x-0 top-[60px] z-30 flex justify-center px-3 md:top-[72px]">
+          <p className="pointer-events-auto inline-flex items-center gap-2 rounded-lg border border-amber bg-amber/95 px-3 py-1.5 text-xs font-semibold text-amber-ink shadow-card">
+            <Icon.Alert width={14} height={14} />
+            {t.config.maintenance} · {cfg.maintenance.message ?? t.config.maintenanceHint}
+          </p>
+        </div>
+      ) : null}
       {children}
     </CityProvider>
   );

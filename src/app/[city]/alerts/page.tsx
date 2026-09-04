@@ -5,6 +5,7 @@ import { AlertCard } from "@/components/alerts/AlertCard";
 import { EmptyState, Spinner } from "@/components/ui/primitives";
 import { useAlerts } from "@/lib/api/hooks";
 import { useI18n } from "@/lib/i18n/provider";
+import { PqrsLink } from "@/components/ui/AgencyLinks";
 
 export default function AlertsPage() {
   const city = useCityCtx();
@@ -18,6 +19,7 @@ export default function AlertsPage() {
     <main className="mx-auto max-w-2xl px-4 pb-16 pt-24 md:pt-28">
       <h1 className="text-2xl font-extrabold tracking-tight md:text-3xl">{t.alerts.title}</h1>
       <p className="mt-1 text-sm text-ink-2">{t.alerts.hint}</p>
+      <PqrsLink city={city} className="mt-2" />
       <div className="mt-6 flex flex-col gap-3">
         {isLoading ? <Spinner /> : null}
         {error ? (
@@ -32,7 +34,7 @@ export default function AlertsPage() {
         ) : null}
         {!isLoading && !error && sorted.length === 0 ? <EmptyState title={t.alerts.none} /> : null}
         {sorted.map((a) => (
-          <AlertCard key={a.id} alert={a} tz={city.timezone} city={city.id} />
+          <AlertCard key={a.id} alert={a} tz={city.timezone} city={city.id} links={city.links} />
         ))}
       </div>
     </main>

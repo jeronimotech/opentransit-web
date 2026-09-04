@@ -6,6 +6,7 @@ import { useI18n } from "@/lib/i18n/provider";
 import { useTheme } from "@/lib/theme";
 import { Icon } from "@/components/ui/primitives";
 import { MOCK } from "@/lib/api/client";
+import { resolveConfig } from "@/lib/city-config";
 import type { City } from "@/lib/api/types";
 
 export function Wordmark({ className = "" }: { className?: string }) {
@@ -27,10 +28,13 @@ export function CityHeader({ city }: { city: City }) {
   const { pref, setPref, resolved } = useTheme();
   const path = usePathname();
   const base = `/${city.id}`;
+  const cfg = resolveConfig(city);
   const items = [
-    { href: base, label: t.nav.plan, active: path === base },
-    { href: `${base}/live`, label: t.nav.live, active: path.startsWith(`${base}/live`) },
-    { href: `${base}/alerts`, label: t.nav.alerts, active: path.startsWith(`${base}/alerts`) },
+    { href: base, label: t.nav.plan, active: path === base || path.startsWith(`${base}/routes`), icon: null },
+    ...(cfg.features.next ? [{ href: `${base}/next`, label: t.nav.next, active: path.startsWith(`${base}/next`), icon: null }] : []),
+    ...(cfg.features.liveVehicles ? [{ href: `${base}/live`, label: t.nav.live, active: path.startsWith(`${base}/live`), icon: null }] : []),
+    ...(cfg.features.alerts ? [{ href: `${base}/alerts`, label: t.nav.alerts, active: path.startsWith(`${base}/alerts`), icon: null }] : []),
+    ...(cfg.features.favorites ? [{ href: `${base}/favorites`, label: t.nav.favorites, active: path.startsWith(`${base}/favorites`), icon: <Icon.Star width={16} height={16} /> }] : []),
   ];
   const toggleTheme = () => setPref(pref === "system" ? (resolved === "dark" ? "light" : "dark") : pref === "dark" ? "light" : "dark");
 
@@ -55,8 +59,17 @@ export function CityHeader({ city }: { city: City }) {
               href={it.href}
               aria-current={it.active ? "page" : undefined}
               className={`whitespace-nowrap rounded-lg px-2 py-1.5 text-sm font-semibold md:px-2.5 ${it.active ? "bg-ink text-paper" : "text-ink-2 hover:bg-paper-3 hover:text-ink"}`}
+              title={it.label}
             >
-              {it.label}
+              {it.icon ? (
+                <>
+                  <span className="inline-block align-middle md:hidden">{it.icon}</span>
+                  <span className="hidden md:inline">{it.label}</span>
+                </>
+              ) : (
+                <span className={it.href.endsWith("/next") ? "hidden sm:inline" : ""}>{it.label}</span>
+              )}
+              {it.href.endsWith("/next") ? <span className="sm:hidden"><Icon.Bus width={16} height={16} className="inline-block align-middle" /></span> : null}
             </Link>
           ))}
         </nav>

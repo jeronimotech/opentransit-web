@@ -5,7 +5,7 @@ import { useI18n } from "@/lib/i18n/provider";
 import { fmtDateTime } from "@/lib/format";
 import { Icon } from "@/components/ui/primitives";
 import { RouteChip } from "@/components/ui/RouteChip";
-import type { Alert } from "@/lib/api/types";
+import type { Alert, CityLinks } from "@/lib/api/types";
 
 const TONE: Record<string, string> = {
   SEVERE: "border-brick/40 bg-brick-soft",
@@ -13,7 +13,7 @@ const TONE: Record<string, string> = {
   INFO: "border-line bg-paper-3",
 };
 
-export function AlertCard({ alert, tz, compact = false, city }: { alert: Alert; tz: string; compact?: boolean; city?: string }) {
+export function AlertCard({ alert, tz, compact = false, city, links }: { alert: Alert; tz: string; compact?: boolean; city?: string; links?: CityLinks | null }) {
   const { t, lang } = useI18n();
   const tone = TONE[alert.severity ?? "INFO"] ?? TONE.INFO;
   return (
@@ -38,25 +38,28 @@ export function AlertCard({ alert, tz, compact = false, city }: { alert: Alert; 
               {alert.stopIds.length ? <span className="text-xs text-ink-3">· {t.alerts.stops(alert.stopIds.length)}</span> : null}
             </div>
           ) : null}
-          {!compact ? (
-            <p className="mt-2 flex flex-wrap gap-x-3 text-xs text-ink-3">
-              {alert.start ? (
-                <span>
-                  {t.alerts.since} {fmtDateTime(alert.start, tz, lang)}
-                </span>
-              ) : null}
-              {alert.end ? (
-                <span>
-                  {t.alerts.until} {fmtDateTime(alert.end, tz, lang)}
-                </span>
-              ) : null}
-              {alert.url ? (
-                <a href={alert.url} target="_blank" rel="noreferrer" className="font-semibold text-signal hover:underline">
-                  {t.alerts.more}
-                </a>
-              ) : null}
-            </p>
-          ) : null}
+          <p className={`flex flex-wrap gap-x-3 text-xs text-ink-3 ${compact ? "mt-1" : "mt-2"}`}>
+            {!compact && alert.start ? (
+              <span>
+                {t.alerts.since} {fmtDateTime(alert.start, tz, lang)}
+              </span>
+            ) : null}
+            {!compact && alert.end ? (
+              <span>
+                {t.alerts.until} {fmtDateTime(alert.end, tz, lang)}
+              </span>
+            ) : null}
+            {alert.url ? (
+              <a href={alert.url} target="_blank" rel="noreferrer" className="font-semibold text-signal hover:underline">
+                {t.alerts.more}
+              </a>
+            ) : null}
+            {links?.pqrs ? (
+              <a href={links.pqrs} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 font-semibold text-ink-2 hover:underline" title={t.links.external}>
+                <Icon.Flag width={11} height={11} /> {t.links.pqrs}
+              </a>
+            ) : null}
+          </p>
         </div>
       </div>
     </article>

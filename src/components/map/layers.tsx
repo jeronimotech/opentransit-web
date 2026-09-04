@@ -2,11 +2,12 @@
 
 import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, MapMouseEvent } from "maplibre-gl";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMap } from "./MapView";
 import { componentColor } from "@/lib/colors";
-import { bboxOf, decodeGeometry, fc, normalizeHex, toLineString, toPoint, type LngLat } from "@/lib/geo";
-import type { Geometry, Itinerary, NetworkShape, Stop, Vehicle } from "@/lib/api/types";
+import { ETA_COLORS, etaBucket } from "@/lib/eta";
+import { bboxOf, decodeGeometry, fc, normalizeHex, toLineString, toPoint, type BBox, type LngLat } from "@/lib/geo";
+import type { Geometry, Itinerary, NetworkShape, PoiCollection, PoiType, Stop, Vehicle } from "@/lib/api/types";
 import type { FeatureCollection } from "geojson";
 
 type DistributiveOmit<T, K extends keyof never> = T extends unknown ? Omit<T, K> : never;
@@ -253,22 +254,49 @@ export function StopsLayer({ stops, onClick, id = "stops" }: { stops: Stop[]; on
 }
 
 // ── Vehicles ────────────────────────────────────────────────────────────────
-export function VehiclesLayer({ vehicles, onClick, selectedId }: { vehicles: Vehicle[]; onClick?: (v: Vehicle) => void; selectedId?: string | null }) {
+/**
+ * Fleet markers. Colored by component (from the city's taxonomy when given);
+ * when `etaById` is present (a stop is selected) the fill switches to the ETA
+ * bucket (≤5 / ≤10 / ≤15 min) and the component stays as the ring — TransMi App's
+ * "how far is my bus" at a glance. Pass already-interpolated positions for motion.
+ */
+export function VehiclesLayer({
+  vehicles,
+  onClick,
+  selectedId,
+  etaById,
+  colors,
+  dimOthers = false,
+}: {
+  vehicles: Vehicle[];
+  onClick?: (v: Vehicle) => void;
+  selectedId?: string | null;
+  etaById?: Map<string, number> | null;
+  colors?: Partial<Record<string, string>>;
+  dimOthers?: boolean;
+}) {
   const byId = useMemo(() => new Map(vehicles.map((v) => [v.id, v])), [vehicles]);
   const data = useMemo(
     () =>
       fc(
-        vehicles.map((v) =>
-          toPoint(v.lon, v.lat, {
+        vehicles.map((v) => {
+          const comp = colors?.[v.component] ?? componentColor(v.component);
+          const eta = etaById?.get(v.id);
+          const bucket = etaBucket(eta ?? null);
+          const tinted = etaById ? bucket !== "none" : false;
+          return toPoint(v.lon, v.lat, {
             id: v.id,
-            label: v.routeShortName ?? "",
-            color: componentColor(v.component),
+            label: eta != null ? `${v.routeShortName ?? ""} · ${eta} min` : (v.routeShortName ?? ""),
+            color: tinted ? ETA_COLORS[bucket] : comp,
+            ring: tinted ? comp : "#ffffff",
             resolved: v.tripResolved,
             selected: v.id === selectedId,
-          }),
-        ),
+            tinted,
+            dim: dimOthers && etaById != null && !tinted,
+          });
+        }),
       ),
-    [vehicles, selectedId],
+    [vehicles, selectedId, etaById, colors, dimOthers],
   );
   useGeoJsonLayer(
     "vehicles",
@@ -278,21 +306,23 @@ export function VehiclesLayer({ vehicles, onClick, selectedId }: { vehicles: Veh
         id: "vehicles-circle",
         type: "circle",
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 3, 14, 6, 17, 9],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, ["case", ["get", "tinted"], 5, 3], 14, ["case", ["get", "tinted"], 8, 6], 17, ["case", ["get", "tinted"], 11, 9]],
           "circle-color": ["get", "color"],
-          "circle-opacity": ["case", ["get", "resolved"], 1, 0.6],
-          "circle-stroke-color": ["case", ["get", "selected"], "#f2b41b", "#ffffff"],
-          "circle-stroke-width": ["case", ["get", "selected"], 4, 1.5],
+          "circle-opacity": ["case", ["get", "dim"], 0.25, ["get", "resolved"], 1, 0.6],
+          "circle-stroke-color": ["case", ["get", "selected"], "#f2b41b", ["get", "ring"]],
+          "circle-stroke-width": ["case", ["get", "selected"], 4, ["get", "tinted"], 2.5, 1.5],
+          "circle-stroke-opacity": ["case", ["get", "dim"], 0.3, 1],
         },
       },
       {
         id: "vehicles-label",
         type: "symbol",
-        minzoom: 14,
+        minzoom: 13.5,
+        filter: ["!", ["get", "dim"]],
         layout: {
           "text-field": ["get", "label"],
           "text-size": 10,
-          "text-offset": [0, -1.2],
+          "text-offset": [0, -1.3],
           "text-font": ["Noto Sans Bold"],
           "text-allow-overlap": false,
           "text-optional": true,
@@ -309,6 +339,129 @@ export function VehiclesLayer({ vehicles, onClick, selectedId }: { vehicles: Veh
     },
   );
   return null;
+}
+
+// ── Station services (POIs) ─────────────────────────────────────────────────
+const POI_COLOR: Record<PoiType, string> = {
+  bike_parking: "#2e7d4f",
+  toilets: "#0b5cd5",
+  atm: "#6a1b9a",
+  health: "#c62828",
+  library: "#e8590c",
+  other: "#667085",
+};
+const POI_GLYPH: Record<PoiType, string> = { bike_parking: "B", toilets: "WC", atm: "$", health: "+", library: "L", other: "•" };
+
+export function PoisLayer({ pois, onClick }: { pois: PoiCollection | null | undefined; onClick?: (p: PoiCollection["features"][number]["properties"]) => void }) {
+  const byId = useMemo(() => new Map((pois?.features ?? []).map((f) => [f.properties.id, f.properties])), [pois]);
+  const data = useMemo(
+    () =>
+      fc(
+        (pois?.features ?? []).map((f) =>
+          toPoint(f.geometry.coordinates[0], f.geometry.coordinates[1], {
+            id: f.properties.id,
+            color: POI_COLOR[f.properties.type] ?? POI_COLOR.other,
+            glyph: POI_GLYPH[f.properties.type] ?? "•",
+            name: f.properties.name ?? "",
+          }),
+        ),
+      ),
+    [pois],
+  );
+  useGeoJsonLayer(
+    "pois",
+    data,
+    [
+      {
+        id: "pois-circle",
+        type: "circle",
+        minzoom: 12,
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 5, 16, 10],
+          "circle-color": "#ffffff",
+          "circle-stroke-color": ["get", "color"],
+          "circle-stroke-width": 2,
+        },
+      },
+      {
+        id: "pois-glyph",
+        type: "symbol",
+        minzoom: 13,
+        layout: { "text-field": ["get", "glyph"], "text-size": 9, "text-font": ["Noto Sans Bold"], "text-allow-overlap": true },
+        paint: { "text-color": ["get", "color"] },
+      },
+    ],
+    {
+      clickLayers: ["pois-circle"],
+      onClick: (f) => {
+        const p = byId.get(String(f.properties?.id));
+        if (p) onClick?.(p);
+      },
+    },
+  );
+  return null;
+}
+
+/** Current viewport as [minLon, minLat, maxLon, maxLat], updated on moveend (debounced). */
+export function useMapBounds(debounceMs = 300): BBox | null {
+  const { map } = useMap();
+  const [bbox, setBbox] = useState<BBox | null>(null);
+  useEffect(() => {
+    if (!map) return;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const read = () => {
+      const b = map.getBounds();
+      setBbox([+b.getWest().toFixed(4), +b.getSouth().toFixed(4), +b.getEast().toFixed(4), +b.getNorth().toFixed(4)]);
+    };
+    const onMove = () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(read, debounceMs);
+    };
+    read();
+    map.on("moveend", onMove);
+    return () => {
+      map.off("moveend", onMove);
+      if (t) clearTimeout(t);
+    };
+  }, [map, debounceMs]);
+  return bbox;
+}
+
+/** Floating toggle rendered over the map (top-right, below the header). */
+export function MapToggle({ on, onClick, label, icon, top = 76 }: { on: boolean; onClick: () => void; label: string; icon: React.ReactNode; top?: number }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={on}
+      title={label}
+      aria-label={label}
+      className={`absolute right-2 z-10 grid h-9 w-9 place-items-center rounded-lg border shadow-card md:right-4 ${on ? "border-ink bg-ink text-paper" : "border-line bg-paper-2 text-ink-2 hover:text-ink"}`}
+      style={{ top }}
+    >
+      {icon}
+    </button>
+  );
+}
+
+/** Small legend for ETA-tinted markers. */
+export function EtaLegend({ labels, className = "" }: { labels: { now: string; soon: string; later: string; far: string; title: string }; className?: string }) {
+  const items: [keyof typeof ETA_COLORS, string][] = [
+    ["now", labels.now],
+    ["soon", labels.soon],
+    ["later", labels.later],
+    ["far", labels.far],
+  ];
+  return (
+    <div className={`pointer-events-none absolute bottom-10 left-1/2 z-10 -translate-x-1/2 rounded-lg border border-line bg-paper-2/95 px-2.5 py-1.5 text-[11px] shadow-card md:bottom-4 md:left-auto md:right-14 md:translate-x-0 ${className}`}>
+      <span className="mr-2 font-semibold text-ink-2">{labels.title}</span>
+      {items.map(([k, l]) => (
+        <span key={k} className="mr-2 inline-flex items-center gap-1">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: ETA_COLORS[k] }} /> {l}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 // ── Pins (origin/destination/user) as DOM markers ───────────────────────────
