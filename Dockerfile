@@ -5,6 +5,8 @@ WORKDIR /app
 
 FROM base AS deps
 COPY package.json pnpm-lock.yaml ./
+# postinstall copies the MapLibre worker into public/, so scripts/ must exist before install
+COPY scripts ./scripts
 RUN pnpm install --frozen-lockfile
 
 FROM base AS build
