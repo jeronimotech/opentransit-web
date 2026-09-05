@@ -1,11 +1,12 @@
 import type { Mode, PlanParams } from "./api/types";
+import { buildPlanModes } from "./rental";
 
 /**
  * The URL is the source of truth for the planner. This module converts
  * between search params and a typed state, so any plan is shareable.
  *
  * ?from=4.7546,-74.0459&fromName=Portal%20Norte&to=4.5978,-74.1616&toName=Portal%20Sur
- * &time=2026-09-04T08:15:00-05:00&arriveBy=1&modes=BUS,CABLE_CAR&wheelchair=1&it=0
+ * &time=2026-09-04T08:15:00-05:00&arriveBy=1&modes=BUS,CABLE_CAR&wheelchair=1&rental=1&it=0
  */
 export type PlannerPoint = { lat: number; lon: number; name: string | null };
 
@@ -17,6 +18,7 @@ export type PlannerState = {
   modes: Mode[]; // transit modes enabled (WALK always implied)
   wheelchair: boolean;
   bike: boolean; // "llegar en bici a la estación" (BICYCLE + TRANSIT)
+  rental: boolean; // "Bici pública" (BIKE_RENTAL via GBFS), with or without transit
   selected: number | null; // itinerary index
 };
 
@@ -49,6 +51,7 @@ export function readPlanner(sp: URLSearchParams): PlannerState {
     modes,
     wheelchair: sp.get("wheelchair") === "1",
     bike: sp.get("bike") === "1",
+    rental: sp.get("rental") === "1",
     selected: it !== null && it !== "" ? Number(it) : null,
   };
 }
@@ -72,11 +75,12 @@ export function writePlanner(s: PlannerState): URLSearchParams {
   if (sorted !== sortedDefault) p.set("modes", s.modes.join(","));
   if (s.wheelchair) p.set("wheelchair", "1");
   if (s.bike) p.set("bike", "1");
+  if (s.rental) p.set("rental", "1");
   if (s.selected !== null) p.set("it", String(s.selected));
   return p;
 }
 
-export function toPlanParams(s: PlannerState, locale: "es" | "en"): PlanParams | null {
+export function toPlanParams(s: PlannerState, locale: "es" | "en", rentalModes: Mode[] = ["BIKE_RENTAL"]): PlanParams | null {
   if (!s.from || !s.to) return null;
   return {
     fromLat: s.from.lat,
@@ -85,9 +89,9 @@ export function toPlanParams(s: PlannerState, locale: "es" | "en"): PlanParams |
     toLon: s.to.lon,
     time: s.time ?? undefined,
     arriveBy: s.arriveBy || undefined,
-    modes: normalizeModes([...s.modes, ...(s.bike ? (["BICYCLE"] as Mode[]) : [])]),
+    modes: buildPlanModes(s.modes, { bike: s.bike, rental: s.rental, rentalModes }),
     wheelchair: s.wheelchair || undefined,
-    numItineraries: 5,
+    numItineraries: 6,
     locale,
     fromName: s.from.name ?? undefined,
     toName: s.to.name ?? undefined,

@@ -9,7 +9,7 @@ import { desaturate, routeChipColors } from "@/lib/route-color";
 import { LIVE_DETAIL_ZOOM, LIVE_MIN_ZOOM } from "@/lib/marker-style";
 import { ETA_COLORS, etaBucket } from "@/lib/eta";
 import { bboxOf, decodeGeometry, fc, toLineString, toPoint, type BBox, type LngLat } from "@/lib/geo";
-import type { Component, Geometry, Itinerary, NetworkShape, PoiCollection, PoiType, Stop, Vehicle } from "@/lib/api/types";
+import type { BikeShareNetwork, Component, Geometry, Itinerary, NetworkShape, PoiCollection, PoiType, RentalStation, Stop, Vehicle } from "@/lib/api/types";
 import type { FeatureCollection } from "geojson";
 
 type DistributiveOmit<T, K extends keyof never> = T extends unknown ? Omit<T, K> : never;
@@ -94,8 +94,10 @@ export function ItineraryLayer({ itinerary, dim = false }: { itinerary: Itinerar
     const lines = itinerary.legs.map((leg, i) =>
       toLineString(decodeGeometry(leg.geometry), {
         i,
-        walk: !leg.transit,
-        color: leg.route ? routeChipColors(leg.route.color, componentColor(leg.route.component)).bg : "#667085",
+        walk: !leg.transit && !leg.rental,
+        // shared-vehicle legs: dashed line in the network's colour
+        rental: !!leg.rental,
+        color: leg.rental ? leg.rental.color : leg.route ? routeChipColors(leg.route.color, componentColor(leg.route.component)).bg : "#667085",
       }),
     );
     const stops = itinerary.legs.flatMap((leg) =>
@@ -106,7 +108,9 @@ export function ItineraryLayer({ itinerary, dim = false }: { itinerary: Itinerar
               color: leg.route ? routeChipColors(leg.route.color, componentColor(leg.route.component)).bg : "#667085",
             }),
           )
-        : [],
+        : leg.rental
+          ? [leg.from, leg.to].map((p) => toPoint(p.lon, p.lat, { end: true, color: leg.rental!.color, rentalPt: true }))
+          : [],
     );
     return fc([...lines, ...stops]);
   }, [itinerary]);
@@ -115,14 +119,14 @@ export function ItineraryLayer({ itinerary, dim = false }: { itinerary: Itinerar
     {
       id: "itinerary-casing",
       type: "line",
-      filter: ["==", ["get", "walk"], false],
+      filter: ["all", ["==", ["get", "walk"], false], ["!=", ["get", "rental"], true]],
       layout: { "line-cap": "round", "line-join": "round" },
       paint: { "line-color": "#ffffff", "line-width": 9, "line-opacity": dim ? 0.4 : 0.9 },
     },
     {
       id: "itinerary-transit",
       type: "line",
-      filter: ["==", ["get", "walk"], false],
+      filter: ["all", ["==", ["get", "walk"], false], ["!=", ["get", "rental"], true]],
       layout: { "line-cap": "round", "line-join": "round" },
       paint: { "line-color": ["get", "color"], "line-width": 5, "line-opacity": dim ? 0.5 : 1 },
     },
@@ -132,6 +136,20 @@ export function ItineraryLayer({ itinerary, dim = false }: { itinerary: Itinerar
       filter: ["==", ["get", "walk"], true],
       layout: { "line-cap": "round" },
       paint: { "line-color": "#1a1d21", "line-width": 3, "line-dasharray": [0.2, 2], "line-opacity": dim ? 0.4 : 0.9 },
+    },
+    {
+      id: "itinerary-rental-casing",
+      type: "line",
+      filter: ["==", ["get", "rental"], true],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#ffffff", "line-width": 8, "line-opacity": dim ? 0.4 : 0.9 },
+    },
+    {
+      id: "itinerary-rental",
+      type: "line",
+      filter: ["==", ["get", "rental"], true],
+      layout: { "line-cap": "butt", "line-join": "round" },
+      paint: { "line-color": ["get", "color"], "line-width": 4.5, "line-dasharray": [1.6, 1.1], "line-opacity": dim ? 0.5 : 1 },
     },
     {
       id: "itinerary-stops",
@@ -475,6 +493,84 @@ export function PoisLayer({ pois, onClick }: { pois: PoiCollection | null | unde
       onClick: (f) => {
         const p = byId.get(String(f.properties?.id));
         if (p) onClick?.(p);
+      },
+    },
+  );
+  return null;
+}
+
+
+// ── Shared bikes (GBFS stations) ─────────────────────────────────────────────
+export const RENTAL_MIN_ZOOM = 14;
+export const RENTAL_LABEL_ZOOM = 15;
+
+/**
+ * Bike-share stations as small rings in their network's colour with the number of
+ * available vehicles inside (UX audit: hidden below zoom 14, labels only from 15).
+ * Works for N networks: colours come from `networks` by `station.networkId`.
+ */
+export function RentalStationsLayer({
+  stations,
+  networks,
+  onClick,
+  selectedId,
+  id = "rental",
+}: {
+  stations: RentalStation[];
+  networks: BikeShareNetwork[];
+  onClick?: (s: RentalStation) => void;
+  selectedId?: string | null;
+  id?: string;
+}) {
+  const byId = useMemo(() => new Map(stations.map((s) => [s.id, s])), [stations]);
+  const colorOf = useMemo(() => new Map(networks.map((n) => [n.id, n.color])), [networks]);
+  const data = useMemo(
+    () =>
+      fc(
+        stations.map((s) =>
+          toPoint(s.lon, s.lat, {
+            id: s.id,
+            n: s.vehiclesAvailable,
+            label: String(s.vehiclesAvailable),
+            color: colorOf.get(s.networkId) ?? "#00A859",
+            empty: s.vehiclesAvailable <= 0 || !s.isRenting,
+            selected: s.id === selectedId,
+          }),
+        ),
+      ),
+    [stations, colorOf, selectedId],
+  );
+  useGeoJsonLayer(
+    id,
+    data,
+    [
+      {
+        id: `${id}-ring`,
+        type: "circle",
+        minzoom: RENTAL_MIN_ZOOM,
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], RENTAL_MIN_ZOOM, 5, RENTAL_LABEL_ZOOM, 8, 17, 11],
+          "circle-color": "#ffffff",
+          "circle-stroke-color": ["case", ["get", "selected"], "#f2b41b", ["get", "color"]],
+          // zoom expressions must be top-level: interpolate with a per-stop `case`
+          "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], RENTAL_MIN_ZOOM, ["case", ["get", "selected"], 4, 2], 17, ["case", ["get", "selected"], 4.5, 3]],
+          "circle-stroke-opacity": ["case", ["get", "empty"], 0.45, 1],
+          "circle-opacity": ["case", ["get", "empty"], 0.7, 1],
+        },
+      },
+      {
+        id: `${id}-count`,
+        type: "symbol",
+        minzoom: RENTAL_LABEL_ZOOM,
+        layout: { "text-field": ["get", "label"], "text-size": ["interpolate", ["linear"], ["zoom"], RENTAL_LABEL_ZOOM, 9, 17, 11], "text-font": ["Noto Sans Bold"], "text-allow-overlap": true, "text-ignore-placement": true },
+        paint: { "text-color": ["case", ["get", "empty"], "#98a2b3", ["get", "color"]] },
+      },
+    ],
+    {
+      clickLayers: [`${id}-ring`],
+      onClick: (f) => {
+        const s = byId.get(String(f.properties?.id));
+        if (s) onClick?.(s);
       },
     },
   );

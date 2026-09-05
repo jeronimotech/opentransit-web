@@ -19,6 +19,9 @@ import type {
   PlanParams,
   PoiCollection,
   PlanResponse,
+  RentalNetworksResponse,
+  RentalStationDetail,
+  RentalStationsResponse,
   ReverseResponse,
   RouteDetail,
   RoutesResponse,
@@ -123,8 +126,14 @@ export const api = {
   reverse: (city: string, lat: number, lon: number) =>
     request<ReverseResponse>(`${c(city)}/reverse`, { lat, lon }),
 
-  stopsNearby: (city: string, lat: number, lon: number, radius = 500, limit = 30) =>
-    request<NearbyResponse>(`${c(city)}/stops/nearby`, { lat, lon, radius, limit }),
+  stopsNearby: (city: string, lat: number, lon: number, radius = 500, limit = 30, include?: ("stops" | "rental")[]) =>
+    request<NearbyResponse>(`${c(city)}/stops/nearby`, { lat, lon, radius, limit, include: include?.join(",") }),
+
+  /** v1.2 — shared bikes (GBFS): networks, stations in view, one station. */
+  rentalNetworks: (city: string) => request<RentalNetworksResponse>(`${c(city)}/rental/networks`),
+  rentalStations: (city: string, bbox?: string, networkId?: string, limit = 500) =>
+    request<RentalStationsResponse>(`${c(city)}/rental/stations`, { bbox, networkId, limit }),
+  rentalStation: (city: string, id: string) => request<RentalStationDetail>(`${c(city)}/rental/stations/${encodeURIComponent(id)}`),
   stop: (city: string, stopId: string) =>
     request<StopDetail>(`${c(city)}/stops/${encodeURIComponent(stopId)}`),
   departures: (city: string, stopId: string, limit = 20, minutes = 60) =>

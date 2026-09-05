@@ -14,7 +14,8 @@
     "predev": "node scripts/copy-maplibre-worker.mjs",
     "prebuild": "node scripts/copy-maplibre-worker.mjs",
     "test": "vitest run",
-    "screenshots:admin": "node scripts/screenshots-admin.mjs"
+    "screenshots:admin": "node scripts/screenshots-admin.mjs",
+    "screenshots:bike": "node scripts/screenshots-bike.mjs"
   },
   "dependencies": {
     "@mapbox/polyline": "^1.2.1",

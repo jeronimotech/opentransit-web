@@ -16,7 +16,7 @@ import type {
 import { city as yamlCity } from "./data";
 
 const TOKENS = new Set(["demo", "change-me"]);
-const SECTIONS: AdminSection[] = ["fares", "config", "links", "services", "branding"];
+const SECTIONS: AdminSection[] = ["fares", "config", "links", "services", "branding", "mobility"];
 
 const state = {
   override: null as AdminOverride | null,
@@ -35,6 +35,7 @@ function yaml(): AdminEditable {
     links: clone(yamlCity.links ?? null),
     services: clone(yamlCity.services ?? null),
     branding: { primaryColor: yamlCity.branding.primaryColor },
+    mobility: clone(yamlCity.mobility ?? null),
   };
 }
 
@@ -48,6 +49,10 @@ export function effectiveCity(): City {
   if (o.links) c.links = clone(o.links);
   if (o.services) c.services = clone(o.services);
   if (o.branding) c.branding = { ...c.branding, primaryColor: o.branding.primaryColor };
+  if (o.mobility) {
+    c.mobility = clone(o.mobility);
+    c.features.bikeShare = (o.mobility.bikeShare ?? []).length > 0;
+  }
   return c;
 }
 

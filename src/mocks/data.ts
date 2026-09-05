@@ -7,12 +7,15 @@ import { encodeGeometry, haversineMeters, type LngLat } from "@/lib/geo";
 import { toIsoWithOffset } from "@/lib/format";
 import type {
   Alert,
+  BikeShareNetwork,
   City,
   Component,
   Itinerary,
   Leg,
+  Mode,
   Place,
   PoiCollection,
+  RentalStation,
   RouteRef,
   Stop,
   Vehicle,
@@ -39,7 +42,7 @@ export const city: City = {
     tripUpdates: true,
     alerts: true,
     fares: false,
-    bikeShare: false,
+    bikeShare: true,
   },
   agencies: [
     { id: "1", name: "TransMilenio Troncal", component: "trunk", color: "#D32F2F" },
@@ -77,7 +80,24 @@ export const city: City = {
     { id: "recharge", label: "Recargar tullave", icon: "card", url: "https://www.tullaveplus.gov.co/", kind: "external" },
     { id: "pqrs", label: "PQRS", icon: "chat", url: "https://www.transmilenio.gov.co/publicaciones/147212/pqrs/", kind: "external" },
   ],
+  // ── v1.2: shared bikes (GBFS) ──
+  mobility: {
+    bikeShare: [
+      {
+        id: "tembici",
+        name: "Tembici Bogotá",
+        network: "tembici_bogota",
+        gbfsUrl: "https://bogota.publicbikesystem.net/customer/gbfs/v3.0/gbfs.json",
+        color: "#00A859",
+        url: "https://tembici.com.co/",
+        apps: { ios: "https://apps.apple.com/co/app/id1454932002", android: "https://play.google.com/store/apps/details?id=com.tembici.app" },
+        pricingSummary: "Pase diario $11.000 · mensual $31.990",
+        formFactors: ["bicycle"],
+      },
+    ],
+  },
 };
+export const tembici: BikeShareNetwork = city.mobility!.bikeShare[0];
 
 // ── Stations along the corridors ────────────────────────────────────────────
 type S = [id: string, name: string, lat: number, lon: number, comp: Component, station?: boolean];
@@ -366,7 +386,7 @@ function itinerary(id: string, legs: Leg[]): Itinerary {
   const transit = legs.filter((l) => l.transit);
   const duration = (end.getTime() - start.getTime()) / 1000;
   const walkTime = walk.reduce((a, l) => a + l.durationSeconds, 0);
-  const ride = transit.reduce((a, l) => a + l.durationSeconds, 0);
+  const ride = legs.filter((l) => l.transit || l.rental).reduce((a, l) => a + l.durationSeconds, 0);
   return {
     id,
     startTime: iso(start),
@@ -390,7 +410,7 @@ function fareFor(transitLegs: number): Itinerary["fare"] {
     amount: f.base + transfers * f.transfer,
     currency: f.currency,
     estimated: true,
-    breakdown: [{ label: "Pasaje", amount: f.base }, ...Array.from({ length: transfers }, () => ({ label: "Transbordo", amount: f.transfer }))],
+    breakdown: [{ label: "Pasaje", amount: f.base, kind: "transit" }, ...Array.from({ length: transfers }, () => ({ label: "Transbordo", amount: f.transfer, kind: "transit" }))],
   };
 }
 
@@ -503,6 +523,175 @@ export function buildItineraries(from: Place, to: Place, time: Date, arriveBy: b
     itinerary("it-1", [w2, b74, tw, g43, w2b]),
     itinerary("it-2", [w3, z737, tw3, g43b, w3b]),
   ];
+}
+
+// ── Shared bikes: 60 Tembici-like stations around Chapinero / Usaquén ────────
+/**
+ * Deterministic grid with a little jitter between Calle 72 and Calle 127, Cra 7 to Cra 19,
+ * roughly where the real system is densest. Availability is pseudo-random but stable.
+ */
+const CALLES = [72, 76, 80, 85, 90, 93, 97, 100, 106, 110, 116, 120, 122, 127, 134];
+const CARRERAS = [7, 11, 15, 19];
+function stationName(i: number, calle: number, cra: number) {
+  return `${String(i + 1).padStart(3, "0")} - CL ${calle} con KR ${cra}`;
+}
+export const rentalStations: RentalStation[] = CALLES.flatMap((calle, ci) =>
+  CARRERAS.map((cra, ki) => {
+    const i = ci * CARRERAS.length + ki;
+    const h = (i * 2654435761) >>> 0; // hash → stable pseudo-random
+    const lat = 4.6581 + (calle - 72) * 0.00118 + ((h % 7) - 3) * 0.00025;
+    const lon = -74.0405 - (cra - 7) * 0.00123 + (((h >> 3) % 7) - 3) * 0.00025;
+    const capacity = 15 + (h % 3) * 4;
+    const bikes = i % 11 === 0 ? 0 : (h >> 5) % Math.max(2, capacity - 2);
+    const docks = i % 13 === 5 ? 0 : Math.max(0, capacity - bikes - ((h >> 9) % 3));
+    return {
+      id: `tembici:${i + 1}`,
+      networkId: "tembici",
+      name: stationName(i, calle, cra),
+      lat: +lat.toFixed(6),
+      lon: +lon.toFixed(6),
+      capacity,
+      vehiclesAvailable: bikes,
+      ebikesAvailable: bikes ? (h >> 11) % Math.min(3, bikes + 1) : 0,
+      docksAvailable: docks,
+      isInstalled: true,
+      isRenting: i % 29 !== 7,
+      isReturning: true,
+      lastReported: iso(new Date(Date.now() - ((h >> 13) % 50) * 1000)),
+    };
+  }),
+);
+export const rentalStationById = new Map(rentalStations.map((s) => [s.id, s]));
+
+/** Nearest station to a point (for pickup/drop-off in mock itineraries). */
+export function nearestRentalStation(p: { lat: number; lon: number }, exclude?: string): RentalStation {
+  let best = rentalStations[0],
+    bd = Infinity;
+  for (const s of rentalStations) {
+    if (s.id === exclude) continue;
+    const d = haversineMeters(p, s);
+    if (d < bd) {
+      bd = d;
+      best = s;
+    }
+  }
+  return best;
+}
+
+const rentalRef = (s: RentalStation) => ({ stationId: s.id, name: s.name, lat: s.lat, lon: s.lon, vehiclesAvailable: s.vehiclesAvailable, docksAvailable: s.docksAvailable, lastReported: s.lastReported });
+const rentalPlace = (s: RentalStation, arr: Date | null, dep: Date | null): Place => ({
+  name: s.name,
+  lat: s.lat,
+  lon: s.lon,
+  stopId: null,
+  stopCode: null,
+  arrival: arr ? iso(arr) : null,
+  departure: dep ? iso(dep) : null,
+  component: null,
+  rentalStationId: s.id,
+});
+
+function rentalLeg(pickup: RentalStation, dropoff: RentalStation, start: Date, minutes: number): Leg {
+  const end = addMin(start, minutes);
+  const coords = densify(
+    [
+      [pickup.lon, pickup.lat],
+      [(pickup.lon + dropoff.lon) / 2 - 0.0012, (pickup.lat + dropoff.lat) / 2],
+      [dropoff.lon, dropoff.lat],
+    ],
+    0.0004,
+  );
+  return {
+    mode: "BICYCLE",
+    transit: false,
+    startTime: iso(start),
+    endTime: iso(end),
+    durationSeconds: minutes * 60,
+    distanceMeters: Math.round(haversineMeters(pickup, dropoff) * 1.3),
+    from: rentalPlace(pickup, null, start),
+    to: rentalPlace(dropoff, end, null),
+    route: null,
+    headsign: null,
+    agency: null,
+    tripId: null,
+    realtime: false,
+    realtimeState: null,
+    delaySeconds: null,
+    geometry: encodeGeometry(coords),
+    intermediateStops: [],
+    steps: [
+      { instruction: "", distanceMeters: 180, lat: pickup.lat, lon: pickup.lon, relativeDirection: "DEPART", streetName: "Ciclorruta Cra 11" },
+      { instruction: "", distanceMeters: Math.max(200, Math.round(haversineMeters(pickup, dropoff)) - 180), lat: dropoff.lat, lon: dropoff.lon, relativeDirection: "CONTINUE", streetName: "Ciclorruta Cra 11" },
+    ],
+    alerts: [],
+    rental: {
+      networkId: tembici.id,
+      networkName: tembici.name,
+      color: tembici.color,
+      vehicleType: pickup.ebikesAvailable > 0 ? "electric_assist" : "bicycle",
+      pickup: rentalRef(pickup),
+      dropoff: rentalRef(dropoff),
+      freeFloating: false,
+      priceEstimate: { amount: 11000, currency: "COP", label: "Pase diario", estimated: true },
+    },
+  };
+}
+
+/** Itineraries that use a shared bike: direct, and bike → Portal Norte → B13. */
+export function buildRentalItineraries(from: Place, to: Place, time: Date, arriveBy: boolean, withTransit: boolean): Itinerary[] {
+  const t0 = arriveBy ? addMin(time, -60) : addMin(time, 1);
+  const pick = nearestRentalStation(from);
+  const walkTo = walkLeg(from, rentalPlace(pick, null, null), t0, 3, [
+    { instruction: "", distanceMeters: Math.round(haversineMeters(from, pick)), lat: from.lat, lon: from.lon, relativeDirection: "DEPART", streetName: "Calle 85" },
+  ]);
+  const out: Itinerary[] = [];
+
+  // 1 · direct: bike from the nearest station to the one nearest the destination
+  const drop = nearestRentalStation(to, pick.id);
+  const rideMin = Math.max(6, Math.round((haversineMeters(pick, drop) * 1.3) / 250)); // ~15 km/h
+  const ride = rentalLeg(pick, drop, addMin(t0, 3), rideMin);
+  const walkEnd = walkLeg(rentalPlace(drop, null, null), to, addMin(t0, 3 + rideMin), 2, [
+    { instruction: "", distanceMeters: Math.round(haversineMeters(drop, to)), lat: drop.lat, lon: drop.lon, relativeDirection: "DEPART", streetName: "Calle 100" },
+  ]);
+  const direct = itinerary("it-bike-0", [walkTo, ride, walkEnd]);
+  out.push({
+    ...direct,
+    fare: { amount: 11000, currency: "COP", estimated: true, breakdown: [{ label: `${tembici.name} · pase diario`, amount: 11000, kind: "rental" }] },
+    rentalLegs: 1,
+    modesUsed: ["WALK", "BICYCLE_RENTAL"],
+  });
+
+  // 2 · bike to the trunk station nearest the origin, then B13
+  if (withTransit) {
+    const hub = sById("7012"); // Calle 100
+    const dropHub = nearestRentalStation(hub, pick.id);
+    const toHubMin = Math.max(5, Math.round((haversineMeters(pick, dropHub) * 1.3) / 250));
+    const ride2 = rentalLeg(pick, dropHub, addMin(t0, 3), toHubMin);
+    const w2 = walkLeg(rentalPlace(dropHub, null, null), place(hub, null, null), addMin(t0, 3 + toHubMin), 3, [
+      { instruction: "", distanceMeters: Math.round(haversineMeters(dropHub, hub)), lat: dropHub.lat, lon: dropHub.lon, relativeDirection: "DEPART", streetName: "Calle 100" },
+    ]);
+    const bus = busLeg(rt("B13"), shapeNorteNQS, [...NORTE, ...NQS], "7012", "7215", addMin(t0, 9 + toHubMin), 44, { realtime: true, delay: 60, headsign: "Portal Sur" });
+    const w3 = walkLeg(place(sById("7215"), null, null), to, addMin(t0, 53 + toHubMin), 2, [
+      { instruction: "", distanceMeters: 120, lat: to.lat, lon: to.lon, relativeDirection: "DEPART", streetName: "Autopista Sur" },
+    ]);
+    const it = itinerary("it-bike-1", [walkTo, ride2, w2, bus, w3]);
+    const fare = it.fare!;
+    out.push({
+      ...it,
+      fare: { ...fare, amount: fare.amount + 11000, breakdown: [...(fare.breakdown ?? []).map((b) => ({ ...b, kind: "transit" })), { label: `${tembici.name} · pase diario`, amount: 11000, kind: "rental" }] },
+      rentalLegs: 1,
+      modesUsed: ["WALK", "BICYCLE_RENTAL", "BUS"],
+    });
+  }
+  return out;
+}
+
+/** Does the requested `modes` list ask for shared bikes / transit? */
+export function modeFlags(modes: string | null | undefined): { rental: boolean; transit: boolean } {
+  const m = (modes ?? "").split(",").filter(Boolean) as Mode[];
+  const rental = m.includes("BIKE_RENTAL") || m.includes("SCOOTER_RENTAL");
+  const transit = m.length === 0 || m.some((x) => !["WALK", "BICYCLE", "BIKE_RENTAL", "SCOOTER_RENTAL", "SCOOTER"].includes(x));
+  return { rental, transit };
 }
 
 // ── Vehicles ─────────────────────────────────────────────────────────────────

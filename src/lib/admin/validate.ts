@@ -1,4 +1,4 @@
-import type { AdminEditable, CityConfig, CityFares, CityLinks, CityService } from "../api/types";
+import type { AdminEditable, BikeShareNetwork, CityConfig, CityFares, CityLinks, CityMobility, CityService } from "../api/types";
 
 /** Errors keyed by JSON path ("fares.base"), matching the API's `details[].path`. */
 export type Errors = Record<string, string>;
@@ -82,6 +82,30 @@ export function validateServices(s: CityService[] | null | undefined, msg: Messa
   return e;
 }
 
+/** Bike-share networks: N per city; ids unique; gbfs.json over https; at least one vehicle type. */
+export function validateMobility(m: CityMobility | null | undefined, msg: Messages): Errors {
+  const e: Errors = {};
+  if (!m) return e;
+  const seen = new Set<string>();
+  (m.bikeShare ?? []).forEach((n: BikeShareNetwork, i: number) => {
+    const k = `mobility.bikeShare.${i}`;
+    if (!SLUG.test(n.id ?? "")) e[`${k}.id`] = msg.slug;
+    else if (seen.has(n.id)) e[`${k}.id`] = msg.duplicateId;
+    seen.add(n.id);
+    if (!(n.name ?? "").trim()) e[`${k}.name`] = msg.required;
+    if (!(n.network ?? "").trim()) e[`${k}.network`] = msg.required;
+    if (!isHttpsUrl(n.gbfsUrl) || !/\.json(\?.*)?$/i.test(n.gbfsUrl)) e[`${k}.gbfsUrl`] = msg.gbfs;
+    if (!HEX.test(n.color ?? "")) e[`${k}.color`] = msg.hex;
+    if (n.url != null && n.url !== "" && !isHttpsUrl(n.url)) e[`${k}.url`] = msg.https;
+    for (const key of ["ios", "android"] as const) {
+      const v = n.apps?.[key];
+      if (v != null && v !== "" && !isHttpsUrl(v)) e[`${k}.apps.${key}`] = msg.https;
+    }
+    if (!n.formFactors?.length) e[`${k}.formFactors`] = msg.formFactors;
+  });
+  return e;
+}
+
 export function validateBranding(b: { primaryColor: string } | null | undefined, msg: Messages): Errors {
   const e: Errors = {};
   if (!b) return e;
@@ -101,6 +125,8 @@ export function validateSection<K extends keyof AdminEditable>(section: K, value
       return validateServices(value as CityService[] | null, msg);
     case "branding":
       return validateBranding(value as { primaryColor: string } | null, msg);
+    case "mobility":
+      return validateMobility(value as CityMobility | null, msg);
     default:
       return {};
   }
@@ -119,6 +145,8 @@ export type Messages = {
   required: string;
   kind: string;
   hex: string;
+  gbfs: string;
+  formFactors: string;
 };
 
 /** English messages, used by the mock API and tests; the UI passes translated ones. */
@@ -135,6 +163,8 @@ export const EN_MESSAGES: Messages = {
   required: "required",
   kind: "must be external or internal",
   hex: "must be a hex colour like #D32F2F",
+  gbfs: "must be an https URL to a gbfs.json",
+  formFactors: "pick at least one vehicle type",
 };
 
 const normPath = (p: string) => p.replace(/\[(\d+)\]/g, ".$1").replace(/^\$\.?/, "");

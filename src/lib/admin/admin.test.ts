@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fareForTransfers, farePreview } from "./fare-preview";
-import { EN_MESSAGES, errorsFromDetails, isHttpsUrl, validateConfig, validateFares, validateLinks, validateServices } from "./validate";
+import { EN_MESSAGES, errorsFromDetails, isHttpsUrl, validateConfig, validateFares, validateLinks, validateMobility, validateServices } from "./validate";
 import { changedKeys, effectiveChanges, effectiveSection, fieldOverridden, flatten, sectionOverridden } from "./diff";
 import type { AdminEditable, CityFares } from "../api/types";
 
@@ -61,6 +61,13 @@ describe("validation", () => {
     );
     expect(Object.keys(e).sort()).toEqual(["services.1.id", "services.1.kind", "services.1.label", "services.1.url", "services.2.id"]);
   });
+  it("validates bike-share networks (N per city, unique ids, https gbfs.json, vehicle types)", () => {
+    const ok = { id: "tembici", name: "Tembici Bogotá", network: "tembici_bogota", gbfsUrl: "https://bogota.publicbikesystem.net/customer/gbfs/v3.0/gbfs.json", color: "#00A859", url: "https://tembici.com.co/", apps: null, pricingSummary: null, formFactors: ["bicycle" as const] };
+    const second = { ...ok, id: "patinetas", name: "Patinetas del Norte", network: "patinetas_norte", gbfsUrl: "https://example.org/gbfs/v3/gbfs.json", color: "#6A1B9A", formFactors: ["scooter" as const] };
+    expect(validateMobility({ bikeShare: [ok, second] }, EN_MESSAGES)).toEqual({});
+    const e = validateMobility({ bikeShare: [ok, { ...second, id: "tembici", gbfsUrl: "http://x", color: "green", formFactors: [] }] }, EN_MESSAGES);
+    expect(Object.keys(e).sort()).toEqual(["mobility.bikeShare.1.color", "mobility.bikeShare.1.formFactors", "mobility.bikeShare.1.gbfsUrl", "mobility.bikeShare.1.id"]);
+  });
   it("maps API details to local paths", () => {
     expect(errorsFromDetails([{ path: "fares.base", message: "x" }, { path: "services[1].url", message: "y" }])).toEqual({ "fares.base": "x", "services.1.url": "y" });
   });
@@ -74,7 +81,7 @@ describe("validation", () => {
 });
 
 describe("overrides and history diff", () => {
-  const yaml: AdminEditable = { fares: bogota, config: null, links: { pqrs: "https://a" }, services: [], branding: { primaryColor: "#D32F2F" } };
+  const yaml: AdminEditable = { fares: bogota, config: null, links: { pqrs: "https://a" }, services: [], branding: { primaryColor: "#D32F2F" }, mobility: null };
   it("detects section and field overrides", () => {
     const override = { fares: { ...bogota, base: 3400 } };
     expect(sectionOverridden(override, "fares")).toBe(true);

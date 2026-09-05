@@ -18,6 +18,7 @@ import { estimateFare } from "@/lib/fare";
 import { useFollowAlong } from "@/lib/follow";
 import { resolveConfig } from "@/lib/city-config";
 import { serviceStatus } from "@/lib/service-window";
+import { RentalLegBlock } from "@/components/rental/RentalLegBlock";
 import type { City, Itinerary, Leg } from "@/lib/api/types";
 import type { Dict } from "@/lib/i18n/dict";
 
@@ -123,7 +124,7 @@ export function ItineraryDetail({
 function LegRow({ leg, city, tz, last, current, done }: { leg: Leg; city: City; tz: string; last: boolean; current: boolean; done: boolean }) {
   const { t, lang } = useI18n();
   const [open, setOpen] = useState(false);
-  const color = leg.transit ? routeChipColors(leg.route?.color, componentColor(leg.route?.component)).bg : "var(--ink-3)";
+  const color = leg.rental ? leg.rental.color : leg.transit ? routeChipColors(leg.route?.color, componentColor(leg.route?.component)).bg : "var(--ink-3)";
   const delay = fmtDelay(leg.delaySeconds, lang);
   const nStops = leg.intermediateStops.length + 1;
   const svc = serviceStatus(t, leg.route);
@@ -139,8 +140,14 @@ function LegRow({ leg, city, tz, last, current, done }: { leg: Leg; city: City; 
       <div className="relative flex justify-center">
         <span className="z-10 mt-1.5 h-3 w-3 rounded-full border-2 bg-paper-2" style={{ borderColor: color }} />
         <span
-          className={`absolute top-3 bottom-0 w-1 ${leg.transit ? "" : "strip-walk"}`}
-          style={leg.transit ? { background: color } : { width: 3, backgroundImage: `repeating-linear-gradient(180deg, var(--ink-3) 0 4px, transparent 4px 8px)` }}
+          className={`absolute top-3 bottom-0 w-1 ${leg.transit || leg.rental ? "" : "strip-walk"}`}
+          style={
+            leg.rental
+              ? { width: 4, backgroundImage: `repeating-linear-gradient(180deg, ${color} 0 7px, transparent 7px 11px)` }
+              : leg.transit
+                ? { background: color }
+                : { width: 3, backgroundImage: `repeating-linear-gradient(180deg, var(--ink-3) 0 4px, transparent 4px 8px)` }
+          }
         />
       </div>
       {/* content */}
@@ -156,7 +163,9 @@ function LegRow({ leg, city, tz, last, current, done }: { leg: Leg; city: City; 
           {current ? <Badge tone="info" className="ml-2 align-middle">{t.follow.currentLeg}</Badge> : null}
         </p>
 
-        {leg.transit ? (
+        {leg.rental ? (
+          <RentalLegBlock leg={leg} city={city} open={open} onToggle={() => setOpen((o) => !o)} />
+        ) : leg.transit ? (
           <div className="mt-1.5 flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2">
               <RouteChip route={leg.route} />

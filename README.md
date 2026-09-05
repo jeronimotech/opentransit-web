@@ -99,6 +99,30 @@ move along their shapes every 4 s through the same SSE consumer the real stream 
 board and "next buses" endpoints, station POIs, service windows, accessibility flags, remote config and three alerts.
 It's what CI builds against and what `pnpm screenshots` uses (`BASE_URL=http://localhost:3100 pnpm screenshots`).
 
+## Shared bikes (GBFS, v1.2)
+
+Any city can plug in one or more bike-share networks through `city.mobility.bikeShare[]`
+(each with its `gbfs.json`, the router's network id, a colour and app links). Nothing about a
+provider is hardcoded: labels, colours and hand-off links come from the city config, and the
+UI handles N networks (Bogotá ships with one, Tembici, configured in the API's `cities/bogota.yaml`).
+
+- **Planner**: a "Bici pública" chip in the network colour adds `BIKE_RENTAL` to the plan
+  (`?rental=1` in the URL). With transit it becomes access/egress; alone it is a direct bike trip.
+- **Results & detail**: rental legs draw as a dashed line in the network colour, cards carry a
+  network chip, and the detail shows pick-up ("Toma una bici en … · 6 bicis disponibles") and
+  drop-off ("Deja la bici en … · 4 puestos libres") cards with freshness, the price line and an
+  "Abrir {red}" hand-off. The fare breakdown lists rental entries next to transit ones.
+- **Map**: "Bicis públicas" in *Capas* (on by default; hidden below zoom 14, counts from 15) draws
+  each station as a ring with the number of available bikes; tapping opens a card with bikes,
+  e-bikes, docks, "actualizado hace N s", *Cómo llegar* and the network's app.
+- **Home**: the nearest station joins the "Cerca de ti" rail.
+- **Admin → Movilidad**: add / remove / reorder networks, edit their feed and links, and
+  *Probar feed* to see what the API currently reads from each `gbfs.json`.
+
+Screenshots: `docs/screenshots/bike-{planner,results,itinerary,map}-{desktop,mobile}.png`,
+`bike-admin-desktop.png` (mock) and the same with `-live-api` against the Bogotá API.
+Regenerate with `pnpm screenshots:bike` (env `SUFFIX=live-api TOKEN=… BASE_URL=…`).
+
 ## Admin (operators)
 
 `/admin` lets an operator change a city **without redeploying**: fares (the estimated fare every itinerary shows),
@@ -154,6 +178,7 @@ re-add their sources when the basemap style reloads (theme switch).
 | `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm build` | what CI runs (`test` = vitest unit tests for colour blending, headsign cleanup, marker zoom rules, admin fare preview/validation/diff) |
 | `pnpm screenshots` | regenerate `docs/screenshots/` from a running `dev:mock` (needs `npx playwright install chromium`) |
 | `pnpm screenshots:admin` | admin flow screenshots (login → validation error → save → history); `TOKEN=… SUFFIX=live-api RESET=1` for the real API |
+| `pnpm screenshots:bike` | shared-bike screenshots (planner chip, rental results/detail, station layer + card, admin Movilidad); `SUFFIX=live-api TOKEN=…` for the real API |
 
 ## Contributing
 

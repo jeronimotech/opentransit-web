@@ -9,8 +9,11 @@ import type {
   Departure,
   Freshness,
   GeocodeResult,
+  NearbyRentalStation,
   NextResponse,
   Place,
+  RentalNetworkInfo,
+  RentalStationDetail,
   StopDetail,
   VehicleDetail,
   VehicleEvent,
@@ -20,15 +23,20 @@ import {
   TZ,
   alerts,
   buildItineraries,
+  buildRentalItineraries,
   corridorFor,
   corridors,
   currentVehicles,
+  modeFlags,
   pois,
+  rentalStationById,
+  rentalStations,
   routeById,
   routes,
   shapes,
   stopById,
   stops,
+  tembici,
   tickVehicles,
   vehicleTrail,
 } from "./data";
@@ -183,7 +191,12 @@ export async function mockRequest<T>(path: string, q: Q, init: Init = { method: 
     if (q.fromName && !from.stopId) from.name = String(q.fromName);
     if (q.toName && !to.stopId) to.name = String(q.toName);
     const time = q.time ? new Date(String(q.time)) : new Date();
-    const itineraries = buildItineraries(from, to, time, q.arriveBy === true || q.arriveBy === "true");
+    const arriveBy = q.arriveBy === true || q.arriveBy === "true";
+    const flags = modeFlags(str(q, "modes"));
+    const itineraries = [
+      ...(flags.transit ? buildItineraries(from, to, time, arriveBy) : []),
+      ...(flags.rental ? buildRentalItineraries(from, to, time, arriveBy, flags.transit) : []),
+    ];
     return {
       from,
       to,
@@ -201,6 +214,7 @@ export async function mockRequest<T>(path: string, q: Q, init: Init = { method: 
     return { name: pl.stopId ? pl.name : "Calle 26 # 13-19", lat: pl.lat, lon: pl.lon } as T;
   }
 
+  let m: RegExpMatchArray | null;
   if (p === "/stops/nearby") {
     const lat = num(q, "lat"),
       lon = num(q, "lon"),
@@ -210,11 +224,61 @@ export async function mockRequest<T>(path: string, q: Q, init: Init = { method: 
       .filter((s) => s.distanceMeters <= radius)
       .sort((a, b) => a.distanceMeters - b.distanceMeters)
       .slice(0, num(q, "limit", 30));
-    return { stops: out } as T;
+    const include = str(q, "include").split(",").filter(Boolean);
+    const rental: NearbyRentalStation[] = include.includes("rental")
+      ? rentalStations
+          .map((s) => ({ ...s, kind: "rental_station" as const, distanceMeters: Math.round(haversineMeters({ lat, lon }, s)) }))
+          .filter((s) => s.distanceMeters <= Math.max(radius, 900))
+          .sort((a, b) => a.distanceMeters - b.distanceMeters)
+          .slice(0, 5)
+      : [];
+    return { stops: include.length && !include.includes("stops") ? [] : out, ...(include.includes("rental") ? { rental } : {}) } as T;
+  }
+
+  // ── v1.2 shared bikes (GBFS) ──
+  const networkInfo = (): RentalNetworkInfo => ({
+    ...tembici,
+    systemId: "bogota_bike",
+    timezone: TZ,
+    stations: rentalStations.length,
+    vehicleTypes: [
+      { id: "FIT", formFactor: "bicycle", propulsion: "human", name: "Bicicleta" },
+      { id: "EFIT", formFactor: "bicycle", propulsion: "electric_assist", name: "Bicicleta eléctrica" },
+    ],
+    pricingPlans: [
+      { id: "daily", name: "Pase diario", price: 11000, currency: "COP", description: "Viajes de hasta 45 min durante 24 h", isTaxable: false },
+      { id: "monthly", name: "Mensual", price: 31990, currency: "COP", description: "Viajes de hasta 45 min durante 30 días", isTaxable: false },
+    ],
+    lastFetchAt: iso(new Date(Date.now() - 12_000)),
+    up: true,
+  });
+  if (p === "/rental/networks") return { networks: [networkInfo()] } as T;
+  if (p === "/rental/stations") {
+    const bbox = str(q, "bbox").split(",").map(Number);
+    const net = str(q, "networkId");
+    const out = rentalStations.filter((st) => {
+      const inBox = bbox.length === 4 && bbox.every(Number.isFinite) ? st.lon >= bbox[0] && st.lon <= bbox[2] && st.lat >= bbox[1] && st.lat <= bbox[3] : true;
+      return inBox && (!net || st.networkId === net);
+    });
+    return { generatedAt: iso(new Date()), ttlSeconds: 30, stations: out.slice(0, num(q, "limit", 500)) } as T;
+  }
+  m = p.match(/^\/rental\/stations\/([^/]+)$/);
+  if (m) {
+    const st = rentalStationById.get(decodeURIComponent(m[1]));
+    if (!st) throw new ApiRequestError(404, "STATION_NOT_FOUND", "Rental station not found");
+    const detail: RentalStationDetail = {
+      ...st,
+      vehicleTypesAvailable: [
+        { id: "FIT", formFactor: "bicycle", propulsion: "human", count: Math.max(0, st.vehiclesAvailable - st.ebikesAvailable) },
+        { id: "EFIT", formFactor: "bicycle", propulsion: "electric_assist", count: st.ebikesAvailable },
+      ],
+      network: networkInfo(),
+    };
+    return detail as T;
   }
   const freshness = (): Freshness => ({ realtime: true, ageSeconds: 15 + Math.floor(Math.random() * 10), stale: false });
 
-  let m = p.match(/^\/stops\/([^/]+)\/board$/);
+  m = p.match(/^\/stops\/([^/]+)\/board$/);
   if (m) {
     const s = stopById.get(decodeURIComponent(m[1]));
     if (!s) throw new ApiRequestError(404, "STOP_NOT_FOUND", "Stop not found");
@@ -384,6 +448,7 @@ export async function mockRequest<T>(path: string, q: Q, init: Init = { method: 
       static: { feedVersion: "GTFS_20260904", fetchedAt: iso(new Date(Date.now() - 3600_000)), routes: 1024, stops: 8309 },
       realtime: { enabled: true, lastFetchAt: iso(new Date()), entityAgeP50Seconds: 18, vehicles: 220, pctTripResolved: 88.9, alerts: 3, stale: false, staleSeconds: null },
       router: { up: true, version: "2.10.0", graphBuiltAt: iso(new Date(Date.now() - 86400_000)) },
+      rental: { networks: [{ id: "tembici", up: true, stations: rentalStations.length, vehiclesAvailable: rentalStations.reduce((a, s) => a + s.vehiclesAvailable, 0), ageSeconds: 12 }] },
     } as T;
   }
 

@@ -25,7 +25,11 @@ export type Mode =
   | "BICYCLE"
   | "CAR"
   | "FERRY"
-  | "TRANSIT";
+  | "TRANSIT"
+  /** v1.2 — shared vehicles (GBFS). `BIKE_RENTAL`/`SCOOTER_RENTAL` are planner modes; `SCOOTER` a leg mode. */
+  | "BIKE_RENTAL"
+  | "SCOOTER_RENTAL"
+  | "SCOOTER";
 
 export type Geometry = { encoded: string; precision: number };
 
@@ -65,6 +69,86 @@ export type City = {
   config?: CityConfig;
   links?: CityLinks;
   services?: CityService[];
+  /** v1.2 — shared mobility networks (bike-share via GBFS). */
+  mobility?: CityMobility | null;
+};
+
+/* ── v1.2 shared bikes (GBFS) ──────────────────────────────────────────────── */
+
+export type RentalFormFactor = "bicycle" | "scooter" | "other";
+
+export type BikeShareNetwork = {
+  id: string;
+  name: string;
+  /** OTP vehicle-rental updater network id. */
+  network: string;
+  gbfsUrl: string;
+  color: string;
+  url: string | null;
+  apps: { ios?: string | null; android?: string | null } | null;
+  /** Derived from `system_pricing_plans` when null. */
+  pricingSummary: string | null;
+  formFactors: RentalFormFactor[];
+};
+
+export type CityMobility = { bikeShare: BikeShareNetwork[] };
+
+export type RentalVehicleType = { id: string; formFactor: RentalFormFactor; propulsion: string; name: string | null };
+export type RentalPricingPlan = { id: string; name: string; price: number; currency: string; description: string | null; isTaxable: boolean };
+
+export type RentalNetworkInfo = BikeShareNetwork & {
+  systemId: string | null;
+  timezone: string | null;
+  stations: number;
+  vehicleTypes: RentalVehicleType[];
+  pricingPlans: RentalPricingPlan[];
+  lastFetchAt: string | null;
+  up: boolean;
+};
+export type RentalNetworksResponse = { networks: RentalNetworkInfo[] };
+
+export type RentalStation = {
+  id: string;
+  networkId: string;
+  name: string;
+  lat: number;
+  lon: number;
+  capacity: number | null;
+  vehiclesAvailable: number;
+  ebikesAvailable: number;
+  docksAvailable: number;
+  isInstalled: boolean;
+  isRenting: boolean;
+  isReturning: boolean;
+  lastReported: string | null;
+};
+export type RentalStationsResponse = { generatedAt: string; ttlSeconds: number; stations: RentalStation[] };
+export type RentalStationDetail = RentalStation & {
+  vehicleTypesAvailable: { id: string; formFactor: RentalFormFactor; propulsion: string; count: number }[];
+  network: BikeShareNetwork | RentalNetworkInfo | null;
+};
+export type NearbyRentalStation = RentalStation & { kind: "rental_station"; distanceMeters: number };
+
+/** A station as referenced from an itinerary leg (pickup / drop-off). */
+export type RentalStationRef = {
+  stationId: string;
+  name: string;
+  lat: number;
+  lon: number;
+  vehiclesAvailable: number | null;
+  docksAvailable: number | null;
+  lastReported: string | null;
+};
+
+export type RentalLegInfo = {
+  networkId: string;
+  networkName: string;
+  color: string;
+  vehicleType: "bicycle" | "electric_assist" | "scooter" | null;
+  pickup: RentalStationRef | null;
+  dropoff: RentalStationRef | null;
+  freeFloating: boolean;
+  priceEstimate: { amount: number; currency: string; label: string; estimated: boolean } | null;
 };
 
 export type CityComponent = {
@@ -146,6 +230,8 @@ export type Place = {
   arrival: string | null;
   departure: string | null;
   component: Component | null;
+  /** v1.2 — set when the place is a bike-share station. */
+  rentalStationId?: string | null;
 };
 
 export type WalkStep = {
@@ -199,6 +285,8 @@ export type Leg = {
   intermediateStops: Place[];
   steps: WalkStep[];
   alerts: Alert[];
+  /** v1.2 — present on shared-vehicle legs (mode BICYCLE/SCOOTER, transit=false). */
+  rental?: RentalLegInfo | null;
 };
 
 export type Itinerary = {
@@ -213,13 +301,17 @@ export type Itinerary = {
   fare: Fare | null;
   accessible: boolean | null;
   legs: Leg[];
+  /** v1.2 */
+  rentalLegs?: number;
+  modesUsed?: string[];
 };
 
+export type FareLine = { label: string; amount: number; kind?: "transit" | "rental" | string };
 export type Fare = {
   amount: number;
   currency: string;
   estimated?: boolean;
-  breakdown?: { label: string; amount: number }[];
+  breakdown?: FareLine[];
 };
 
 export type PlanParams = {
@@ -283,8 +375,9 @@ export type StopAccessibility = {
   note: string | null;
 };
 
-export type NearbyStop = Stop & { distanceMeters: number };
-export type NearbyResponse = { stops: NearbyStop[] };
+export type NearbyStop = Stop & { distanceMeters: number; kind?: "stop" | "rental_station" };
+/** `?include=stops,rental` adds bike-share stations (in `rental`, or inline in `stops` with `kind`). */
+export type NearbyResponse = { stops: NearbyStop[]; rental?: NearbyRentalStation[] };
 
 export type StopDetail = Stop & {
   routes: RouteRef[];
@@ -474,6 +567,8 @@ export type CityHealth = {
     staleSeconds?: number | null;
   };
   router: { up: boolean; version: string; graphBuiltAt: string | null };
+  /** v1.2 */
+  rental?: { networks: { id: string; up: boolean; stations: number; vehiclesAvailable: number; ageSeconds: number | null }[] } | null;
 };
 
 export type Healthz = { status: string; version: string; cities: string[] };
@@ -489,6 +584,8 @@ export type AdminEditable = {
   links: CityLinks | null;
   services: CityService[] | null;
   branding: { primaryColor: string } | null;
+  /** v1.2 — bike-share networks (GBFS). */
+  mobility: CityMobility | null;
 };
 export type AdminSection = keyof AdminEditable;
 export type AdminOverride = Partial<AdminEditable>;

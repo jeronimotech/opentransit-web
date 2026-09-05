@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/provider";
-import { useAlerts, useBoard, useNearbyStops } from "@/lib/api/hooks";
+import { useAlerts, useBoard, useNearbyRental, useNearbyStops } from "@/lib/api/hooks";
+import { availabilityTone, bikeShareEnabled, formatAvailability, networkById, stationAgeSeconds } from "@/lib/rental";
 import { useFavorites } from "@/lib/favorites";
 import { resolveConfig, componentOf } from "@/lib/city-config";
 import { Icon, Spinner } from "@/components/ui/primitives";
@@ -11,7 +12,7 @@ import { ComponentIcon } from "@/components/ui/ComponentIcon";
 import { RouteChip } from "@/components/ui/RouteChip";
 import { StatusText } from "@/components/ui/FreshnessBadge";
 import { AlertCarousel } from "./AlertCarousel";
-import type { City, NearbyStop } from "@/lib/api/types";
+import type { City, NearbyRentalStation, NearbyStop } from "@/lib/api/types";
 
 /**
  * Map-first home (UX audit A). The sheet peeks with only what the nav does not already
@@ -43,6 +44,9 @@ export function Hub({
   const base = `/${city.id}`;
   const alerts = useAlerts(city.id);
   const nearby = useNearbyStops(city.id, pos, 700);
+  const bikes = bikeShareEnabled(city);
+  const nearRental = useNearbyRental(city.id, pos, 700, bikes);
+  const nearestBike = nearRental.data?.[0] ?? null;
   const fav = useFavorites(city.id);
   const home = fav.places.find((p) => p.placeKind === "home");
   const work = fav.places.find((p) => p.placeKind === "work");
@@ -101,13 +105,20 @@ export function Hub({
           <div className="flex h-[76px] items-center">
             <Spinner />
           </div>
-        ) : !nearby.data?.stops.length ? (
+        ) : !nearby.data?.stops.length && !nearestBike ? (
           <p className="text-sm text-ink-3">{t.hub.nearbyEmpty}</p>
         ) : (
           <ul className="rail -mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-1">
-            {nearby.data.stops.slice(0, 8).map((s) => (
-              <NearbyCard key={s.id} city={city} stop={s} refreshMs={cfg.departuresRefreshSeconds * 1000} boardEnabled={cfg.features.board} />
-            ))}
+            {/* stops and the nearest shared-bike station, ordered by distance */}
+            {[...(nearby.data?.stops.slice(0, 8) ?? []).map((s) => ({ kind: "stop" as const, d: s.distanceMeters, s })), ...(nearestBike ? [{ kind: "bike" as const, d: nearestBike.distanceMeters, s: nearestBike }] : [])]
+              .sort((a, b) => a.d - b.d)
+              .map((x) =>
+                x.kind === "bike" ? (
+                  <NearbyBikeCard key={x.s.id} city={city} station={x.s} />
+                ) : (
+                  <NearbyCard key={x.s.id} city={city} stop={x.s} refreshMs={cfg.departuresRefreshSeconds * 1000} boardEnabled={cfg.features.board} />
+                ),
+              )}
           </ul>
         )}
       </section>
@@ -227,6 +238,38 @@ function NearbyCard({ city, stop, refreshMs, boardEnabled }: { city: City; stop:
           )}
         </span>
       </button>
+    </li>
+  );
+}
+
+
+/** Nearest shared-bike station: network colour, name, "6 bicis · 13 puestos", distance. */
+function NearbyBikeCard({ city, station }: { city: City; station: NearbyRentalStation }) {
+  const { t, lang } = useI18n();
+  const net = networkById(city, station.networkId);
+  const color = net?.color ?? "#00A859";
+  const tone = availabilityTone(station.vehiclesAvailable);
+  const age = stationAgeSeconds(station.lastReported);
+  const href = `/${city.id}?lat=${station.lat.toFixed(5)}&lon=${station.lon.toFixed(5)}&zoom=16.5`;
+  return (
+    <li className="w-[196px] shrink-0 snap-start">
+      <Link href={href} className="flex h-full w-full flex-col gap-1.5 rounded-xl border border-line bg-paper-2 p-2.5 text-left hover:border-ink" aria-label={`${net?.name ?? t.rental.station}: ${station.name}`}>
+        <span className="flex items-center gap-2">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-white" style={{ background: color }}>
+            <Icon.Bike width={15} height={15} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[13px] font-bold leading-tight">{station.name}</span>
+            <span className="block text-[11px] text-ink-3">
+              {Math.round(station.distanceMeters)} m · {net?.name ?? t.hub.bikeStation}
+            </span>
+          </span>
+        </span>
+        <span className="flex min-h-6 items-center gap-2 text-xs">
+          <span className={`font-bold ${tone === "none" ? "text-brick" : tone === "low" ? "text-amber-ink" : "text-ink"}`}>{tone === "none" ? t.rental.none : formatAvailability(station.vehiclesAvailable, station.docksAvailable, lang)}</span>
+          {age != null ? <span className={`h-1.5 w-1.5 rounded-full ${age > 180 ? "bg-amber" : "bg-moss"}`} aria-hidden title={t.rental.updatedAgo(age)} /> : null}
+        </span>
+      </Link>
     </li>
   );
 }

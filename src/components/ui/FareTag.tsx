@@ -43,8 +43,11 @@ export function FareTag({ fare, size = "sm", className = "", interactive = true 
         <span role="tooltip" className="absolute left-0 top-full z-30 mt-1 w-64 rounded-lg border border-line bg-paper-2 p-2.5 text-xs shadow-card">
           <span className="mb-1 block font-semibold">{t.fare.breakdown}</span>
           {(fare.breakdown ?? []).map((b, i) => (
-            <span key={i} className="flex justify-between">
-              <span>{label(b.label)}</span>
+            <span key={i} className="flex justify-between gap-2">
+              <span className="inline-flex items-center gap-1">
+                {b.kind === "rental" ? <Icon.Bike width={12} height={12} className="text-ink-3" /> : null}
+                {label(b.label)}
+              </span>
               <span className="tabular-nums">{b.amount === 0 ? t.fare.free : fmtMoney(b.amount, fare.currency, lang)}</span>
             </span>
           ))}

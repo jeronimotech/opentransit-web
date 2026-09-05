@@ -74,7 +74,7 @@ export function effectiveSection<K extends AdminSection>(override: AdminOverride
   return (o !== undefined && o !== null ? o : yaml[section]) as AdminEditable[K];
 }
 
-const SECTIONS: AdminSection[] = ["fares", "config", "links", "services", "branding"];
+const SECTIONS: AdminSection[] = ["fares", "config", "links", "services", "branding", "mobility"];
 
 /** What the app effectively sees for a snapshot: each section from the override, else YAML. */
 export function effectiveSnapshot(override: AdminOverride | null | undefined, yaml: AdminEditable): AdminEditable {

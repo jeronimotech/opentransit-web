@@ -2,7 +2,7 @@
 
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { ApiRequestError, api } from "./client";
-import type { Departure, PlanParams } from "./types";
+import type { Departure, NearbyRentalStation, PlanParams } from "./types";
 
 const HOUR = 60 * 60 * 1000;
 
@@ -188,5 +188,58 @@ export function useCityHealth(city: string) {
     queryKey: ["health", city],
     queryFn: () => api.health(city),
     refetchInterval: 60_000,
+  });
+}
+
+
+/* ── v1.2 shared bikes (GBFS) ──────────────────────────────────────────────── */
+
+export function useRentalNetworks(city: string, enabled = true) {
+  return useQuery({
+    queryKey: ["rental", "networks", city],
+    queryFn: () => api.rentalNetworks(city),
+    enabled,
+    staleTime: 5 * 60_000,
+    retry: retryPolicy,
+  });
+}
+
+/** Stations in the viewport; the API caches GBFS itself (ttl ~30 s), so we poll at that pace. */
+export function useRentalStations(city: string, bbox: string | null, enabled: boolean, networkId?: string) {
+  return useQuery({
+    queryKey: ["rental", "stations", city, bbox, networkId ?? ""],
+    queryFn: () => api.rentalStations(city, bbox ?? undefined, networkId),
+    enabled: enabled && !!bbox,
+    staleTime: 20_000,
+    refetchInterval: (q) => (q.state.error ? false : 30_000),
+    retry: retryPolicy,
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useRentalStation(city: string, id: string | null) {
+  return useQuery({
+    queryKey: ["rental", "station", city, id],
+    queryFn: () => api.rentalStation(city, id!),
+    enabled: !!id,
+    staleTime: 20_000,
+    refetchInterval: 30_000,
+    retry: retryPolicy,
+  });
+}
+
+/** Nearest bike-share stations (via `stops/nearby?include=rental`), tolerant of either response shape. */
+export function useNearbyRental(city: string, pos: { lat: number; lon: number } | null, radius = 700, enabled = true) {
+  return useQuery({
+    queryKey: ["nearby-rental", city, pos?.lat, pos?.lon, radius],
+    queryFn: async (): Promise<NearbyRentalStation[]> => {
+      const r = await api.stopsNearby(city, pos!.lat, pos!.lon, radius, 40, ["rental"]);
+      const inline = (r.stops as unknown as NearbyRentalStation[]).filter((s) => s.kind === "rental_station");
+      return [...(r.rental ?? []), ...inline].sort((a, b) => a.distanceMeters - b.distanceMeters);
+    },
+    enabled: enabled && !!pos,
+    staleTime: 30_000,
+    refetchInterval: 45_000,
+    retry: retryPolicy,
   });
 }
