@@ -124,6 +124,25 @@ export function withPlatform(url: string | null | undefined, platform: HandoffPl
   }
 }
 
+/**
+ * The URL a "Pedir" anchor navigates to: the API's hand-off with `redirect=1` (so the API
+ * answers 302 into the provider instead of JSON), the platform, and the endpoint names
+ * from the itinerary when the API's URL lacks them. Relative API paths stay relative.
+ */
+export function handoffHref(url: string | null | undefined, platform: HandoffPlatform, names: { fromName?: string | null; toName?: string | null } = {}): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url, "https://localhost");
+    if (!u.searchParams.has("platform")) u.searchParams.set("platform", platform);
+    if (names.fromName && !u.searchParams.get("fromName")) u.searchParams.set("fromName", names.fromName);
+    if (names.toName && !u.searchParams.get("toName")) u.searchParams.set("toName", names.toName);
+    u.searchParams.set("redirect", "1");
+    return url.startsWith("http") ? u.toString() : `${u.pathname}${u.search}`;
+  } catch {
+    return url;
+  }
+}
+
 /** Where "Pedir" falls back to when the provider has no template: the store for the platform, else the website. */
 export function providerFallback(p: Pick<OnDemandProvider, "handoff"> | null | undefined, platform: HandoffPlatform): string | null {
   const h = p?.handoff;

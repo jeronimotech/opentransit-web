@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   estimateTaxi,
   formatPriceRange,
+  handoffHref,
   inNightWindow,
   isMaskedCredential,
   itineraryOnDemandTotal,
@@ -133,6 +134,22 @@ describe("provider ordering and gating", () => {
 });
 
 describe("hand-off", () => {
+  it("builds a navigable hand-off: redirect=1, platform, endpoint names only when missing", () => {
+    const rel = handoffHref("/v1/cities/x/ondemand/handoff?providerId=a&fromLat=4.1&fromLon=-74.1&toLat=4.2&toLon=-74.2", "ios", { fromName: "Chicó Norte", toName: "Portal Sur" })!;
+    const q = new URLSearchParams(rel.split("?")[1]);
+    expect(rel.startsWith("/v1/cities/x/ondemand/handoff?")).toBe(true);
+    expect(q.get("redirect")).toBe("1");
+    expect(q.get("platform")).toBe("ios");
+    expect(q.get("fromName")).toBe("Chicó Norte");
+    expect(q.get("toName")).toBe("Portal Sur");
+    const abs = handoffHref("https://api.example.com/h?providerId=a&platform=web&fromName=Casa", "android", { fromName: "X", toName: "Y" })!;
+    const qa = new URL(abs).searchParams;
+    expect(qa.get("platform")).toBe("web");
+    expect(qa.get("fromName")).toBe("Casa");
+    expect(qa.get("toName")).toBe("Y");
+    expect(qa.get("redirect")).toBe("1");
+    expect(handoffHref(null, "web")).toBeNull();
+  });
   it("adds the platform to API hand-off URLs and falls back to store/web links", () => {
     expect(withPlatform("/v1/cities/x/ondemand/handoff?providerId=a", "ios")).toBe("/v1/cities/x/ondemand/handoff?providerId=a&platform=ios");
     expect(withPlatform("https://api.example.com/h?providerId=a&platform=web", "ios")).toContain("platform=web");

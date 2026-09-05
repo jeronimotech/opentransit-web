@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "@/lib/i18n/provider";
 import { fmtDistance, fmtDuration, fmtMoney } from "@/lib/format";
-import { formatPriceRange, handoffPlatform, legLeadPrice, providerById, providerFallback, tariffById, withPlatform, type HandoffPlatform } from "@/lib/ondemand";
+import { formatPriceRange, handoffHref, handoffPlatform, legLeadPrice, providerById, providerFallback, tariffById, type HandoffPlatform } from "@/lib/ondemand";
 import { API_URL } from "@/lib/api/client";
 import { Badge, Icon } from "@/components/ui/primitives";
 import type { City, Leg, LegOnDemandProvider } from "@/lib/api/types";
@@ -63,7 +63,7 @@ export function OnDemandLegBlock({ leg, city, open, onToggle }: { leg: Leg; city
         <p className="px-3 pt-2 text-[11px] font-semibold uppercase tracking-wide text-ink-3">{t.ondemand.providers}</p>
         <ul className="divide-y divide-line">
           {od.providers.map((p) => (
-            <ProviderRow key={p.providerId} p={p} city={city} platform={platform} recommended={p.providerId === od.recommendedProviderId} />
+            <ProviderRow key={p.providerId} p={p} city={city} platform={platform} recommended={p.providerId === od.recommendedProviderId} names={{ fromName: leg.from.name, toName: leg.to.name }} />
           ))}
         </ul>
       </div>
@@ -94,11 +94,12 @@ export function OnDemandLegBlock({ leg, city, open, onToggle }: { leg: Leg; city
   );
 }
 
-function ProviderRow({ p, city, platform, recommended }: { p: LegOnDemandProvider; city: City; platform: HandoffPlatform; recommended: boolean }) {
+function ProviderRow({ p, city, platform, recommended, names }: { p: LegOnDemandProvider; city: City; platform: HandoffPlatform; recommended: boolean; names: { fromName?: string | null; toName?: string | null } }) {
   const { t, lang } = useI18n();
   const cfg = providerById(city, p.providerId);
   const price = formatPriceRange(p.price, lang);
-  const href = absolute(withPlatform(p.handoffUrl, platform)) ?? providerFallback(cfg, platform);
+  // navigable hand-off: redirect=1 makes the API 302 into the provider instead of answering JSON
+  const href = absolute(handoffHref(p.handoffUrl, platform, names)) ?? providerFallback(cfg, platform);
   const textColor = p.textColor ?? cfg?.textColor ?? "#ffffff";
   return (
     <li className="flex min-h-12 items-center gap-3 px-3 py-2">
