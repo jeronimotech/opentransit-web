@@ -44,6 +44,8 @@ export const landingCopy = {
     previewBanner: "Vista previa del borrador sin guardar",
     closePreview: "Cerrar",
     bikeShare: "Bicis públicas de",
+    onDemandTitle: "Taxi y apps de transporte",
+    onDemandText: (names: string) => `Compara y pide ${names} desde el mismo itinerario, con precio estimado.`,
   },
   en: {
     skip: "Skip to content",
@@ -83,6 +85,8 @@ export const landingCopy = {
     previewBanner: "Preview of the unsaved draft",
     closePreview: "Close",
     bikeShare: "Public bikes by",
+    onDemandTitle: "Taxis and ride apps",
+    onDemandText: (names: string) => `Compare and request ${names} from the same itinerary, with an estimated price.`,
   },
 } as const;
 

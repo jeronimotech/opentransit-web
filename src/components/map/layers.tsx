@@ -94,10 +94,18 @@ export function ItineraryLayer({ itinerary, dim = false }: { itinerary: Itinerar
     const lines = itinerary.legs.map((leg, i) =>
       toLineString(decodeGeometry(leg.geometry), {
         i,
-        walk: !leg.transit && !leg.rental,
+        walk: !leg.transit && !leg.rental && !leg.onDemand,
         // shared-vehicle legs: dashed line in the network's colour
         rental: !!leg.rental,
-        color: leg.rental ? leg.rental.color : leg.route ? routeChipColors(leg.route.color, componentColor(leg.route.component)).bg : "#667085",
+        // taxi / ride-hailing legs: long dashes in the lead provider's colour
+        ondemand: !!leg.onDemand,
+        color: leg.rental
+          ? leg.rental.color
+          : leg.onDemand
+            ? (leg.onDemand.providers.find((p) => p.providerId === leg.onDemand!.recommendedProviderId) ?? leg.onDemand.providers[0])?.color ?? "#667085"
+            : leg.route
+              ? routeChipColors(leg.route.color, componentColor(leg.route.component)).bg
+              : "#667085",
       }),
     );
     const stops = itinerary.legs.flatMap((leg) =>
@@ -110,7 +118,9 @@ export function ItineraryLayer({ itinerary, dim = false }: { itinerary: Itinerar
           )
         : leg.rental
           ? [leg.from, leg.to].map((p) => toPoint(p.lon, p.lat, { end: true, color: leg.rental!.color, rentalPt: true }))
-          : [],
+          : leg.onDemand
+            ? [leg.from, leg.to].map((p) => toPoint(p.lon, p.lat, { end: true, color: (leg.onDemand!.providers.find((x) => x.providerId === leg.onDemand!.recommendedProviderId) ?? leg.onDemand!.providers[0])?.color ?? "#667085" }))
+            : [],
     );
     return fc([...lines, ...stops]);
   }, [itinerary]);
@@ -119,14 +129,14 @@ export function ItineraryLayer({ itinerary, dim = false }: { itinerary: Itinerar
     {
       id: "itinerary-casing",
       type: "line",
-      filter: ["all", ["==", ["get", "walk"], false], ["!=", ["get", "rental"], true]],
+      filter: ["all", ["==", ["get", "walk"], false], ["!=", ["get", "rental"], true], ["!=", ["get", "ondemand"], true]],
       layout: { "line-cap": "round", "line-join": "round" },
       paint: { "line-color": "#ffffff", "line-width": 9, "line-opacity": dim ? 0.4 : 0.9 },
     },
     {
       id: "itinerary-transit",
       type: "line",
-      filter: ["all", ["==", ["get", "walk"], false], ["!=", ["get", "rental"], true]],
+      filter: ["all", ["==", ["get", "walk"], false], ["!=", ["get", "rental"], true], ["!=", ["get", "ondemand"], true]],
       layout: { "line-cap": "round", "line-join": "round" },
       paint: { "line-color": ["get", "color"], "line-width": 5, "line-opacity": dim ? 0.5 : 1 },
     },
@@ -150,6 +160,20 @@ export function ItineraryLayer({ itinerary, dim = false }: { itinerary: Itinerar
       filter: ["==", ["get", "rental"], true],
       layout: { "line-cap": "butt", "line-join": "round" },
       paint: { "line-color": ["get", "color"], "line-width": 4.5, "line-dasharray": [1.6, 1.1], "line-opacity": dim ? 0.5 : 1 },
+    },
+    {
+      id: "itinerary-ondemand-casing",
+      type: "line",
+      filter: ["==", ["get", "ondemand"], true],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#ffffff", "line-width": 8, "line-opacity": dim ? 0.4 : 0.9 },
+    },
+    {
+      id: "itinerary-ondemand",
+      type: "line",
+      filter: ["==", ["get", "ondemand"], true],
+      layout: { "line-cap": "butt", "line-join": "round" },
+      paint: { "line-color": ["get", "color"], "line-width": 4.5, "line-dasharray": [3, 1.4], "line-opacity": dim ? 0.5 : 1 },
     },
     {
       id: "itinerary-stops",

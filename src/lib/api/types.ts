@@ -29,7 +29,9 @@ export type Mode =
   /** v1.2 — shared vehicles (GBFS). `BIKE_RENTAL`/`SCOOTER_RENTAL` are planner modes; `SCOOTER` a leg mode. */
   | "BIKE_RENTAL"
   | "SCOOTER_RENTAL"
-  | "SCOOTER";
+  | "SCOOTER"
+  /** v1.4 — on-demand (taxi / ride-hailing) is a planner flag (`onDemand=true`); `CAR_ONDEMAND` appears in `modesUsed`. */
+  | "CAR_ONDEMAND";
 
 export type Geometry = { encoded: string; precision: number };
 
@@ -60,6 +62,8 @@ export type City = {
     alerts: boolean;
     fares: boolean;
     bikeShare: boolean;
+    /** v1.4 — taxi / ride-hailing options in the planner. */
+    onDemand?: boolean;
   };
   agencies: Agency[];
   attribution: string;
@@ -93,7 +97,115 @@ export type BikeShareNetwork = {
   formFactors: RentalFormFactor[];
 };
 
-export type CityMobility = { bikeShare: BikeShareNetwork[] };
+export type CityMobility = {
+  bikeShare: BikeShareNetwork[];
+  /** v1.4 — on-demand mobility (taxi, ride-hailing). Provider-agnostic: names, colours and links are data. */
+  taxiTariffs?: TaxiTariff[];
+  onDemand?: OnDemandProvider[];
+  onDemandPolicy?: OnDemandPolicy | null;
+};
+
+/* ── v1.4 on-demand mobility (taxi / ride-hailing) ─────────────────────────── */
+
+export type TariffSurchargeWhen = {
+  nightFrom?: string | null; // "19:00"
+  nightTo?: string | null; // "06:00"
+  sundays?: boolean;
+  holidays?: boolean;
+  zones?: string[];
+  optional?: boolean;
+};
+export type TariffSurcharge = { id: string; label: string; amount: number; when: TariffSurchargeWhen };
+export type TariffZone = { id: string; name: string; polygon: [number, number][] };
+export type TaxiTariff = {
+  id: string;
+  name: string;
+  currency: string;
+  flagFall: number;
+  unitPrice: number;
+  unitMeters: number;
+  unitSeconds: number;
+  minimumFare: number;
+  surcharges: TariffSurcharge[];
+  zones?: TariffZone[];
+  source: { label: string; url: string | null } | null;
+  validFrom: string | null;
+  note: string | null;
+};
+
+export type OnDemandKind = "taxi" | "ridehail";
+export type OnDemandEstimateKind = "tariff" | "api" | "none";
+export type OnDemandHandoffKind = "none" | "url" | "template";
+export type OnDemandProvider = {
+  id: string;
+  name: string;
+  kind: OnDemandKind;
+  color: string;
+  textColor?: string | null;
+  logoUrl?: string | null;
+  estimate: { kind: OnDemandEstimateKind; tariffId?: string | null };
+  handoff: {
+    kind: OnDemandHandoffKind;
+    template?: string | null;
+    web?: string | null;
+    apps?: { ios?: string | null; android?: string | null } | null;
+    scheme?: string | null;
+    /** Public endpoint only: whether a template (with credentials) exists server-side. */
+    hasTemplate?: boolean;
+  };
+  /** Admin only: masked on GET ("••••1a2b"); sent on PUT only when changed. Never in public responses. */
+  credentials?: { clientId?: string | null } | null;
+  enabled: boolean;
+  order: number;
+};
+export type OnDemandPolicy = { maxDirectDistanceKm: number; firstLastMile: boolean; maxFeederKm: number; showWhenTransitFaster: boolean };
+
+export type OnDemandPrice = {
+  amount: number | null;
+  min: number | null;
+  max: number | null;
+  currency: string;
+  estimated: boolean;
+  breakdown?: { label: string; amount: number }[];
+  surchargesApplied?: string[];
+  note?: string | null;
+};
+export type OnDemandEstimateSource = "tariff" | "api" | "none";
+
+/** `GET /v1/cities/{city}/ondemand/providers` — public shape, no credentials. */
+export type OnDemandProvidersResponse = { providers: OnDemandProvider[]; policy?: OnDemandPolicy | null };
+
+export type OnDemandProviderEstimate = {
+  providerId: string;
+  kind: OnDemandKind;
+  name?: string;
+  color?: string;
+  price: OnDemandPrice | null;
+  waitSeconds: number | null;
+  handoffUrl: string | null;
+  source: OnDemandEstimateSource;
+};
+/** `GET /v1/cities/{city}/ondemand/estimate` */
+export type OnDemandEstimateResponse = {
+  route: { distanceMeters: number; durationSeconds: number; geometry: Geometry | null };
+  estimates: OnDemandProviderEstimate[];
+};
+/** `GET /v1/cities/{city}/ondemand/handoff` */
+export type OnDemandHandoffResponse = { url: string | null; fallback: string | null; provider: Pick<OnDemandProvider, "id" | "name" | "kind" | "color"> };
+
+/** Leg block on CAR legs (mode CAR, transit=false) produced by the on-demand planner. */
+export type LegOnDemandProvider = {
+  providerId: string;
+  name: string;
+  color: string;
+  textColor?: string | null;
+  kind?: OnDemandKind;
+  price: OnDemandPrice | null;
+  waitSeconds: number | null;
+  handoffUrl: string | null;
+  source: OnDemandEstimateSource;
+};
+export type LegOnDemand = { kind: OnDemandKind; providers: LegOnDemandProvider[]; recommendedProviderId: string | null };
 
 export type RentalVehicleType = { id: string; formFactor: RentalFormFactor; propulsion: string; name: string | null };
 export type RentalPricingPlan = { id: string; name: string; price: number; currency: string; description: string | null; isTaxable: boolean };
@@ -289,6 +401,8 @@ export type Leg = {
   alerts: Alert[];
   /** v1.2 — present on shared-vehicle legs (mode BICYCLE/SCOOTER, transit=false). */
   rental?: RentalLegInfo | null;
+  /** v1.4 — present on taxi / ride-hailing legs (mode CAR, transit=false). */
+  onDemand?: LegOnDemand | null;
 };
 
 export type Itinerary = {
@@ -306,9 +420,11 @@ export type Itinerary = {
   /** v1.2 */
   rentalLegs?: number;
   modesUsed?: string[];
+  /** v1.4 — diagnostic: which planner query produced it. */
+  source?: "primary" | "rental" | "ondemand" | string;
 };
 
-export type FareLine = { label: string; amount: number; kind?: "transit" | "rental" | string };
+export type FareLine = { label: string; amount: number; kind?: "transit" | "rental" | "ondemand" | string };
 export type Fare = {
   amount: number;
   currency: string;
@@ -330,6 +446,8 @@ export type PlanParams = {
   locale?: "es" | "en";
   fromName?: string;
   toName?: string;
+  /** v1.4 — add taxi / ride-hailing itineraries (direct + first/last mile). */
+  onDemand?: boolean;
 };
 
 export type PlanResponse = {
@@ -571,6 +689,8 @@ export type CityHealth = {
   router: { up: boolean; version: string; graphBuiltAt: string | null };
   /** v1.2 */
   rental?: { networks: { id: string; up: boolean; stations: number; vehiclesAvailable: number; ageSeconds: number | null }[] } | null;
+  /** v1.4 */
+  ondemand?: { providers: number; tariffs: number; routerCar: boolean } | null;
 };
 
 export type Healthz = { status: string; version: string; cities: string[] };
@@ -615,7 +735,7 @@ export type LandingResponse = {
   city: Pick<City, "id" | "name" | "country" | "locale" | "branding" | "attribution"> & {
     links?: CityLinks | null;
     services?: CityService[] | null;
-    mobility?: { bikeShare: Pick<BikeShareNetwork, "id" | "name" | "color" | "url">[] } | null;
+    mobility?: { bikeShare: Pick<BikeShareNetwork, "id" | "name" | "color" | "url">[]; onDemand?: Pick<OnDemandProvider, "id" | "name" | "color" | "kind">[] } | null;
   };
   landing: CityLanding;
   stats: LandingStats;

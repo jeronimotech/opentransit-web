@@ -7,6 +7,7 @@ import { PlaceInput } from "./PlaceInput";
 import { fmtDateTime, fromLocalInput, toLocalInput } from "@/lib/format";
 import { TRANSIT_MODES } from "@/lib/planner-params";
 import { bikeShareEnabled, bikeShareNetworks } from "@/lib/rental";
+import { onDemandEnabled, onDemandProviders } from "@/lib/ondemand";
 import type { City, Mode } from "@/lib/api/types";
 import type { PlannerPoint, PlannerState } from "@/lib/planner-params";
 
@@ -29,6 +30,8 @@ type Props = {
   userPos: { lat: number; lon: number } | null;
   compact?: boolean;
   bikeEnabled?: boolean;
+  /** v1.4 — "Taxi / app" chip (on-demand). Gated by `features.onDemand` and the provider list. */
+  onDemandEnabled?: boolean;
 };
 
 /**
@@ -36,7 +39,7 @@ type Props = {
  * (`Ahora ▾` popover with Salir a las / Llegar antes de + picker), one mode row that
  * fits on a phone, advanced toggles under "Más opciones", and the CTA pinned at the bottom.
  */
-export function PlannerForm({ city, state, onChange, onSubmit, onUseLocation, onPickOnMap, picking, locating, userPos, compact, bikeEnabled = true }: Props) {
+export function PlannerForm({ city, state, onChange, onSubmit, onUseLocation, onPickOnMap, picking, locating, userPos, compact, bikeEnabled = true, onDemandEnabled: onDemandFlag = true }: Props) {
   const { t, lang } = useI18n();
   const canBike = bikeEnabled && city.modes.includes("BICYCLE");
   // shared bikes: one chip for the city's networks (N per city); colour of the first, names in the hint
@@ -45,6 +48,12 @@ export function PlannerForm({ city, state, onChange, onSubmit, onUseLocation, on
   const rentalColor = networks[0]?.color ?? "#00A859";
   const rentalLabel = t.rental.mode;
   const rentalHint = t.rental.modeHint(networks.map((n) => n.name).join(" · ") || t.rental.mode);
+  // on-demand: one chip for the city's taxi / ride providers (N per city); colour of the first, names in the hint
+  const providers = onDemandProviders(city);
+  const canTaxi = onDemandFlag && onDemandEnabled(city);
+  const taxiColor = providers[0]?.color ?? "#F2C200";
+  const taxiInk = providers[0]?.textColor ?? "#111111";
+  const taxiHint = t.ondemand.modeHint(providers.map((p) => p.name).join(" · ") || t.ondemand.mode);
   const [timeOpen, setTimeOpen] = useState(false);
   const [more, setMore] = useState(state.wheelchair || state.bike);
   const timeRef = useRef<HTMLDivElement>(null);
@@ -167,6 +176,20 @@ export function PlannerForm({ city, state, onChange, onSubmit, onUseLocation, on
           <button type="button" aria-pressed={state.rental} onClick={() => set({ rental: !state.rental })} title={rentalHint} className={chip(state.rental, "shrink-0 px-3")} style={state.rental ? { background: rentalColor, borderColor: rentalColor, color: "#ffffff" } : { borderColor: rentalColor, color: rentalColor }}>
             <Icon.Bike width={16} height={16} />
             <span className="truncate">{rentalLabel}</span>
+          </button>
+        ) : null}
+        {canTaxi ? (
+          <button
+            type="button"
+            data-testid="mode-taxi"
+            aria-pressed={state.taxi}
+            onClick={() => set({ taxi: !state.taxi })}
+            title={taxiHint}
+            className={chip(state.taxi, "shrink-0 px-3")}
+            style={state.taxi ? { background: taxiColor, borderColor: taxiColor, color: taxiInk } : { borderColor: taxiColor, color: "inherit" }}
+          >
+            <Icon.Car width={16} height={16} />
+            <span className="whitespace-nowrap">{t.ondemand.mode}</span>
           </button>
         ) : null}
       </div>

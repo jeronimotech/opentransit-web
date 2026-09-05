@@ -5,7 +5,10 @@ import { useI18n } from "@/lib/i18n/provider";
 import { fmtDateTime } from "@/lib/format";
 import { api } from "@/lib/api/client";
 import { Badge, Button, Icon, Spinner } from "@/components/ui/primitives";
-import type { AdminConfigResponse, BikeShareNetwork, CityMobility, RentalFormFactor, RentalNetworkInfo } from "@/lib/api/types";
+import type { AdminConfigResponse, BikeShareNetwork, CityMobility, OnDemandPolicy, OnDemandProvider, RentalFormFactor, RentalNetworkInfo, TaxiTariff } from "@/lib/api/types";
+import { isMaskedCredential } from "@/lib/ondemand";
+import { TaxiTariffEditor } from "./TaxiTariffEditor";
+import { OnDemandProvidersEditor } from "./OnDemandProvidersEditor";
 import { validateMobility, type Errors } from "@/lib/admin/validate";
 import { Control, SaveBar, SectionCard, TextInput, saveErrorsFrom, useSectionDraft, type SaveState } from "./form";
 import { useSaveConfig } from "./useAdmin";
@@ -25,11 +28,37 @@ export function MobilityTab({ token, city, data }: { token: string; city: string
   const [serverErrors, setServerErrors] = useState<Errors>({});
   const [probe, setProbe] = useState<{ status: "idle" } | { status: "loading" } | { status: "done"; networks: RentalNetworkInfo[] } | { status: "fail" }>({ status: "idle" });
   const rows: BikeShareNetwork[] = draft?.bikeShare ?? [];
+  const tariffs: TaxiTariff[] = draft?.taxiTariffs ?? [];
+  const providers: OnDemandProvider[] = draft?.onDemand ?? [];
+  const policy: OnDemandPolicy | null = draft?.onDemandPolicy ?? null;
   const errors: Errors = { ...validateMobility(draft, t.admin.errors), ...serverErrors };
+  const mobility = (patch: Partial<CityMobility>): CityMobility => ({ bikeShare: rows, taxiTariffs: tariffs, onDemand: providers, onDemandPolicy: policy, ...(draft ?? {}), ...patch });
   const set = (next: BikeShareNetwork[]) => {
     setServerErrors({});
-    setDraft(next.length ? ({ bikeShare: next } as CityMobility) : { bikeShare: [] });
+    setDraft(mobility({ bikeShare: next }));
   };
+  const setTariffs = (next: TaxiTariff[]) => {
+    setServerErrors({});
+    setDraft(mobility({ taxiTariffs: next }));
+  };
+  const setProviders = (next: OnDemandProvider[]) => {
+    setServerErrors({});
+    setDraft(mobility({ onDemand: next }));
+  };
+  const setPolicy = (next: OnDemandPolicy) => {
+    setServerErrors({});
+    setDraft(mobility({ onDemandPolicy: next }));
+  };
+  /** A masked client id means "unchanged": drop it from the payload so the API keeps what it stores. */
+  const payload = (): CityMobility => ({
+    ...mobility({}),
+    onDemand: providers.map((p) => {
+      if (!isMaskedCredential(p.credentials?.clientId)) return p;
+      const rest = { ...p };
+      delete rest.credentials;
+      return rest;
+    }),
+  });
   const update = (i: number, p: Partial<BikeShareNetwork>) => set(rows.map((r, j) => (j === i ? { ...r, ...p } : r)));
   const move = (i: number, d: -1 | 1) => {
     const j = i + d;
@@ -46,7 +75,7 @@ export function MobilityTab({ token, city, data }: { token: string; city: string
   const onSave = async (meta: { note: string; updatedBy: string }) => {
     setState({ status: "saving" });
     try {
-      const r = await save.mutateAsync({ mobility: { bikeShare: rows }, note: meta.note || undefined, updatedBy: meta.updatedBy || undefined });
+      const r = await save.mutateAsync({ mobility: payload(), note: meta.note || undefined, updatedBy: meta.updatedBy || undefined });
       setState({ status: "saved", revision: r.revision });
     } catch (err) {
       const { errors: e, message } = saveErrorsFrom(err);
@@ -183,6 +212,14 @@ export function MobilityTab({ token, city, data }: { token: string; city: string
             );
           })}
         </ol>
+      </SectionCard>
+      {/* v1.4 · taxi tariff(s) */}
+      <SectionCard title={t.admin.mobility.taxi.title} hint={t.admin.mobility.taxi.hint} overridden={overridden}>
+        <TaxiTariffEditor rows={tariffs} onChange={setTariffs} errors={errors} lang={lang} />
+      </SectionCard>
+      {/* v1.4 · on-demand providers */}
+      <SectionCard title={t.admin.mobility.providers.title} hint={t.admin.mobility.providers.hint} overridden={overridden}>
+        <OnDemandProvidersEditor rows={providers} tariffs={tariffs} policy={policy} city={data.effective} cityId={city} onChange={setProviders} onPolicy={setPolicy} errors={errors} />
       </SectionCard>
       <SaveBar dirty={dirty} errors={errors} state={state} onSave={onSave} onDiscard={() => { reset(); setServerErrors({}); setState({ status: "idle" }); }} viewAppHref={`/${city}`} />
     </div>

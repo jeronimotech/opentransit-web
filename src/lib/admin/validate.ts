@@ -1,4 +1,5 @@
-import type { AdminEditable, BikeShareNetwork, CityConfig, CityFares, CityLanding, CityLinks, CityMobility, CityService } from "../api/types";
+import type { AdminEditable, BikeShareNetwork, CityConfig, CityFares, CityLanding, CityLinks, CityMobility, CityService, OnDemandProvider, TaxiTariff } from "../api/types";
+import { validateTemplate } from "../ondemand";
 import { LANDING_ICONS, LANDING_STAT_KEYS } from "../api/types";
 
 /** Errors keyed by JSON path ("fares.base"), matching the API's `details[].path`. */
@@ -103,6 +104,77 @@ export function validateMobility(m: CityMobility | null | undefined, msg: Messag
       if (v != null && v !== "" && !isHttpsUrl(v)) e[`${k}.apps.${key}`] = msg.https;
     }
     if (!n.formFactors?.length) e[`${k}.formFactors`] = msg.formFactors;
+  });
+  validateTaxiTariffs(m.taxiTariffs ?? [], msg, e);
+  validateOnDemand(m.onDemand ?? [], m.taxiTariffs ?? [], msg, e);
+  const pol = m.onDemandPolicy;
+  if (pol) {
+    if (!isNum(pol.maxDirectDistanceKm) || pol.maxDirectDistanceKm <= 0) e["mobility.onDemandPolicy.maxDirectDistanceKm"] = msg.positive;
+    if (!isNum(pol.maxFeederKm) || pol.maxFeederKm <= 0) e["mobility.onDemandPolicy.maxFeederKm"] = msg.positive;
+  }
+  return e;
+}
+
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** Taxi tariffs (v1.4): taximeter parameters, all non-negative, unit meters > 0, surcharges with a label and a rule. */
+export function validateTaxiTariffs(list: TaxiTariff[], msg: Messages, e: Errors = {}): Errors {
+  const seen = new Set<string>();
+  list.forEach((t, i) => {
+    const k = `mobility.taxiTariffs.${i}`;
+    if (!SLUG.test(t.id ?? "")) e[`${k}.id`] = msg.slug;
+    else if (seen.has(t.id)) e[`${k}.id`] = msg.duplicateId;
+    seen.add(t.id);
+    if (!(t.name ?? "").trim()) e[`${k}.name`] = msg.required;
+    if (!/^[A-Z]{3}$/.test(t.currency ?? "")) e[`${k}.currency`] = msg.currency;
+    for (const f of ["flagFall", "unitPrice", "unitSeconds", "minimumFare"] as const) if (!isNum(t[f]) || t[f] < 0) e[`${k}.${f}`] = msg.nonNegative;
+    if (!isNum(t.unitMeters) || t.unitMeters <= 0) e[`${k}.unitMeters`] = msg.positive;
+    const sids = new Set<string>();
+    (t.surcharges ?? []).forEach((sc, j) => {
+      const kk = `${k}.surcharges.${j}`;
+      if (!SLUG.test(sc.id ?? "")) e[`${kk}.id`] = msg.slug;
+      else if (sids.has(sc.id)) e[`${kk}.id`] = msg.duplicateId;
+      sids.add(sc.id);
+      if (!(sc.label ?? "").trim()) e[`${kk}.label`] = msg.required;
+      if (!isNum(sc.amount) || sc.amount < 0) e[`${kk}.amount`] = msg.nonNegative;
+      const w = sc.when ?? {};
+      if ((w.nightFrom && !HHMM.test(w.nightFrom)) || (w.nightTo && !HHMM.test(w.nightTo))) e[`${kk}.when.nightFrom`] = msg.hhmm;
+      if ((w.nightFrom && !w.nightTo) || (!w.nightFrom && w.nightTo)) e[`${kk}.when.nightFrom`] = msg.hhmm;
+    });
+    if (t.source?.url != null && t.source.url !== "" && !isHttpsUrl(t.source.url)) e[`${k}.source.url`] = msg.https;
+  });
+  return e;
+}
+
+/** On-demand providers (v1.4): kinds from the documented sets, hex colours, https links, templates with placeholders, unique ids and order. */
+export function validateOnDemand(list: OnDemandProvider[], tariffs: TaxiTariff[], msg: Messages, e: Errors = {}): Errors {
+  const seen = new Set<string>();
+  const orders = new Set<number>();
+  const tariffIds = new Set(tariffs.map((t) => t.id));
+  list.forEach((p, i) => {
+    const k = `mobility.onDemand.${i}`;
+    if (!SLUG.test(p.id ?? "")) e[`${k}.id`] = msg.slug;
+    else if (seen.has(p.id)) e[`${k}.id`] = msg.duplicateId;
+    seen.add(p.id);
+    if (!(p.name ?? "").trim()) e[`${k}.name`] = msg.required;
+    if (p.kind !== "taxi" && p.kind !== "ridehail") e[`${k}.kind`] = msg.onDemandKind;
+    if (!HEX.test(p.color ?? "")) e[`${k}.color`] = msg.hex;
+    if (p.textColor != null && p.textColor !== "" && !HEX.test(p.textColor)) e[`${k}.textColor`] = msg.hex;
+    if (p.logoUrl != null && p.logoUrl !== "" && !isHttpsUrl(p.logoUrl)) e[`${k}.logoUrl`] = msg.https;
+    const ek = p.estimate?.kind;
+    if (ek !== "tariff" && ek !== "api" && ek !== "none") e[`${k}.estimate.kind`] = msg.estimateKind;
+    if (ek === "tariff" && !(p.estimate?.tariffId && tariffIds.has(p.estimate.tariffId))) e[`${k}.estimate.tariffId`] = msg.tariffRef;
+    const hk = p.handoff?.kind;
+    if (hk !== "none" && hk !== "url" && hk !== "template") e[`${k}.handoff.kind`] = msg.handoffKind;
+    if (hk === "template" && !validateTemplate(p.handoff?.template).ok) e[`${k}.handoff.template`] = msg.template;
+    if (p.handoff?.web != null && p.handoff.web !== "" && !isHttpsUrl(p.handoff.web)) e[`${k}.handoff.web`] = msg.https;
+    for (const key of ["ios", "android"] as const) {
+      const v = p.handoff?.apps?.[key];
+      if (v != null && v !== "" && !isHttpsUrl(v)) e[`${k}.handoff.apps.${key}`] = msg.https;
+    }
+    if (!isInt(p.order)) e[`${k}.order`] = msg.intRange(0, 99);
+    else if (orders.has(p.order)) e[`${k}.order`] = msg.duplicateOrder;
+    orders.add(p.order);
   });
   return e;
 }
@@ -235,6 +307,14 @@ export type Messages = {
   statKey: string;
   email: string;
   httpsOrAnchor: string;
+  positive: string;
+  onDemandKind: string;
+  estimateKind: string;
+  tariffRef: string;
+  handoffKind: string;
+  template: string;
+  hhmm: string;
+  duplicateOrder: string;
 };
 
 /** English messages, used by the mock API and tests; the UI passes translated ones. */
@@ -260,6 +340,14 @@ export const EN_MESSAGES: Messages = {
   statKey: "unknown stat",
   email: "must be an email address",
   httpsOrAnchor: "must be an https:// URL, a /path or a #anchor",
+  positive: "must be a number > 0",
+  onDemandKind: "must be taxi or ridehail",
+  estimateKind: "must be tariff, api or none",
+  tariffRef: "must reference an existing tariff",
+  handoffKind: "must be none, url or template",
+  template: "must be an https template with at least one known placeholder",
+  hhmm: "must be a time like 19:00",
+  duplicateOrder: "order already used",
 };
 
 const normPath = (p: string) => p.replace(/\[(\d+)\]/g, ".$1").replace(/^\$\.?/, "");

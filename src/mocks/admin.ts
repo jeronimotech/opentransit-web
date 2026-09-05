@@ -59,15 +59,25 @@ export function effectiveCity(): City {
   if (o.mobility) {
     c.mobility = clone(o.mobility);
     c.features.bikeShare = (o.mobility.bikeShare ?? []).length > 0;
+    c.features.onDemand = (o.mobility.onDemand ?? []).some((p) => p.enabled);
   }
   if (o.landing) c.landing = clone(o.landing);
   return c;
 }
 
+const MASK = /^[•*]{2,}/;
+/** Credentials never leave the store in clear: "••••" + last 4 chars, like the API. */
+function maskOverride(o: AdminOverride | null): AdminOverride | null {
+  if (!o?.mobility?.onDemand) return o;
+  const m = clone(o);
+  m.mobility!.onDemand = m.mobility!.onDemand!.map((p) => (p.credentials?.clientId ? { ...p, credentials: { clientId: `••••${p.credentials.clientId.slice(-4)}` } } : p));
+  return m;
+}
+
 function response(): AdminConfigResponse {
   return {
     effective: effectiveCity(),
-    override: state.override ? clone(state.override) : null,
+    override: maskOverride(state.override ? clone(state.override) : null),
     yaml: yaml(),
     revision: state.revision,
     updatedAt: state.updatedAt,
@@ -85,7 +95,7 @@ function commit(next: AdminOverride | null, by: string | null, note: string | nu
   state.revision += 1;
   state.updatedAt = new Date().toISOString();
   state.updatedBy = by;
-  state.history.unshift({ revision: state.revision, changedAt: state.updatedAt, changedBy: by, note, data: state.override ? clone(state.override) : null });
+  state.history.unshift({ revision: state.revision, changedAt: state.updatedAt, changedBy: by, note, data: maskOverride(state.override ? clone(state.override) : null) });
   state.history = state.history.slice(0, 50);
 }
 
@@ -125,6 +135,12 @@ export function adminMock<T>(path: string, q: Record<string, unknown>, init: { m
       for (const [p, msg] of Object.entries(errs)) details.push({ path: p, message: msg });
       // fares.estimated is always true: operators can only estimate, never publish official fares
       (next as Record<string, unknown>)[s] = s === "fares" ? { ...(v as object), estimated: true } : clone(v);
+      if (s === "mobility") {
+        // a masked client id means "keep what is stored" (YAML or the previous override)
+        const stored = new Map((state.override?.mobility?.onDemand ?? yamlCity.mobility?.onDemand ?? []).map((p) => [p.id, p.credentials?.clientId ?? null]));
+        const m = next.mobility!;
+        m.onDemand = (m.onDemand ?? []).map((p) => (p.credentials?.clientId && MASK.test(p.credentials.clientId) ? { ...p, credentials: { clientId: stored.get(p.id) ?? null } } : p));
+      }
     }
     if (details.length) throw new ApiRequestError(400, "BAD_REQUEST", "validation failed", details);
     commit(next, patch.updatedBy?.trim() || null, patch.note?.trim() || null);

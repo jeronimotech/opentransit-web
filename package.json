@@ -1,6 +1,6 @@
 {
   "name": "opentransit-web",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -16,7 +16,8 @@
     "test": "vitest run",
     "screenshots:admin": "node scripts/screenshots-admin.mjs",
     "screenshots:bike": "node scripts/screenshots-bike.mjs",
-    "screenshots:landing": "node scripts/screenshots-landing.mjs"
+    "screenshots:landing": "node scripts/screenshots-landing.mjs",
+    "screenshots:ondemand": "node scripts/screenshots-ondemand.mjs"
   },
   "dependencies": {
     "@mapbox/polyline": "^1.2.1",

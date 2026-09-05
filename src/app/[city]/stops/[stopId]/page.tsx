@@ -21,6 +21,7 @@ import { useVehicleStream } from "@/lib/api/stream";
 import { useInterpolatedVehicles } from "@/lib/interpolate";
 import { useI18n } from "@/lib/i18n/provider";
 import { resolveConfig, componentOf, componentsOf, stopComponent } from "@/lib/city-config";
+import { onDemandEnabled } from "@/lib/ondemand";
 import type { Stop, StopDetail } from "@/lib/api/types";
 
 /**
@@ -145,7 +146,7 @@ export default function StopPage({ params }: { params: Promise<{ stopId: string 
             {city.features.tripUpdates ? <p className="mt-2 text-[11px] text-ink-3">{t.stop.liveOnly}</p> : null}
           </section>
 
-          {/* 2 · plan from / to */}
+          {/* 2 · plan from / to (+ taxi / app to get here) */}
           <div className="flex gap-2">
             <LinkButton href={`/${city.id}${q("from")}`} variant="primary" size="md" className="h-11 flex-1">
               {t.stop.planFrom}
@@ -154,6 +155,11 @@ export default function StopPage({ params }: { params: Promise<{ stopId: string 
               {t.stop.planTo}
             </LinkButton>
           </div>
+          {onDemandEnabled(city) ? (
+            <Link href={`/${city.id}${q("to")}&taxi=1`} className="inline-flex h-10 items-center gap-1.5 self-start text-sm font-semibold text-signal" title={t.ondemand.atStopHint} data-testid="stop-taxi">
+              <Icon.Car width={16} height={16} /> {t.ondemand.atStop} →
+            </Link>
+          ) : null}
 
           {/* 3 · routes, collapsed */}
           {routesDedup.length ? (

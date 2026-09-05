@@ -6,6 +6,10 @@
 import { encodeGeometry, haversineMeters, type LngLat } from "@/lib/geo";
 import { toIsoWithOffset } from "@/lib/format";
 import type {
+  LegOnDemand,
+  OnDemandPrice,
+  OnDemandProvider,
+  TaxiTariff,
   Alert,
   BikeShareNetwork,
   City,
@@ -44,6 +48,7 @@ export const city: City = {
     alerts: true,
     fares: false,
     bikeShare: true,
+    onDemand: true,
   },
   agencies: [
     { id: "1", name: "TransMilenio Troncal", component: "trunk", color: "#D32F2F" },
@@ -96,6 +101,36 @@ export const city: City = {
         formFactors: ["bicycle"],
       },
     ],
+    // ── v1.4: on-demand (taxi / ride-hailing) — every name below is fixture data, not code ──
+    taxiTariffs: [
+      {
+        id: "taxi-2026",
+        name: "Tarifa oficial de taxi 2026",
+        currency: "COP",
+        flagFall: 4500,
+        unitPrice: 159,
+        unitMeters: 100,
+        unitSeconds: 30,
+        minimumFare: 8000,
+        surcharges: [
+          { id: "night", label: "Nocturno / dominical / festivo", amount: 3800, when: { nightFrom: "19:00", nightTo: "06:00", sundays: true, holidays: true } },
+          { id: "airport", label: "Aeropuerto", amount: 8000, when: { zones: ["airport"] } },
+          { id: "door", label: "Puerta a puerta", amount: 1500, when: { optional: true } },
+        ],
+        zones: [{ id: "airport", name: "Aeropuerto El Dorado", polygon: [[-74.16, 4.69], [-74.13, 4.69], [-74.13, 4.715], [-74.16, 4.715]] }],
+        source: { label: "Decreto Distrital 042 de 2026", url: "https://bogota.gov.co/mi-ciudad/movilidad/en-firme-el-decreto-que-fija-las-tarifas-de-taxi-en-bogota-en-2026" },
+        validFrom: "2026-02-12",
+        note: "Estimación según tarifa oficial; el taxímetro manda.",
+      },
+    ],
+    onDemand: [
+      { id: "taxi", name: "Taxi", kind: "taxi", color: "#F2C200", textColor: "#111111", logoUrl: null, estimate: { kind: "tariff", tariffId: "taxi-2026" }, handoff: { kind: "url", template: null, web: "https://www.taxislibres.com.co/", apps: { ios: null, android: null }, scheme: null }, enabled: true, order: 1 },
+      { id: "uber", name: "Uber", kind: "ridehail", color: "#000000", textColor: "#FFFFFF", logoUrl: null, estimate: { kind: "none" }, handoff: { kind: "template", template: "https://m.uber.com/looking?client_id={clientId}&pickup={pickupJson}&drop[0]={dropoffJson}", web: "https://www.uber.com/co/", apps: { ios: "https://apps.apple.com/co/app/id368677368", android: "https://play.google.com/store/apps/details?id=com.ubercab" }, scheme: null, hasTemplate: true }, credentials: { clientId: "••••demo" }, enabled: true, order: 2 },
+      { id: "cabify", name: "Cabify", kind: "ridehail", color: "#7145D6", textColor: "#FFFFFF", logoUrl: null, estimate: { kind: "none" }, handoff: { kind: "url", template: null, web: "https://cabify.com/co", apps: { ios: null, android: null }, scheme: null }, enabled: true, order: 3 },
+      { id: "didi", name: "DiDi", kind: "ridehail", color: "#FF7F41", textColor: "#111111", logoUrl: null, estimate: { kind: "none" }, handoff: { kind: "url", template: null, web: "https://web.didiglobal.com/co/", apps: { ios: null, android: null }, scheme: null }, enabled: true, order: 4 },
+      { id: "indrive", name: "inDrive", kind: "ridehail", color: "#A6E22E", textColor: "#111111", logoUrl: null, estimate: { kind: "none" }, handoff: { kind: "url", template: null, web: "https://indrive.com/", apps: { ios: null, android: null }, scheme: null }, enabled: true, order: 5 },
+    ],
+    onDemandPolicy: { maxDirectDistanceKm: 40, firstLastMile: true, maxFeederKm: 8, showWhenTransitFaster: true },
   },
 };
 export const tembici: BikeShareNetwork = city.mobility!.bikeShare[0];
@@ -736,6 +771,126 @@ export function buildRentalItineraries(from: Place, to: Place, time: Date, arriv
       fare: { ...fare, amount: fare.amount + 11000, breakdown: [...(fare.breakdown ?? []).map((b) => ({ ...b, kind: "transit" })), { label: `${tembici.name} · pase diario`, amount: 11000, kind: "rental" }] },
       rentalLegs: 1,
       modesUsed: ["WALK", "BICYCLE_RENTAL", "BUS"],
+    });
+  }
+  return out;
+}
+
+
+// ── v1.4: on-demand (taxi / ride-hailing) itineraries ────────────────────────
+export const taxiTariff: TaxiTariff = city.mobility!.taxiTariffs![0];
+export const onDemandProviders: OnDemandProvider[] = city.mobility!.onDemand!;
+
+/** Same rule as lib/ondemand.estimateTaxi, kept inline so the mock has no UI dependency. */
+export function mockTaxiPrice(distanceMeters: number, at: Date, zones: string[] = []): OnDemandPrice {
+  const t = taxiTariff;
+  const units = Math.ceil(distanceMeters / t.unitMeters);
+  let amount = Math.max(t.minimumFare, t.flagFall + units * t.unitPrice);
+  const breakdown = [
+    { label: "Banderazo", amount: t.flagFall },
+    { label: `${units} unidades`, amount: units * t.unitPrice },
+  ];
+  const applied: string[] = [];
+  const hh = Number(new Intl.DateTimeFormat("en-US", { timeZone: TZ, hour: "2-digit", hour12: false }).format(at)) % 24;
+  const wd = new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "short" }).format(at);
+  for (const sc of t.surcharges) {
+    const w = sc.when;
+    const on = w.optional ? false : w.zones?.length ? w.zones.some((z) => zones.includes(z)) : (w.sundays && wd === "Sun") || (w.nightFrom && (hh >= 19 || hh < 6));
+    if (!on) continue;
+    applied.push(sc.id);
+    amount += sc.amount;
+    breakdown.push({ label: sc.label, amount: sc.amount });
+  }
+  const r = (n: number) => Math.round(n / 100) * 100;
+  return { amount, min: r(amount * 0.9), max: r(amount * 1.1), currency: t.currency, estimated: true, breakdown, surchargesApplied: applied, note: t.note };
+}
+
+function handoffUrl(providerId: string, from: Place, to: Place): string {
+  const q = new URLSearchParams({ providerId, fromLat: String(from.lat), fromLon: String(from.lon), toLat: String(to.lat), toLon: String(to.lon), fromName: from.name, toName: to.name, redirect: "1" });
+  return `/v1/cities/bogota/ondemand/handoff?${q.toString()}`;
+}
+
+export function onDemandBlock(from: Place, to: Place, distanceMeters: number, at: Date): LegOnDemand {
+  const zones = haversineMeters(to, { lat: 4.7016, lon: -74.1469 }) < 2500 || haversineMeters(from, { lat: 4.7016, lon: -74.1469 }) < 2500 ? ["airport"] : [];
+  const providers = onDemandProviders
+    .filter((p) => p.enabled)
+    .sort((a, b) => a.order - b.order)
+    .map((p) => ({
+      providerId: p.id,
+      name: p.name,
+      color: p.color,
+      textColor: p.textColor ?? null,
+      kind: p.kind,
+      price: p.estimate.kind === "tariff" ? mockTaxiPrice(distanceMeters, at, zones) : null,
+      waitSeconds: p.kind === "taxi" ? 300 : null,
+      handoffUrl: handoffUrl(p.id, from, to),
+      source: (p.estimate.kind === "tariff" ? "tariff" : "none") as "tariff" | "none",
+    }));
+  return { kind: "taxi", providers, recommendedProviderId: providers.find((p) => p.price)?.providerId ?? providers[0]?.providerId ?? null };
+}
+
+function carLeg(from: Place, to: Place, start: Date, minutes: number): Leg {
+  const end = addMin(start, minutes);
+  const dist = Math.round(haversineMeters(from, to) * 1.35);
+  const coords: LngLat[] = [
+    [from.lon, from.lat],
+    [(from.lon + to.lon) / 2 - 0.004, (from.lat + to.lat) / 2 + 0.003],
+    [to.lon, to.lat],
+  ];
+  return {
+    mode: "CAR",
+    transit: false,
+    startTime: iso(start),
+    endTime: iso(end),
+    durationSeconds: minutes * 60,
+    distanceMeters: dist,
+    from: { ...from, departure: iso(start), arrival: null },
+    to: { ...to, arrival: iso(end), departure: null },
+    route: null,
+    headsign: null,
+    agency: null,
+    tripId: null,
+    realtime: false,
+    realtimeState: null,
+    delaySeconds: null,
+    geometry: encodeGeometry(coords),
+    intermediateStops: [],
+    steps: [],
+    alerts: [],
+    onDemand: onDemandBlock(from, to, dist, start),
+  };
+}
+
+/** A direct taxi/app trip and a "Taxi → Bus" combo (taxi to the nearest trunk station, then B13). */
+export function buildOnDemandItineraries(from: Place, to: Place, time: Date, arriveBy: boolean, withTransit: boolean): Itinerary[] {
+  const t0 = arriveBy ? addMin(time, -45) : addMin(time, 4); // ~4 min pickup
+  const out: Itinerary[] = [];
+  const directMin = Math.max(8, Math.round((haversineMeters(from, to) * 1.35) / 330)); // ~20 km/h city traffic
+  const direct = itinerary("it-taxi-0", [carLeg(from, to, t0, directMin)]);
+  const lead = direct.legs[0].onDemand!.providers.find((p) => p.price)!;
+  out.push({
+    ...direct,
+    fare: { amount: lead.price!.amount as number, currency: lead.price!.currency, estimated: true, breakdown: [{ label: `${lead.name} · ${direct.legs[0].distanceMeters > 0 ? "estimado" : ""}`.trim(), amount: lead.price!.amount as number, kind: "ondemand" }] },
+    modesUsed: ["CAR_ONDEMAND"],
+    source: "ondemand",
+  });
+  if (withTransit) {
+    const hub = sById("7012"); // Calle 100
+    const hubPlace = place(hub, null, null);
+    const feederMin = Math.max(5, Math.round((haversineMeters(from, hub) * 1.35) / 330));
+    const car = carLeg(from, hubPlace, t0, feederMin);
+    const bus = busLeg(rt("B13"), shapeNorteNQS, [...NORTE, ...NQS], "7012", "7215", addMin(t0, feederMin + 3), 44, { realtime: true, delay: 60, headsign: "Portal Sur" });
+    const w = walkLeg(place(sById("7215"), null, null), to, addMin(t0, feederMin + 47), 2, [
+      { instruction: "", distanceMeters: 120, lat: to.lat, lon: to.lon, relativeDirection: "DEPART", streetName: "Autopista Sur" },
+    ]);
+    const it = itinerary("it-taxi-1", [car, bus, w]);
+    const carLead = car.onDemand!.providers.find((p) => p.price)!;
+    const fare = it.fare!;
+    out.push({
+      ...it,
+      fare: { ...fare, amount: fare.amount + (carLead.price!.amount as number), breakdown: [{ label: carLead.name, amount: carLead.price!.amount as number, kind: "ondemand" }, ...(fare.breakdown ?? []).map((b) => ({ ...b, kind: "transit" }))] },
+      modesUsed: ["CAR_ONDEMAND", "BUS", "WALK"],
+      source: "ondemand",
     });
   }
   return out;

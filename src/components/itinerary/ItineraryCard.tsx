@@ -7,6 +7,7 @@ import { StatusText } from "@/components/ui/FreshnessBadge";
 import { FareTag } from "@/components/ui/FareTag";
 import { RouteStrip } from "./RouteStrip";
 import { estimateFare } from "@/lib/fare";
+import { formatPriceRange, legLeadPrice, onDemandLegs, onDemandShape } from "@/lib/ondemand";
 import type { CityFares, Itinerary } from "@/lib/api/types";
 
 export function ItineraryCard({
@@ -29,6 +30,10 @@ export function ItineraryCard({
   const rentals = itinerary.legs.filter((l) => l.rental).map((l) => l.rental!);
   const rentalNets = [...new Map(rentals.map((r) => [r.networkId, r])).values()];
   const bike = itinerary.legs.some((l) => l.mode === "BICYCLE" && !l.rental);
+  const odLegs = onDemandLegs(itinerary);
+  const odLead = odLegs[0] ? legLeadPrice(odLegs[0]) : null;
+  const odProvider = odLead?.provider ?? odLegs[0]?.onDemand?.providers[0] ?? null;
+  const odShape = onDemandShape(itinerary);
   const live = itinerary.legs.some((l) => l.realtime);
   const hasAlerts = itinerary.legs.some((l) => l.alerts.length);
   const canceled = itinerary.legs.some((l) => l.realtimeState === "CANCELED");
@@ -64,6 +69,12 @@ export function ItineraryCard({
             {fmtDuration(itinerary.waitingTimeSeconds, lang)} {t.planner.wait}
           </span>
         ) : null}
+        {odProvider ? (
+          <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold" style={{ background: odProvider.color, color: odProvider.textColor ?? "#ffffff" }} title={t.ondemand.inItinerary}>
+            <Icon.Car width={12} height={12} /> {odShape === "combo" ? t.ondemand.combo : odLegs[0].onDemand!.kind === "taxi" ? t.ondemand.taxi : t.ondemand.ridehail}
+          </span>
+        ) : null}
+        {odProvider ? <span className="text-xs font-semibold tabular-nums text-ink">{odLead ? formatPriceRange(odLead.price, lang) : t.ondemand.priceInApp}</span> : null}
         {rentalNets.map((r) => (
           <span key={r.networkId} className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold text-white" style={{ background: r.color }} title={t.rental.inItinerary}>
             <Icon.Bike width={12} height={12} /> {r.networkName}

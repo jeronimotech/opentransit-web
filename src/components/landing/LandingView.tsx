@@ -9,9 +9,11 @@ import { Icon } from "@/components/ui/primitives";
 import { RouteDiagram } from "./RouteDiagram";
 
 /* ── icons for highlights: the app's set plus three the landing needs ─────────── */
-function HighlightIcon({ icon }: { icon: LandingIcon }) {
+function HighlightIcon({ icon }: { icon: LandingIcon | "car" }) {
   const p = { width: 22, height: 22 };
   switch (icon) {
+    case "car":
+      return <Icon.Car {...p} />;
     case "route":
       return <Icon.Route {...p} />;
     case "live":
@@ -129,7 +131,14 @@ export function LandingView({ data, appHref, preview, onClosePreview, diagramCol
   const t = copyFor(l.locale);
   const theme = resolveTheme(l, data.city);
   const stats = visibleStats(l, data.stats);
-  const highlights = l.highlights.length ? l.highlights : (t.genericHighlights as unknown as CityLanding["highlights"]);
+  const baseHighlights = l.highlights.length ? l.highlights : (t.genericHighlights as unknown as CityLanding["highlights"]);
+  // v1.4: when the city offers taxi / ride apps, a highlight appears automatically (copy from config names)
+  const odProviders = data.city.mobility?.onDemand ?? [];
+  const odNames = odProviders.map((p) => p.name).join(" · ");
+  const highlights: (CityLanding["highlights"][number] | { icon: "car"; title: string; text: string })[] =
+    odProviders.length && !baseHighlights.some((h) => /taxi|uber|cabify|ride|app de transporte/i.test(`${h.title} ${h.text}`))
+      ? [...baseHighlights, { icon: "car", title: t.onDemandTitle, text: t.onDemandText(odNames) }]
+      : baseHighlights;
   const heroShot = l.screenshots.find((s) => s.kind === "mobile") ?? l.screenshots[0] ?? null;
   const title = l.hero.title?.trim() || t.heroTitle(data.city.name);
   const subtitle = l.hero.subtitle?.trim() || t.heroSubtitle;

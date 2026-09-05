@@ -11,6 +11,8 @@ import type {
   GeocodeResult,
   NearbyRentalStation,
   NextResponse,
+  OnDemandEstimateResponse,
+  OnDemandHandoffResponse,
   Place,
   RentalNetworkInfo,
   RentalStationDetail,
@@ -23,11 +25,14 @@ import {
   TZ,
   alerts,
   buildItineraries,
+  buildOnDemandItineraries,
   buildRentalItineraries,
   corridorFor,
   corridors,
   currentVehicles,
+  mockTaxiPrice,
   modeFlags,
+  onDemandProviders,
   pois,
   rentalStationById,
   rentalStations,
@@ -193,9 +198,13 @@ export async function mockRequest<T>(path: string, q: Q, init: Init = { method: 
     const time = q.time ? new Date(String(q.time)) : new Date();
     const arriveBy = q.arriveBy === true || q.arriveBy === "true";
     const flags = modeFlags(str(q, "modes"));
+    const onDemand = q.onDemand === true || q.onDemand === "true" || q.onDemand === "1";
+    const c = await liveCity();
+    const odOn = onDemand && c.features.onDemand !== false && (c.mobility?.onDemand ?? []).some((p) => p.enabled);
     const itineraries = [
       ...(flags.transit ? buildItineraries(from, to, time, arriveBy) : []),
       ...(flags.rental ? buildRentalItineraries(from, to, time, arriveBy, flags.transit) : []),
+      ...(odOn ? buildOnDemandItineraries(from, to, time, arriveBy, flags.transit) : []),
     ];
     return {
       from,
@@ -275,6 +284,70 @@ export async function mockRequest<T>(path: string, q: Q, init: Init = { method: 
       network: networkInfo(),
     };
     return detail as T;
+  }
+  // ── v1.4 on-demand (taxi / ride-hailing) ──
+  const publicProviders = async () => {
+    const c = await liveCity();
+    return (c.mobility?.onDemand ?? onDemandProviders)
+      .filter((pv) => pv.enabled)
+      .sort((a, b) => a.order - b.order)
+      .map((pv) => {
+        const pub = { ...pv, handoff: { ...pv.handoff, template: null, hasTemplate: pv.handoff.kind === "template" && !!pv.handoff.template } };
+        delete pub.credentials;
+        return pub;
+      });
+  };
+  if (p === "/ondemand/providers") {
+    const c = await liveCity();
+    return { providers: await publicProviders(), policy: c.mobility?.onDemandPolicy ?? null } as T;
+  }
+  if (p === "/ondemand/estimate") {
+    const from = { lat: num(q, "fromLat"), lon: num(q, "fromLon") };
+    const to = { lat: num(q, "toLat"), lon: num(q, "toLon") };
+    const at = q.time ? new Date(String(q.time)) : new Date();
+    const dist = Math.round(haversineMeters(from, to) * 1.35);
+    const dur = Math.max(300, Math.round(dist / 5.5));
+    const airport = haversineMeters(to, { lat: 4.7016, lon: -74.1469 }) < 2500 || haversineMeters(from, { lat: 4.7016, lon: -74.1469 }) < 2500;
+    const only = str(q, "providerId");
+    const list = (await publicProviders()).filter((pv) => !only || pv.id === only);
+    const out: OnDemandEstimateResponse = {
+      route: { distanceMeters: dist, durationSeconds: dur, geometry: encodeGeometry([[from.lon, from.lat], [to.lon, to.lat]]) },
+      estimates: list.map((pv) => ({
+        providerId: pv.id,
+        kind: pv.kind,
+        name: pv.name,
+        color: pv.color,
+        price: pv.estimate.kind === "tariff" ? mockTaxiPrice(dist, at, airport ? ["airport"] : []) : null,
+        waitSeconds: pv.kind === "taxi" ? 300 : null,
+        handoffUrl: `/v1/cities/bogota/ondemand/handoff?providerId=${pv.id}&fromLat=${from.lat}&fromLon=${from.lon}&toLat=${to.lat}&toLon=${to.lon}`,
+        source: pv.estimate.kind === "tariff" ? "tariff" : "none",
+      })),
+    };
+    return out as T;
+  }
+  if (p === "/ondemand/handoff") {
+    const c = await liveCity();
+    const pv = (c.mobility?.onDemand ?? onDemandProviders).find((x) => x.id === str(q, "providerId"));
+    if (!pv) throw new ApiRequestError(404, "PROVIDER_NOT_FOUND", "No such on-demand provider");
+    const platform = str(q, "platform") || "web";
+    const fallback = platform === "ios" && pv.handoff.apps?.ios ? pv.handoff.apps.ios : platform === "android" && pv.handoff.apps?.android ? pv.handoff.apps.android : (pv.handoff.web ?? pv.handoff.apps?.ios ?? pv.handoff.apps?.android ?? null);
+    let url: string | null = null;
+    if (pv.handoff.kind === "template" && pv.handoff.template) {
+      const clientId = pv.credentials?.clientId && !/^[•*]/.test(pv.credentials.clientId) ? pv.credentials.clientId : "demo-client-id";
+      const j = (lat: number, lon: number, name: string) => encodeURIComponent(JSON.stringify({ latitude: lat, longitude: lon, addressLine1: name }));
+      url = pv.handoff.template
+        .replace("{clientId}", encodeURIComponent(clientId))
+        .replace("{pickupLat}", String(num(q, "fromLat")))
+        .replace("{pickupLon}", String(num(q, "fromLon")))
+        .replace("{dropoffLat}", String(num(q, "toLat")))
+        .replace("{dropoffLon}", String(num(q, "toLon")))
+        .replace("{pickupName}", encodeURIComponent(str(q, "fromName")))
+        .replace("{dropoffName}", encodeURIComponent(str(q, "toName")))
+        .replace("{pickupJson}", j(num(q, "fromLat"), num(q, "fromLon"), str(q, "fromName")))
+        .replace("{dropoffJson}", j(num(q, "toLat"), num(q, "toLon"), str(q, "toName")));
+    } else if (pv.handoff.kind === "url") url = fallback;
+    const out: OnDemandHandoffResponse = { url, fallback, provider: { id: pv.id, name: pv.name, kind: pv.kind, color: pv.color } };
+    return out as T;
   }
   const freshness = (): Freshness => ({ realtime: true, ageSeconds: 15 + Math.floor(Math.random() * 10), stale: false });
 
@@ -452,7 +525,12 @@ export async function mockRequest<T>(path: string, q: Q, init: Init = { method: 
       city: {
         id: c.id, name: c.name, country: c.country, locale: c.locale, branding: c.branding, attribution: c.attribution,
         links: c.links ?? null, services: c.services ?? null,
-        mobility: c.mobility ? { bikeShare: c.mobility.bikeShare.map((n) => ({ id: n.id, name: n.name, color: n.color, url: n.url })) } : null,
+        mobility: c.mobility
+          ? {
+              bikeShare: c.mobility.bikeShare.map((n) => ({ id: n.id, name: n.name, color: n.color, url: n.url })),
+              onDemand: (c.mobility.onDemand ?? []).filter((x) => x.enabled).map((x) => ({ id: x.id, name: x.name, color: x.color, kind: x.kind })),
+            }
+          : null,
       },
       landing: l,
       stats: { routes: 1024, stops: 8309, vehiclesLive: currentVehicles().length, bikeStations: rentalStations.length, alertsActive: alerts.length, generatedAt: iso(new Date()) },
@@ -465,6 +543,7 @@ export async function mockRequest<T>(path: string, q: Q, init: Init = { method: 
       realtime: { enabled: true, lastFetchAt: iso(new Date()), entityAgeP50Seconds: 18, vehicles: 220, pctTripResolved: 88.9, alerts: 3, stale: false, staleSeconds: null },
       router: { up: true, version: "2.10.0", graphBuiltAt: iso(new Date(Date.now() - 86400_000)) },
       rental: { networks: [{ id: "tembici", up: true, stations: rentalStations.length, vehiclesAvailable: rentalStations.reduce((a, s) => a + s.vehiclesAvailable, 0), ageSeconds: 12 }] },
+      ondemand: { providers: onDemandProviders.filter((x) => x.enabled).length, tariffs: 1, routerCar: true },
     } as T;
   }
 

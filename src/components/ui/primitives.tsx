@@ -280,6 +280,14 @@ export const Icon = {
       <path d="M5 14l3-7h4l3 7M8 7h-2M12 7l1-2h2M8 7l3 7" />
     </svg>
   ),
+  Car: (p: ComponentProps<"svg">) => (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}>
+      <path d="M4 12l1.5-4.5A1.5 1.5 0 017 6.5h6a1.5 1.5 0 011.5 1L16 12" />
+      <rect x="3" y="12" width="14" height="4" rx="1.2" />
+      <circle cx="6.5" cy="16.5" r="1.3" /><circle cx="13.5" cy="16.5" r="1.3" />
+      <path d="M5.5 14h1.5M13 14h1.5" />
+    </svg>
+  ),
   Services: (p: ComponentProps<"svg">) => (
     <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}>
       <rect x="3" y="3" width="6" height="6" rx="1.5" /><rect x="11" y="3" width="6" height="6" rx="1.5" />

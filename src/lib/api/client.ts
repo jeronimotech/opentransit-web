@@ -17,6 +17,9 @@ import type {
   NearbyResponse,
   NetworkResponse,
   NextResponse,
+  OnDemandEstimateResponse,
+  OnDemandHandoffResponse,
+  OnDemandProvidersResponse,
   PlanParams,
   PoiCollection,
   PlanResponse,
@@ -115,6 +118,7 @@ export const api = {
       locale: p.locale,
       fromName: p.fromName,
       toName: p.toName,
+      onDemand: p.onDemand || undefined,
     }),
 
   geocode: (city: string, q: string, near?: { lat: number; lon: number }, limit = 8) =>
@@ -135,6 +139,16 @@ export const api = {
   rentalStations: (city: string, bbox?: string, networkId?: string, limit = 500) =>
     request<RentalStationsResponse>(`${c(city)}/rental/stations`, { bbox, networkId, limit }),
   rentalStation: (city: string, id: string) => request<RentalStationDetail>(`${c(city)}/rental/stations/${encodeURIComponent(id)}`),
+
+  /** v1.4 — on-demand (taxi / ride-hailing): public providers, a price/time estimate, and the hand-off URL builder. */
+  onDemandProviders: (city: string) => request<OnDemandProvidersResponse>(`${c(city)}/ondemand/providers`),
+  onDemandEstimate: (city: string, p: { fromLat: number; fromLon: number; toLat: number; toLon: number; time?: string; providerId?: string }) =>
+    request<OnDemandEstimateResponse>(`${c(city)}/ondemand/estimate`, p),
+  onDemandHandoff: (city: string, p: { providerId: string; fromLat: number; fromLon: number; toLat: number; toLon: number; fromName?: string; toName?: string; platform?: "ios" | "android" | "web" }) =>
+    request<OnDemandHandoffResponse>(`${c(city)}/ondemand/handoff`, p),
+  /** The same hand-off as a navigable URL (`?redirect=1` → 302 into the provider). */
+  onDemandHandoffUrl: (city: string, p: { providerId: string; fromLat: number; fromLon: number; toLat: number; toLon: number; fromName?: string; toName?: string; platform?: "ios" | "android" | "web" }) =>
+    `${API_URL}${c(city)}/ondemand/handoff${qs({ ...p, redirect: 1 })}`,
   stop: (city: string, stopId: string) =>
     request<StopDetail>(`${c(city)}/stops/${encodeURIComponent(stopId)}`),
   departures: (city: string, stopId: string, limit = 20, minutes = 60) =>

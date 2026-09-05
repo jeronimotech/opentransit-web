@@ -30,6 +30,25 @@ export function RouteStrip({ itinerary, height = 30 }: { itinerary: Itinerary; h
             </span>
           );
         }
+        if (leg.onDemand) {
+          // taxi / ride-hailing leg: the lead provider's colour with a car glyph
+          const lead = leg.onDemand.providers.find((p) => p.providerId === leg.onDemand!.recommendedProviderId) ?? leg.onDemand.providers[0];
+          return (
+            <span
+              key={i}
+              className="flex items-center justify-center overflow-hidden rounded-md px-1 text-[11px] font-extrabold"
+              style={{ flex: `${share} 1 0`, minWidth: "3ch", background: lead?.color ?? "#667085", color: lead?.textColor ?? "#ffffff" }}
+              title={lead?.name}
+            >
+              <svg viewBox="0 0 20 20" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                <path d="M4 12l1.5-4.5A1.5 1.5 0 017 6.5h6a1.5 1.5 0 011.5 1L16 12" />
+                <rect x="3" y="12" width="14" height="4" rx="1.2" />
+                <circle cx="6.5" cy="16.5" r="1.3" />
+                <circle cx="13.5" cy="16.5" r="1.3" />
+              </svg>
+            </span>
+          );
+        }
         if (!leg.transit) {
           return <span key={i} className="strip-walk self-center" style={{ flex: `${share} 1 0`, height: 3 }} />;
         }

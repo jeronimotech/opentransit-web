@@ -6,7 +6,7 @@ import { buildPlanModes } from "./rental";
  * between search params and a typed state, so any plan is shareable.
  *
  * ?from=4.7546,-74.0459&fromName=Portal%20Norte&to=4.5978,-74.1616&toName=Portal%20Sur
- * &time=2026-09-04T08:15:00-05:00&arriveBy=1&modes=BUS,CABLE_CAR&wheelchair=1&rental=1&it=0
+ * &time=2026-09-04T08:15:00-05:00&arriveBy=1&modes=BUS,CABLE_CAR&wheelchair=1&rental=1&taxi=1&it=0
  */
 export type PlannerPoint = { lat: number; lon: number; name: string | null };
 
@@ -19,6 +19,7 @@ export type PlannerState = {
   wheelchair: boolean;
   bike: boolean; // "llegar en bici a la estación" (BICYCLE + TRANSIT)
   rental: boolean; // "Bici pública" (BIKE_RENTAL via GBFS), with or without transit
+  taxi: boolean; // "Taxi / app" (on-demand: direct + first/last mile), API flag onDemand=true
   selected: number | null; // itinerary index
 };
 
@@ -52,6 +53,7 @@ export function readPlanner(sp: URLSearchParams): PlannerState {
     wheelchair: sp.get("wheelchair") === "1",
     bike: sp.get("bike") === "1",
     rental: sp.get("rental") === "1",
+    taxi: sp.get("taxi") === "1",
     selected: it !== null && it !== "" ? Number(it) : null,
   };
 }
@@ -76,6 +78,7 @@ export function writePlanner(s: PlannerState): URLSearchParams {
   if (s.wheelchair) p.set("wheelchair", "1");
   if (s.bike) p.set("bike", "1");
   if (s.rental) p.set("rental", "1");
+  if (s.taxi) p.set("taxi", "1");
   if (s.selected !== null) p.set("it", String(s.selected));
   return p;
 }
@@ -95,5 +98,6 @@ export function toPlanParams(s: PlannerState, locale: "es" | "en", rentalModes: 
     locale,
     fromName: s.from.name ?? undefined,
     toName: s.to.name ?? undefined,
+    onDemand: s.taxi || undefined,
   };
 }
