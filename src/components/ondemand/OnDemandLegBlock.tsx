@@ -38,7 +38,7 @@ export function OnDemandLegBlock({ leg, city, open, onToggle }: { leg: Leg; city
     <div className="mt-1.5 flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-sm font-extrabold" style={{ background: leadProvider?.color ?? "#667085", color: leadProvider?.textColor ?? "#ffffff" }}>
-          <Icon.Car width={14} height={14} /> {od.kind === "taxi" ? t.ondemand.taxi : t.ondemand.ridehail}
+          <Icon.Car width={14} height={14} /> {od.kind === "taxi" ? t.ondemand.taxi : od.kind === "ridehail" ? t.ondemand.ridehail : t.ondemand.title}
         </span>
         <button type="button" onClick={onToggle} className="inline-flex items-center gap-1 text-xs font-semibold text-signal" aria-expanded={open}>
           <Icon.Chevron width={14} height={14} className={`transition-transform ${open ? "rotate-90" : ""}`} />

@@ -17,6 +17,7 @@ const BASE = process.env.BASE_URL ?? "http://localhost:3100";
 const OUT = "docs/screenshots";
 const SUFFIX = process.env.SUFFIX ? `-${process.env.SUFFIX}` : "";
 const TOKEN = process.env.TOKEN ?? "demo";
+// mock fixture station by default; pass STOP=bogota:2000 (Portal Norte) against the real API
 const STOP = process.env.STOP ?? "bogota:7012";
 const file = (n, vp) => `${OUT}/ondemand-${n}-${vp}${SUFFIX}.png`;
 const trip = process.env.TRIP ?? "from=4.68450,-74.05300&fromName=Chic%C3%B3%20Norte&to=4.59780,-74.16160&toName=Portal%20Sur&taxi=1";
@@ -38,6 +39,14 @@ const settle = (page) =>
     }, null, { timeout: 30_000 })
     .catch(() => console.warn("map not settled - capturing anyway"));
 const results = (page) => page.waitForFunction(() => document.body.innerText.includes("Rutas sugeridas") || document.body.innerText.includes("No encontramos"), null, { timeout: 45_000 }).catch(() => {});
+/** Wait for some text; the dev server occasionally hangs a chunk on navigation, so reload once and retry. */
+const waitText = async (page, re, timeout = 20_000) => {
+  const ok = await page.waitForFunction((src) => new RegExp(src, "i").test(document.body.innerText), re.source, { timeout }).then(() => true, () => false);
+  if (ok) return true;
+  console.warn(`text ${re} missing - reloading`);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  return page.waitForFunction((src) => new RegExp(src, "i").test(document.body.innerText), re.source, { timeout: 45_000 }).then(() => true, () => false);
+};
 
 mkdirSync(OUT, { recursive: true });
 const browser = await chromium.launch();
@@ -50,6 +59,11 @@ try {
     await page.goto(`${BASE}/bogota?view=plan&taxi=1`);
     await waitMap(page);
     await settle(page);
+    // close the autofocused suggestions and scroll the mode rail so the "Taxi / app" chip shows on phones
+    await page.evaluate(() => {
+      (document.activeElement instanceof HTMLElement ? document.activeElement : null)?.blur();
+      document.querySelector("[data-testid=mode-taxi]")?.scrollIntoView({ inline: "end", block: "nearest" });
+    });
     await page.waitForTimeout(800);
     await page.screenshot({ path: file("planner", vpName) });
 
@@ -76,9 +90,14 @@ try {
     await page.screenshot({ path: file("itinerary", vpName), fullPage: vpName === "mobile" });
 
     // 4 · stop page with the "Llegar en taxi / app" action
-    await page.goto(`${BASE}/bogota/stops/${encodeURIComponent(STOP)}`);
-    await page.waitForSelector("[data-testid=stop-taxi]", { timeout: 30_000 }).catch(() => console.warn("no stop taxi action"));
-    await page.waitForTimeout(1500);
+    await page.goto(`${BASE}/bogota/stops/${encodeURIComponent(STOP)}`, { waitUntil: "domcontentloaded" });
+    if (!(await waitText(page, /Llegar en taxi|Get here by taxi/))) console.warn("no stop taxi action");
+    // hydration can re-render once more: scroll twice with a pause in between
+    for (let i = 0; i < 2; i++) {
+      await page.waitForTimeout(1200);
+      await page.evaluate(() => document.querySelector("[data-testid=stop-taxi]")?.scrollIntoView({ block: "center" }));
+    }
+    await page.waitForTimeout(600);
     await page.screenshot({ path: file("stop", vpName) });
 
     await page.close();

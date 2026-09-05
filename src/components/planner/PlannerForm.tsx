@@ -58,6 +58,8 @@ export function PlannerForm({ city, state, onChange, onSubmit, onUseLocation, on
   const [more, setMore] = useState(state.wheelchair || state.bike);
   const timeRef = useRef<HTMLDivElement>(null);
 
+  const chipCls = (on: boolean, extra = "") =>
+    `inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold ${on ? "border-ink bg-ink text-paper" : "border-line bg-paper-2 text-ink-2 hover:border-line-2"} ${extra}`;
   const set = (patch: Partial<PlannerState>) => onChange({ ...state, ...patch, selected: null });
   const setPoint = (kind: "from" | "to", p: PlannerPoint | null) => set({ [kind]: p });
 
@@ -83,6 +85,22 @@ export function PlannerForm({ city, state, onChange, onSubmit, onUseLocation, on
 
   const timeValue = state.time ? toLocalInput(new Date(state.time), city.timezone) : toLocalInput(new Date(), city.timezone);
   const timeLabel = !state.time ? t.planner.timeNow : `${state.arriveBy ? t.planner.arriveBy : t.planner.departAt} ${fmtDateTime(state.time, city.timezone, lang)}`;
+
+  const taxiChip = canTaxi ? (
+    <button
+      key="taxi"
+      type="button"
+      data-testid="mode-taxi"
+      aria-pressed={state.taxi}
+      onClick={() => set({ taxi: !state.taxi })}
+      title={taxiHint}
+      className={chipCls(state.taxi, "shrink-0 px-3")}
+      style={state.taxi ? { background: taxiColor, borderColor: taxiColor, color: taxiInk } : { borderColor: taxiColor, color: "inherit" }}
+    >
+      <Icon.Car width={16} height={16} />
+      <span className="whitespace-nowrap">{t.ondemand.mode}</span>
+    </button>
+  ) : null;
 
   const chip = (on: boolean, extra = "") =>
     `inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold ${on ? "border-ink bg-ink text-paper" : "border-line bg-paper-2 text-ink-2 hover:border-line-2"} ${extra}`;
@@ -152,9 +170,10 @@ export function PlannerForm({ city, state, onChange, onSubmit, onUseLocation, on
               <span className="whitespace-nowrap">{shortLabel(m)}</span>
             </button>
           );
-          // "Bici pública" sits between transit and the person's own bike
-          if (m === "BICYCLE" && canRental) {
+          // "Bici pública" (+ "Taxi / app") sit between transit and the person's own bike
+          if (m === "BICYCLE" && (canRental || canTaxi)) {
             return [
+              canRental ? (
               <button
                 key="rental"
                 type="button"
@@ -166,7 +185,10 @@ export function PlannerForm({ city, state, onChange, onSubmit, onUseLocation, on
               >
                 <Icon.Bike width={16} height={16} />
                 <span className="whitespace-nowrap">{rentalLabel}</span>
-              </button>,
+              </button>
+              ) : null,
+              // "Taxi / app" sits with the shared / on-demand options, before the person's own bike
+              taxiChip,
               chipEl,
             ];
           }
@@ -178,20 +200,7 @@ export function PlannerForm({ city, state, onChange, onSubmit, onUseLocation, on
             <span className="truncate">{rentalLabel}</span>
           </button>
         ) : null}
-        {canTaxi ? (
-          <button
-            type="button"
-            data-testid="mode-taxi"
-            aria-pressed={state.taxi}
-            onClick={() => set({ taxi: !state.taxi })}
-            title={taxiHint}
-            className={chip(state.taxi, "shrink-0 px-3")}
-            style={state.taxi ? { background: taxiColor, borderColor: taxiColor, color: taxiInk } : { borderColor: taxiColor, color: "inherit" }}
-          >
-            <Icon.Car width={16} height={16} />
-            <span className="whitespace-nowrap">{t.ondemand.mode}</span>
-          </button>
-        ) : null}
+        {!rowModes.includes("BICYCLE") ? taxiChip : null}
       </div>
 
       {/* more options */}

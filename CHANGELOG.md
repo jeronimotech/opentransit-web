@@ -4,6 +4,13 @@ All notable changes to opentransit-web. Format: [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-09-05 — Taxi and ride apps (on-demand)
+- "Taxi / app" planner chip (`?taxi=1` → `onDemand=true`), on-demand itineraries with price bands or "Precio en la app", "Taxi → Bus" combos, cheapest sorting by estimate.
+- Itinerary detail: dashed car leg on the map, provider picker with "Pedir" hand-off (platform-aware, store/web fallback), tariff source and surcharge chips.
+- Stop page "Llegar en taxi / app" action; landing highlight when enabled.
+- Admin › Movilidad: taxi tariff editor with calculator preview, providers editor (templates with placeholder help, masked client id, "Probar enlace"), policy.
+- Provider-agnostic: names, colours, links and tariffs come from `city.mobility`; nothing brand-specific in code or i18n.
+
 ## [1.3.0] — 2026-09-04 — City landing page
 - White-label public page at `/{city}/landing` driven by the city's `landing` config: hero, store badges, highlights, screenshots, live stats, partners, open data, FAQ, contact, footer, SEO and JSON-LD.
 - Single-city deployments can serve it at `/` (`NEXT_PUBLIC_DEFAULT_CITY` + `NEXT_PUBLIC_ROOT_LANDING=1`).

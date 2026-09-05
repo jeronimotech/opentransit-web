@@ -71,7 +71,7 @@ export function ItineraryCard({
         ) : null}
         {odProvider ? (
           <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold" style={{ background: odProvider.color, color: odProvider.textColor ?? "#ffffff" }} title={t.ondemand.inItinerary}>
-            <Icon.Car width={12} height={12} /> {odShape === "combo" ? t.ondemand.combo : odLegs[0].onDemand!.kind === "taxi" ? t.ondemand.taxi : t.ondemand.ridehail}
+            <Icon.Car width={12} height={12} /> {odShape === "combo" ? t.ondemand.combo : (odProvider.kind ?? odLegs[0].onDemand!.kind) === "taxi" ? t.ondemand.taxi : (odProvider.kind ?? odLegs[0].onDemand!.kind) === "ridehail" ? t.ondemand.ridehail : t.ondemand.title}
           </span>
         ) : null}
         {odProvider ? <span className="text-xs font-semibold tabular-nums text-ink">{odLead ? formatPriceRange(odLead.price, lang) : t.ondemand.priceInApp}</span> : null}

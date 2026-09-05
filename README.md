@@ -156,6 +156,19 @@ Screenshots: `docs/screenshots/bike-{planner,results,itinerary,map}-{desktop,mob
 `bike-admin-desktop.png` (mock) and the same with `-live-api` against the Bogotá API.
 Regenerate with `pnpm screenshots:bike` (env `SUFFIX=live-api TOKEN=… BASE_URL=…`).
 
+## Taxi and ride apps (on-demand, v1.4)
+
+Taxis and ride-hailing apps become options **inside the planner**, direct or as a first/last-mile leg to transit. Everything is per-city configuration (`city.mobility.onDemand[]`, `taxiTariffs[]`, `onDemandPolicy`): names, colours, links, templates and tariffs are data, never code.
+
+- **Planner**: a "Taxi / app" chip (colour of the first provider) sends `onDemand=true` (`?taxi=1` in the URL).
+- **Results**: on-demand itineraries show a car chip in the provider colour with a price band ("≈ $34.800–42.600") or "Precio en la app", and "Taxi → Bus" for combos; "Más económico" sorts by the estimate.
+- **Itinerary detail**: the car leg is a dashed line on the map and, in the timeline, a **provider picker** (colour, name, price or "Precio en la app", "Pedir" → the API's hand-off URL with `platform=web|ios|android`, store/web fallback), the tariff source line and the surcharges applied.
+- **Stop page**: "Llegar en taxi / app" opens the planner with the stop as destination and the chip on.
+- **Landing**: a "Taxi y apps" highlight appears automatically when a city enables the module.
+- **Admin › Movilidad**: **Taxi (tarifa)** editor (flag fall, unit price/meters/seconds, minimum, surcharges with night/Sunday/holiday/zone/optional rules, source, validity) with a calculator (5 km day / 5 km night / 15 km airport) using the same rule as the app; **Apps de transporte** list editor (kind, colour, links, price source, hand-off kind, URL template with placeholder chips, masked client id sent only when changed, "Probar enlace" → `/ondemand/handoff` for a sample trip) and the policy (max direct distance, first/last mile, max feeder leg).
+
+Helpers live in `src/lib/ondemand.ts` (price ranges, hand-off platform, template validation/rendering, tariff calculator); screenshots via `pnpm screenshots:ondemand` (`SUFFIX=live-api STOP=bogota:2000 TOKEN=…` against a real API).
+
 ## Admin (operators)
 
 `/admin` lets an operator change a city **without redeploying**: fares (the estimated fare every itinerary shows),

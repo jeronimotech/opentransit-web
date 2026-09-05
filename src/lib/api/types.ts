@@ -205,7 +205,8 @@ export type LegOnDemandProvider = {
   handoffUrl: string | null;
   source: OnDemandEstimateSource;
 };
-export type LegOnDemand = { kind: OnDemandKind; providers: LegOnDemandProvider[]; recommendedProviderId: string | null };
+/** `kind` is `taxi` | `ridehail` per contract; the API sends `mixed` when the providers differ (handled as generic). */
+export type LegOnDemand = { kind: OnDemandKind | "mixed"; providers: LegOnDemandProvider[]; recommendedProviderId: string | null };
 
 export type RentalVehicleType = { id: string; formFactor: RentalFormFactor; propulsion: string; name: string | null };
 export type RentalPricingPlan = { id: string; name: string; price: number; currency: string; description: string | null; isTaxable: boolean };
