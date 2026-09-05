@@ -10,6 +10,7 @@ import {
   onDemandEnabled,
   onDemandShape,
   providerFallback,
+  providersPayload,
   renderTemplate,
   sortProviders,
   surchargeApplies,
@@ -152,6 +153,16 @@ describe("hand-off", () => {
     expect(url).toContain(encodeURIComponent(JSON.stringify({ latitude: 4.1, longitude: -74.1, addressLine1: "Calle 93" })));
     expect(url).not.toContain("{");
   });
+  it("PUT payload echoes masked client ids, sends edited ones plain and null when cleared", () => {
+    const rows = [
+      provider("a", 1, { credentials: { clientId: "••••1234" } }),
+      provider("b", 2, { credentials: { clientId: "new-plain-id" } }),
+      provider("c", 3, { credentials: { clientId: "" } }),
+      provider("d", 4),
+    ];
+    expect(providersPayload(rows).map((p) => p.credentials)).toEqual([{ clientId: "••••1234" }, { clientId: "new-plain-id" }, { clientId: null }, { clientId: null }]);
+    expect(providersPayload(rows).every((p) => "credentials" in p)).toBe(true);
+  });
   it("recognises a masked credential", () => {
     expect(isMaskedCredential("••••1a2b")).toBe(true);
     expect(isMaskedCredential("****ab")).toBe(true);
@@ -193,6 +204,12 @@ describe("admin validation (mobility v1.4)", () => {
   const ok = { bikeShare: [], taxiTariffs: [tariff], onDemand: [provider("taxi", 1, { kind: "taxi", estimate: { kind: "tariff", tariffId: "t-2026" } }), provider("app", 2, { handoff: { kind: "template", template: "https://m.example.com/?p={pickupJson}" } })], onDemandPolicy: { maxDirectDistanceKm: 40, firstLastMile: true, maxFeederKm: 8, showWhenTransitFaster: true } };
   it("accepts a well-formed configuration", () => {
     expect(validateMobility(ok, EN_MESSAGES)).toEqual({});
+    expect(validateMobility({ ...ok, onDemandPolicy: { ...ok.onDemandPolicy, durationFactor: 1.4, nightDurationFactor: null } }, EN_MESSAGES)).toEqual({});
+  });
+  it("bounds the traffic factors to 1.0–3.0", () => {
+    const e = validateMobility({ ...ok, onDemandPolicy: { ...ok.onDemandPolicy, durationFactor: 0.5, nightDurationFactor: 3.5 } }, EN_MESSAGES);
+    expect(e["mobility.onDemandPolicy.durationFactor"]).toBe(EN_MESSAGES.factorRange);
+    expect(e["mobility.onDemandPolicy.nightDurationFactor"]).toBe(EN_MESSAGES.factorRange);
   });
   it("flags bad tariff numbers, unknown tariff refs, bad templates and duplicate orders", () => {
     const e = validateMobility(

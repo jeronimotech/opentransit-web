@@ -158,7 +158,15 @@ export type OnDemandProvider = {
   enabled: boolean;
   order: number;
 };
-export type OnDemandPolicy = { maxDirectDistanceKm: number; firstLastMile: boolean; maxFeederKm: number; showWhenTransitFaster: boolean };
+export type OnDemandPolicy = {
+  maxDirectDistanceKm: number;
+  firstLastMile: boolean;
+  maxFeederKm: number;
+  showWhenTransitFaster: boolean;
+  /** Traffic factor applied to car times (1.0–3.0, default 1.4); `nightDurationFactor` overrides it at night. */
+  durationFactor?: number | null;
+  nightDurationFactor?: number | null;
+};
 
 export type OnDemandPrice = {
   amount: number | null;

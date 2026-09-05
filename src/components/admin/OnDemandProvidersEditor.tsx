@@ -10,7 +10,7 @@ import type { Errors } from "@/lib/admin/validate";
 import { Control, NumberInput, TextInput, Toggle } from "./form";
 
 export const EMPTY_PROVIDER: OnDemandProvider = { id: "", name: "", kind: "ridehail", color: "#111111", textColor: "#FFFFFF", logoUrl: null, estimate: { kind: "none", tariffId: null }, handoff: { kind: "url", template: null, web: null, apps: { ios: null, android: null }, scheme: null }, credentials: { clientId: null }, enabled: true, order: 1 };
-export const DEFAULT_POLICY: OnDemandPolicy = { maxDirectDistanceKm: 40, firstLastMile: true, maxFeederKm: 8, showWhenTransitFaster: true };
+export const DEFAULT_POLICY: OnDemandPolicy = { maxDirectDistanceKm: 40, firstLastMile: true, maxFeederKm: 8, showWhenTransitFaster: true, durationFactor: 1.4, nightDurationFactor: null };
 
 type TestState = { status: "idle" } | { status: "loading" } | { status: "done"; url: string | null; fallback: string | null; local?: boolean } | { status: "fail" };
 
@@ -210,6 +210,12 @@ export function OnDemandProvidersEditor({ rows, tariffs, policy, city, cityId, o
           </Control>
           <Control id="od-pol-feeder" label={a.maxFeeder} error={errors["mobility.onDemandPolicy.maxFeederKm"]}>
             <NumberInput id="od-pol-feeder" value={pol.maxFeederKm} onChange={(n) => onPolicy({ ...pol, maxFeederKm: n ?? 0 })} min={1} error={errors["mobility.onDemandPolicy.maxFeederKm"]} />
+          </Control>
+          <Control id="od-pol-factor" label={a.durationFactor} hint={a.durationFactorHint} error={errors["mobility.onDemandPolicy.durationFactor"]}>
+            <NumberInput id="od-pol-factor" value={pol.durationFactor ?? null} onChange={(n) => onPolicy({ ...pol, durationFactor: n })} min={1} max={3} step={0.1} placeholder="1.4" error={errors["mobility.onDemandPolicy.durationFactor"]} />
+          </Control>
+          <Control id="od-pol-night-factor" label={a.nightDurationFactor} hint={a.durationFactorHint} error={errors["mobility.onDemandPolicy.nightDurationFactor"]}>
+            <NumberInput id="od-pol-night-factor" value={pol.nightDurationFactor ?? null} onChange={(n) => onPolicy({ ...pol, nightDurationFactor: n })} min={1} max={3} step={0.1} placeholder="1.4" error={errors["mobility.onDemandPolicy.nightDurationFactor"]} />
           </Control>
           <Toggle id="od-pol-flm" checked={pol.firstLastMile} onChange={(v) => onPolicy({ ...pol, firstLastMile: v })} label={a.firstLastMile} />
           <Toggle id="od-pol-faster" checked={pol.showWhenTransitFaster} onChange={(v) => onPolicy({ ...pol, showWhenTransitFaster: v })} label={a.showWhenTransitFaster} />

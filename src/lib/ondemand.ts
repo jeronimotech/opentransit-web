@@ -173,8 +173,17 @@ export function renderTemplate(template: string, trip: SampleTrip): string {
   return template.replace(/\{([a-zA-Z]+)\}/g, (m, k: string) => (k in vals ? encodeURIComponent(vals[k as TemplatePlaceholder]) : m));
 }
 
-/** Masked credential as the API returns it ("••••1a2b"); the form must not send it back unchanged. */
+/** Masked credential as the API returns it ("••••1a2b"). */
 export const isMaskedCredential = (v: string | null | undefined) => !!v && /^[•*]{2,}/.test(v);
+
+/**
+ * Providers as they must be PUT: the list replaces, so a row saved WITHOUT `credentials`
+ * wipes the stored secret. Echo the masked value exactly as received when unchanged,
+ * send the new plain value when changed, and `{ clientId: null }` when explicitly cleared.
+ */
+export function providersPayload(rows: OnDemandProvider[]): OnDemandProvider[] {
+  return rows.map((p) => ({ ...p, credentials: { clientId: p.credentials?.clientId?.trim() ? p.credentials.clientId : null } }));
+}
 
 /* ── taxi tariff calculator (admin preview; the API computes the real estimate) ── */
 

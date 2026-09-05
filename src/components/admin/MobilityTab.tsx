@@ -6,7 +6,7 @@ import { fmtDateTime } from "@/lib/format";
 import { api } from "@/lib/api/client";
 import { Badge, Button, Icon, Spinner } from "@/components/ui/primitives";
 import type { AdminConfigResponse, BikeShareNetwork, CityMobility, OnDemandPolicy, OnDemandProvider, RentalFormFactor, RentalNetworkInfo, TaxiTariff } from "@/lib/api/types";
-import { isMaskedCredential } from "@/lib/ondemand";
+import { providersPayload } from "@/lib/ondemand";
 import { TaxiTariffEditor } from "./TaxiTariffEditor";
 import { OnDemandProvidersEditor } from "./OnDemandProvidersEditor";
 import { validateMobility, type Errors } from "@/lib/admin/validate";
@@ -49,16 +49,8 @@ export function MobilityTab({ token, city, data }: { token: string; city: string
     setServerErrors({});
     setDraft(mobility({ onDemandPolicy: next }));
   };
-  /** A masked client id means "unchanged": drop it from the payload so the API keeps what it stores. */
-  const payload = (): CityMobility => ({
-    ...mobility({}),
-    onDemand: providers.map((p) => {
-      if (!isMaskedCredential(p.credentials?.clientId)) return p;
-      const rest = { ...p };
-      delete rest.credentials;
-      return rest;
-    }),
-  });
+  /** The list replaces server-side: echo masked client ids unchanged, plain when edited, null when cleared. */
+  const payload = (): CityMobility => ({ ...mobility({}), onDemand: providersPayload(providers) });
   const update = (i: number, p: Partial<BikeShareNetwork>) => set(rows.map((r, j) => (j === i ? { ...r, ...p } : r)));
   const move = (i: number, d: -1 | 1) => {
     const j = i + d;

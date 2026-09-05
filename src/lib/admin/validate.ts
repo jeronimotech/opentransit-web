@@ -111,6 +111,10 @@ export function validateMobility(m: CityMobility | null | undefined, msg: Messag
   if (pol) {
     if (!isNum(pol.maxDirectDistanceKm) || pol.maxDirectDistanceKm <= 0) e["mobility.onDemandPolicy.maxDirectDistanceKm"] = msg.positive;
     if (!isNum(pol.maxFeederKm) || pol.maxFeederKm <= 0) e["mobility.onDemandPolicy.maxFeederKm"] = msg.positive;
+    for (const f of ["durationFactor", "nightDurationFactor"] as const) {
+      const v = pol[f];
+      if (v != null && (!isNum(v) || v < 1 || v > 3)) e[`mobility.onDemandPolicy.${f}`] = msg.factorRange;
+    }
   }
   return e;
 }
@@ -315,6 +319,7 @@ export type Messages = {
   template: string;
   hhmm: string;
   duplicateOrder: string;
+  factorRange: string;
 };
 
 /** English messages, used by the mock API and tests; the UI passes translated ones. */
@@ -348,6 +353,7 @@ export const EN_MESSAGES: Messages = {
   template: "must be an https template with at least one known placeholder",
   hhmm: "must be a time like 19:00",
   duplicateOrder: "order already used",
+  factorRange: "must be between 1.0 and 3.0",
 };
 
 const normPath = (p: string) => p.replace(/\[(\d+)\]/g, ".$1").replace(/^\$\.?/, "");

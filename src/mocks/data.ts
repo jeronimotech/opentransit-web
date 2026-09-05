@@ -130,7 +130,7 @@ export const city: City = {
       { id: "didi", name: "DiDi", kind: "ridehail", color: "#FF7F41", textColor: "#111111", logoUrl: null, estimate: { kind: "none" }, handoff: { kind: "url", template: null, web: "https://web.didiglobal.com/co/", apps: { ios: null, android: null }, scheme: null }, enabled: true, order: 4 },
       { id: "indrive", name: "inDrive", kind: "ridehail", color: "#A6E22E", textColor: "#111111", logoUrl: null, estimate: { kind: "none" }, handoff: { kind: "url", template: null, web: "https://indrive.com/", apps: { ios: null, android: null }, scheme: null }, enabled: true, order: 5 },
     ],
-    onDemandPolicy: { maxDirectDistanceKm: 40, firstLastMile: true, maxFeederKm: 8, showWhenTransitFaster: true },
+    onDemandPolicy: { maxDirectDistanceKm: 40, firstLastMile: true, maxFeederKm: 8, showWhenTransitFaster: true, durationFactor: 1.4, nightDurationFactor: 1.2 },
   },
 };
 export const tembici: BikeShareNetwork = city.mobility!.bikeShare[0];
