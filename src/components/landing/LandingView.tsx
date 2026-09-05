@@ -250,7 +250,7 @@ export function LandingView({ data, appHref, preview, onClosePreview, diagramCol
                 <p className="lp-stats-meta">
                   <span className="lp-live-dot" aria-hidden />
                   {t.statsLive}, {t.statsUpdated}{" "}
-                  <time dateTime={generatedAt.toISOString()}>{generatedAt.toLocaleTimeString(l.locale === "es" ? "es-CO" : "en-US", { hour: "2-digit", minute: "2-digit" })}</time>
+                  <time dateTime={generatedAt.toISOString()} suppressHydrationWarning>{generatedAt.toLocaleTimeString(l.locale === "es" ? "es-CO" : "en-US", { hour: "2-digit", minute: "2-digit" })}</time>
                 </p>
               ) : null}
             </div>

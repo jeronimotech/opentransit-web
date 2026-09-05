@@ -688,6 +688,7 @@ body {
   padding: 8px max(20px, calc((100vw - var(--lp-max)) / 2 + 32px)) 24px;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
+  scroll-padding-inline: max(20px, calc((100vw - var(--lp-max)) / 2 + 32px));
   scrollbar-width: thin;
 }
 .lp-rail-item {

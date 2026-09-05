@@ -8,6 +8,34 @@ import { LANDING_STAT_KEYS } from "./api/types";
  */
 
 export const LANDING_DRAFT_KEY = (city: string) => `opentransit.admin.landingDraft.${city}`;
+const DRAFT_TTL_MS = 10 * 60_000;
+
+/** Hand an unsaved draft to the preview tab. localStorage (not session) because a `noopener` popup starts empty. */
+export function writeLandingDraft(city: string, draft: CityLanding) {
+  try {
+    localStorage.setItem(LANDING_DRAFT_KEY(city), JSON.stringify({ at: Date.now(), draft }));
+  } catch {
+    /* storage unavailable: the preview shows the published page */
+  }
+}
+export function readLandingDraft(city: string): Partial<CityLanding> | null {
+  try {
+    const raw = localStorage.getItem(LANDING_DRAFT_KEY(city));
+    if (!raw) return null;
+    const v = JSON.parse(raw) as { at?: number; draft?: Partial<CityLanding> };
+    if (!v.draft || !v.at || Date.now() - v.at > DRAFT_TTL_MS) return null;
+    return v.draft;
+  } catch {
+    return null;
+  }
+}
+export function clearLandingDraft(city: string) {
+  try {
+    localStorage.removeItem(LANDING_DRAFT_KEY(city));
+  } catch {
+    /* ignore */
+  }
+}
 
 export const EMPTY_LANDING: CityLanding = {
   enabled: true,

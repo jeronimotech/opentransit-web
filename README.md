@@ -1,5 +1,9 @@
 # opentransit-web
 
+[![ci](https://github.com/jeronimotech/opentransit-web/actions/workflows/ci.yml/badge.svg)](https://github.com/jeronimotech/opentransit-web/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-jeronimotech.github.io%2Fopentransit-1a1d21)](https://jeronimotech.github.io/opentransit/)
+
 Web client of **opentransit**, an open-source, multi-city, multimodal trip planner.
 Any city with a GTFS feed can run it with its own data and branding; Bogotá is the first tenant.
 
@@ -50,6 +54,7 @@ The map is the product. Every screen with a map gives it ≥ 65 % of a phone vie
 | `/{city}/live` | Whole fleet in real time (SSE stream with deltas, interpolated motion), filter by component or route, `?stop=` tints buses by ETA to that stop, click a bus for details |
 | `/{city}/favorites` | Casa, Trabajo and custom places, favorite stops with their next departures, favorite routes with service hours, recent trips — all local to the browser |
 | `/{city}/alerts` | Service alerts, most severe first, with the agency's official PQRS channel |
+| `/{city}/landing` | **City landing page** (white-label, config-driven, see below) |
 | `/about` | Project, stack, data attribution |
 
 Every map has a **Servicios** toggle (bike parking, toilets, ATMs, health points, libraries from `/pois`).
@@ -65,6 +70,34 @@ so every plan is a shareable link. Spanish by default, English with one click. L
 
 Nothing city-specific is hardcoded: name, colors, timezone, modes, feature flags and attribution come from the
 `City` object the API returns. Bogotá only exists in the mock fixtures.
+
+
+## City landing page (v1.3)
+
+Every city gets a public, white-label page at `/{city}/landing` that presents **its** app: hero with the city's colours and a
+route diagram generated from its own component palette, store badges, highlights, screenshots, live figures
+(routes, stops, buses live, bike stations, alerts), partners, open-data links, FAQ, contact and footer. Nothing on it is
+hardcoded: the content comes from the city's `landing` config served by `GET /v1/cities/{city}/landing`, and operators edit
+it in the admin **Página** tab (per-section forms, validation, override badges, reset to YAML, history) with **Vista previa**
+showing the unsaved draft.
+
+<p>
+  <img src="docs/screenshots/landing-desktop.png" alt="City landing page on desktop: dark hero with a generated route diagram, phone screenshot, CTAs" width="640">
+  <img src="docs/screenshots/landing-mobile.png" alt="City landing page on a phone with the sticky Abrir la app button" width="150">
+</p>
+<p>
+  <img src="docs/screenshots/landing-admin.png" alt="Admin Página tab editing the landing content" width="640">
+</p>
+
+- Server-rendered with a 5-minute revalidation, SEO/Open Graph metadata, JSON-LD (`WebApplication` + `WebSite`), `sitemap.xml`, `lang` from the page's locale, dark-mode aware.
+- Single-city deployments can serve it at `/`: set `NEXT_PUBLIC_DEFAULT_CITY=bogota` and `NEXT_PUBLIC_ROOT_LANDING=1` (the app stays at `/{city}`). `NEXT_PUBLIC_DEFAULT_CITY` alone sends `/` straight into the app. `NEXT_PUBLIC_SITE_URL` makes canonical/OG links absolute.
+- `docs/screenshots/landing-*-live-api.png` were taken against the real Bogotá API; `pnpm screenshots:landing` regenerates the mock set.
+
+## Deploy
+
+`railway.json` configures a Railway service from the Dockerfile (health check on `/`). The full runbook, including the API,
+OpenTripPlanner and Postgres services, is [`opentransit-api/docs/DEPLOY-RAILWAY.md`](https://github.com/jeronimotech/opentransit-api/blob/main/docs/DEPLOY-RAILWAY.md).
+Set `NEXT_PUBLIC_API_URL` to the API's public URL and, for a single-city deployment, the landing variables above.
 
 ## Quickstart
 

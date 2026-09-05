@@ -6,7 +6,7 @@ import { Badge, Button, Icon } from "@/components/ui/primitives";
 import type { AdminConfigResponse, CityLanding, LandingIcon, LandingStatKey } from "@/lib/api/types";
 import { LANDING_ICONS, LANDING_STAT_KEYS } from "@/lib/api/types";
 import { LANDING_LIMITS, validateLanding, type Errors } from "@/lib/admin/validate";
-import { LANDING_DRAFT_KEY, normalizeLanding } from "@/lib/landing";
+import { normalizeLanding, writeLandingDraft } from "@/lib/landing";
 import { Control, SaveBar, SectionCard, TextInput, Toggle, saveErrorsFrom, useSectionDraft, type SaveState } from "./form";
 import { useSaveConfig } from "./useAdmin";
 
@@ -19,7 +19,7 @@ const nul = (v: string) => (v.trim() ? v : null);
 /**
  * "Página": everything the public landing shows, one card per section, with the same
  * draft / validation / override / history mechanics as the other tabs. "Vista previa" hands
- * the unsaved draft to /{city}/landing?preview=1 through sessionStorage.
+ * the unsaved draft to /{city}/landing?preview=1 through localStorage (short TTL).
  */
 export function LandingTab({ token, city, data }: { token: string; city: string; data: AdminConfigResponse }) {
   const { t } = useI18n();
@@ -57,11 +57,7 @@ export function LandingTab({ token, city, data }: { token: string; city: string;
     }
   };
   const preview = () => {
-    try {
-      sessionStorage.setItem(LANDING_DRAFT_KEY(city), JSON.stringify(l));
-    } catch {
-      /* storage unavailable: the preview shows the published page */
-    }
+    writeLandingDraft(city, l);
     window.open(`/${encodeURIComponent(city)}/landing?preview=1`, "_blank", "noopener");
   };
 

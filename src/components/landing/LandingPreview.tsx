@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { CityLanding, LandingResponse } from "@/lib/api/types";
-import { LANDING_DRAFT_KEY, normalizeLanding } from "@/lib/landing";
+import { clearLandingDraft, normalizeLanding, readLandingDraft } from "@/lib/landing";
 import { LandingView } from "./LandingView";
 
 /**
@@ -13,15 +13,10 @@ export function LandingPreview({ initial, appHref, city }: { initial: LandingRes
   const [data, setData] = useState<LandingResponse>(initial);
   const [hasDraft, setHasDraft] = useState(false);
   useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(LANDING_DRAFT_KEY(city));
-      if (!raw) return;
-      const draft = JSON.parse(raw) as Partial<CityLanding>;
-      setData({ ...initial, landing: normalizeLanding(draft) });
-      setHasDraft(true);
-    } catch {
-      /* no usable draft */
-    }
+    const draft: Partial<CityLanding> | null = readLandingDraft(city);
+    if (!draft) return;
+    setData({ ...initial, landing: normalizeLanding(draft) });
+    setHasDraft(true);
   }, [city, initial]);
   return (
     <LandingView
@@ -29,13 +24,7 @@ export function LandingPreview({ initial, appHref, city }: { initial: LandingRes
       appHref={appHref}
       preview
       onClosePreview={() => {
-        if (hasDraft) {
-          try {
-            sessionStorage.removeItem(LANDING_DRAFT_KEY(city));
-          } catch {
-            /* ignore */
-          }
-        }
+        if (hasDraft) clearLandingDraft(city);
         window.close();
         setData(initial);
         setHasDraft(false);
