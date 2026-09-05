@@ -13,10 +13,11 @@ import type {
   AdminSection,
   City,
 } from "@/lib/api/types";
-import { city as yamlCity } from "./data";
+import { city as yamlCity, landing as yamlLanding } from "./data";
+import type { CityLanding } from "@/lib/api/types";
 
 const TOKENS = new Set(["demo", "change-me"]);
-const SECTIONS: AdminSection[] = ["fares", "config", "links", "services", "branding", "mobility"];
+const SECTIONS: AdminSection[] = ["fares", "config", "links", "services", "branding", "mobility", "landing"];
 
 const state = {
   override: null as AdminOverride | null,
@@ -36,7 +37,13 @@ function yaml(): AdminEditable {
     services: clone(yamlCity.services ?? null),
     branding: { primaryColor: yamlCity.branding.primaryColor },
     mobility: clone(yamlCity.mobility ?? null),
+    landing: clone(yamlLanding),
   };
+}
+
+/** The landing as `/landing` would serve it: YAML with the override applied. */
+export function effectiveLanding(): CityLanding {
+  return clone(state.override?.landing ?? yamlLanding);
 }
 
 /** The city as the public API would serve it: YAML with overrides applied. */
@@ -53,6 +60,7 @@ export function effectiveCity(): City {
     c.mobility = clone(o.mobility);
     c.features.bikeShare = (o.mobility.bikeShare ?? []).length > 0;
   }
+  if (o.landing) c.landing = clone(o.landing);
   return c;
 }
 

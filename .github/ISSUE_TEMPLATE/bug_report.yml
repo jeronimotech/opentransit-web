@@ -1,0 +1,21 @@
+name: Bug report
+description: Something in the web app does not work as expected
+labels: [bug]
+body:
+  - type: input
+    id: url
+    attributes: { label: Page URL, placeholder: "https://…/bogota/stops/bogota:2000" }
+    validations: { required: true }
+  - type: textarea
+    id: what
+    attributes: { label: What happened, description: Steps to reproduce and what you saw instead }
+    validations: { required: true }
+  - type: input
+    id: browser
+    attributes: { label: Browser and device, placeholder: "Chrome 130 · Android 14" }
+  - type: dropdown
+    id: mode
+    attributes: { label: Data source, options: [Live API, Mock mode (NEXT_PUBLIC_MOCK=1)] }
+  - type: textarea
+    id: console
+    attributes: { label: Console errors or screenshots }

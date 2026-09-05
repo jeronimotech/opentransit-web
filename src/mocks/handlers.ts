@@ -443,6 +443,22 @@ export async function mockRequest<T>(path: string, q: Q, init: Init = { method: 
       ),
     } as T;
   }
+  if (p === "/landing") {
+    const { effectiveLanding } = await import("./admin");
+    const c = await liveCity();
+    const l = effectiveLanding();
+    if (!l.enabled) throw new ApiRequestError(404, "LANDING_DISABLED", "landing page is disabled for this city");
+    return {
+      city: {
+        id: c.id, name: c.name, country: c.country, locale: c.locale, branding: c.branding, attribution: c.attribution,
+        links: c.links ?? null, services: c.services ?? null,
+        mobility: c.mobility ? { bikeShare: c.mobility.bikeShare.map((n) => ({ id: n.id, name: n.name, color: n.color, url: n.url })) } : null,
+      },
+      landing: l,
+      stats: { routes: 1024, stops: 8309, vehiclesLive: currentVehicles().length, bikeStations: rentalStations.length, alertsActive: alerts.length, generatedAt: iso(new Date()) },
+      apps: l.apps,
+    } as T;
+  }
   if (p === "/health") {
     return {
       static: { feedVersion: "GTFS_20260904", fetchedAt: iso(new Date(Date.now() - 3600_000)), routes: 1024, stops: 8309 },

@@ -1,0 +1,24 @@
+# Changelog
+
+All notable changes to opentransit-web. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+## [Unreleased]
+
+## [1.3.0] — 2026-09-04 — City landing page
+- White-label public page at `/{city}/landing` driven by the city's `landing` config: hero, store badges, highlights, screenshots, live stats, partners, open data, FAQ, contact, footer, SEO and JSON-LD.
+- Single-city deployments can serve it at `/` (`NEXT_PUBLIC_DEFAULT_CITY` + `NEXT_PUBLIC_ROOT_LANDING=1`).
+- Admin **Página** tab with per-section forms, validation, override badges and an unsaved-draft preview.
+- `sitemap.xml`, `railway.json`, open-source hygiene files.
+
+## [1.2.0] — 2026-09-04 — Shared bikes (GBFS)
+- "Bici pública" mode, rental legs with pick-up/drop-off cards, station layer with availability, nearest station on the home strip, admin **Movilidad** tab. Providers are per-city configuration.
+
+## [1.1.1] — 2026-09-04 — Admin panel and map-first redesign
+- Token-gated `/admin` to edit fares, remote config, links, services and brand per city, with history.
+- Map-first home (peeking sheet, layers popover), zoom-aware fleet and network layers, planner with one time control, stop page with the board above the fold, route colour and headsign clean-up.
+
+## [1.1.0] — 2026-09-04 — Features from the reference apps
+- Home hub, Ubica tu bus, arrival board, freshness labels, ETA-tinted live markers, service hours, estimated fares, sorting chips, component taxonomy, typed favorites and recents, alert carousel, remote config, QR codes, follow-along, POI layer, accessibility block, PQRS links.
+
+## [1.0.0] — 2026-09-04 — First release
+- Planner, itinerary detail, stops, routes, live fleet, alerts, favorites, PWA, es/en, dark mode, mock mode.

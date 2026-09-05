@@ -71,6 +71,8 @@ export type City = {
   services?: CityService[];
   /** v1.2 — shared mobility networks (bike-share via GBFS). */
   mobility?: CityMobility | null;
+  /** v1.3 — landing page content (only the effective value is served on /landing). */
+  landing?: CityLanding | null;
 };
 
 /* ── v1.2 shared bikes (GBFS) ──────────────────────────────────────────────── */
@@ -573,6 +575,53 @@ export type CityHealth = {
 
 export type Healthz = { status: string; version: string; cities: string[] };
 
+
+/* ── v1.3 city landing page (white-label, admin-editable) ──────────────────── */
+
+export type LandingIcon = "route" | "live" | "board" | "bike" | "open" | "alert" | "accessibility" | "favorites" | "offline" | "map" | "ticket" | "info";
+export const LANDING_ICONS: LandingIcon[] = ["route", "live", "board", "bike", "open", "alert", "accessibility", "favorites", "offline", "map", "ticket", "info"];
+export type LandingStatKey = "routes" | "stops" | "vehiclesLive" | "bikeStations" | "alertsActive";
+export const LANDING_STAT_KEYS: LandingStatKey[] = ["routes", "stops", "vehiclesLive", "bikeStations", "alertsActive"];
+
+export type LandingCta = { label: string; url: string | null };
+export type LandingHighlight = { icon: LandingIcon; title: string; text: string };
+export type LandingScreenshot = { url: string; alt: string; kind: "mobile" | "web" };
+export type LandingPartner = { name: string; logoUrl: string | null; url: string | null; role: string | null };
+export type LandingLink = { label: string; url: string };
+export type LandingFaq = { q: string; a: string };
+
+export type CityLanding = {
+  enabled: boolean;
+  slug: string | null;
+  locale: "es" | "en";
+  theme: { primaryColor: string | null; accentColor: string | null; logoUrl: string | null; heroImageUrl: string | null; darkHero: boolean };
+  hero: { title: string | null; subtitle: string | null; ctaPrimary: LandingCta | null; ctaSecondary: LandingCta | null };
+  apps: { ios: string | null; android: string | null; web: string | null };
+  highlights: LandingHighlight[];
+  screenshots: LandingScreenshot[];
+  stats: { show: boolean; items: LandingStatKey[] };
+  partners: LandingPartner[];
+  openData: { show: boolean; links: LandingLink[] };
+  faq: LandingFaq[];
+  contact: { email: string | null; url: string | null; social: { x: string | null; instagram: string | null; github: string | null } };
+  footer: { legalName: string | null; privacyUrl: string | null; termsUrl: string | null; attribution: string | null };
+  seo: { title: string | null; description: string | null; ogImageUrl: string | null };
+};
+
+export type LandingStats = Partial<Record<LandingStatKey, number | null>> & { generatedAt: string };
+
+/** `GET /v1/cities/{city}/landing` */
+export type LandingResponse = {
+  city: Pick<City, "id" | "name" | "country" | "locale" | "branding" | "attribution"> & {
+    links?: CityLinks | null;
+    services?: CityService[] | null;
+    mobility?: { bikeShare: Pick<BikeShareNetwork, "id" | "name" | "color" | "url">[] } | null;
+  };
+  landing: CityLanding;
+  stats: LandingStats;
+  apps?: CityLanding["apps"];
+};
+
 /* ── Admin (operators): per-city overrides on top of cities/*.yaml ─────────── */
 
 export type AdminMe = { ok: true; cities: string[] };
@@ -586,6 +635,8 @@ export type AdminEditable = {
   branding: { primaryColor: string } | null;
   /** v1.2 — bike-share networks (GBFS). */
   mobility: CityMobility | null;
+  /** v1.3 — public landing page content. */
+  landing: CityLanding | null;
 };
 export type AdminSection = keyof AdminEditable;
 export type AdminOverride = Partial<AdminEditable>;

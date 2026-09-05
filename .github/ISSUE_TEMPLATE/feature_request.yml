@@ -1,0 +1,19 @@
+name: Feature request
+description: Propose an improvement to the web app
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes: { label: What problem does this solve for riders or operators? }
+    validations: { required: true }
+  - type: textarea
+    id: proposal
+    attributes: { label: Proposal, description: Screens, data needed, how it stays city-agnostic }
+    validations: { required: true }
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: Needs an API change (open a linked issue in opentransit-api)
+        - label: Should also exist in the mobile app

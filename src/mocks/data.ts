@@ -9,6 +9,7 @@ import type {
   Alert,
   BikeShareNetwork,
   City,
+  CityLanding,
   Component,
   Itinerary,
   Leg,
@@ -98,6 +99,60 @@ export const city: City = {
   },
 };
 export const tembici: BikeShareNetwork = city.mobility!.bikeShare[0];
+
+// ── v1.3: public landing page (white-label; every string is content, not code) ──
+const SHOTS = "https://raw.githubusercontent.com/jeronimotech/opentransit-web/main/docs/screenshots";
+export const landing: CityLanding = {
+  enabled: true,
+  slug: null,
+  locale: "es",
+  theme: { primaryColor: null, accentColor: null, logoUrl: null, heroImageUrl: null, darkHero: true },
+  hero: {
+    title: "Muévete por Bogotá con datos en vivo",
+    subtitle: "Planea tu viaje en TransMilenio, SITP, TransMiCable y bici pública. Gratis, sin cuenta y de código abierto.",
+    ctaPrimary: { label: "Abrir la app web", url: null },
+    ctaSecondary: { label: "Cómo funciona", url: "#features" },
+  },
+  apps: { ios: null, android: null, web: null },
+  highlights: [
+    { icon: "route", title: "Planea viajes multimodales", text: "Troncal, zonal, alimentador, cable y bici pública en un solo itinerario, con transbordos y tarifa estimada." },
+    { icon: "live", title: "Buses en vivo", text: "Más de cinco mil buses en el mapa con su posición real, cada 15 segundos." },
+    { icon: "board", title: "Ubica tu bus", text: "Elige tu estación y tu ruta: te decimos cuándo llega el próximo y si viene en vivo o por programación." },
+    { icon: "bike", title: "Bicis públicas", text: "Estaciones con bicis y puestos disponibles, y viajes que combinan bici y bus." },
+    { icon: "open", title: "Datos abiertos", text: "Los mismos feeds públicos de TRANSMILENIO S.A. Sin cuenta, sin rastreadores." },
+  ],
+  screenshots: [
+    { url: `${SHOTS}/hub-mobile.png`, alt: "Mapa en vivo con la barra de búsqueda y las paradas cercanas", kind: "mobile" },
+    { url: `${SHOTS}/next-mobile.png`, alt: "Ubica tu bus: próximos buses de una ruta en una estación", kind: "mobile" },
+    { url: `${SHOTS}/itinerary-mobile.png`, alt: "Itinerario con tramos a pie y en bus", kind: "mobile" },
+    { url: `${SHOTS}/stop-mobile.png`, alt: "Tablero de llegadas de una estación", kind: "mobile" },
+    { url: `${SHOTS}/hub-desktop.png`, alt: "Versión web con el mapa completo", kind: "web" },
+  ],
+  stats: { show: true, items: ["routes", "stops", "vehiclesLive", "bikeStations", "alertsActive"] },
+  partners: [
+    { name: "TRANSMILENIO S.A.", logoUrl: null, url: "https://www.transmilenio.gov.co", role: "Datos GTFS y GTFS-Realtime" },
+    { name: "Tembici Bogotá", logoUrl: null, url: "https://tembici.com.co/", role: "Feed GBFS de bicis públicas" },
+  ],
+  openData: {
+    show: true,
+    links: [
+      { label: "GTFS estático", url: "https://gtfs.transmilenio.gov.co/GTFS.zip" },
+      { label: "GTFS-Realtime: posiciones", url: "https://gtfs.transmilenio.gov.co/positions.pb" },
+      { label: "GTFS-Realtime: alertas", url: "https://gtfs.transmilenio.gov.co/alerts.pb" },
+      { label: "GBFS bicis públicas", url: "https://bogota.publicbikesystem.net/customer/gbfs/v3.0/gbfs.json" },
+    ],
+  },
+  faq: [
+    { q: "¿Necesito una cuenta?", a: "No. La app no pide registro ni guarda tu ubicación en ningún servidor. Tus favoritos viven en tu dispositivo." },
+    { q: "¿La tarifa que muestra es oficial?", a: "Es una estimación calculada con la tarifa vigente y las reglas de transbordo. La tarifa oficial la fija TRANSMILENIO S.A." },
+    { q: "¿Por qué algunos buses aparecen «por programación»?", a: "Cuando el feed en tiempo real no tiene datos de ese viaje, mostramos el horario programado y lo decimos claramente." },
+    { q: "¿Puedo usar los datos en mi propio proyecto?", a: "Sí. Los feeds son públicos y el código de la app es libre bajo licencia MIT." },
+  ],
+  contact: { email: null, url: "https://www.transmilenio.gov.co/publicaciones/149179/canales-de-atencion/", social: { x: null, instagram: null, github: "https://github.com/jeronimotech" } },
+  footer: { legalName: null, privacyUrl: null, termsUrl: null, attribution: null },
+  seo: { title: null, description: null, ogImageUrl: null },
+};
+
 
 // ── Stations along the corridors ────────────────────────────────────────────
 type S = [id: string, name: string, lat: number, lon: number, comp: Component, station?: boolean];

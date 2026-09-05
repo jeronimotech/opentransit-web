@@ -12,6 +12,7 @@ import type {
   DeparturesResponse,
   GeocodeResponse,
   Healthz,
+  LandingResponse,
   Mode,
   NearbyResponse,
   NetworkResponse,
@@ -173,6 +174,8 @@ export const api = {
   alerts: (city: string, f?: { routeId?: string; stopId?: string; active?: boolean }) =>
     request<AlertsResponse>(`${c(city)}/alerts`, f),
   health: (city: string) => request<CityHealth>(`${c(city)}/health`),
+  /** v1.3 — white-label landing page content + live stats (404 LANDING_DISABLED when off). */
+  landing: (city: string, init?: RequestInit) => request<LandingResponse>(`${c(city)}/landing`, undefined, init),
 };
 
 /* ── Admin: token-authenticated operator endpoints ───────────────────────── */

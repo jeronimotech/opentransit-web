@@ -1,8 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { Manrope } from "next/font/google";
+import { Bricolage_Grotesque, Manrope } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { themeInitScript } from "@/lib/theme";
+
+const bricolage = Bricolage_Grotesque({
+  variable: "--font-display",
+  subsets: ["latin"],
+  weight: ["500", "700", "800"],
+  display: "swap",
+});
 
 const manrope = Manrope({
   variable: "--font-manrope",
@@ -36,7 +43,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className={`${manrope.variable} font-sans`}>
+      <body className={`${manrope.variable} ${bricolage.variable} font-sans`}>
         <Providers>{children}</Providers>
       </body>
     </html>

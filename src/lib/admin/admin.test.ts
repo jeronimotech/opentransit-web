@@ -81,7 +81,7 @@ describe("validation", () => {
 });
 
 describe("overrides and history diff", () => {
-  const yaml: AdminEditable = { fares: bogota, config: null, links: { pqrs: "https://a" }, services: [], branding: { primaryColor: "#D32F2F" }, mobility: null };
+  const yaml: AdminEditable = { fares: bogota, config: null, links: { pqrs: "https://a" }, services: [], branding: { primaryColor: "#D32F2F" }, mobility: null, landing: null };
   it("detects section and field overrides", () => {
     const override = { fares: { ...bogota, base: 3400 } };
     expect(sectionOverridden(override, "fares")).toBe(true);

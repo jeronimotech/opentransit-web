@@ -31,7 +31,10 @@ export default function About() {
         <ul className="mt-2 flex flex-col gap-1.5 text-sm text-ink-2">
           {(data?.cities ?? []).map((c) => (
             <li key={c.id}>
-              <span className="font-semibold text-ink">{c.name}</span> — {c.attribution}
+              <span className="font-semibold text-ink">{c.name}</span> — {c.attribution}{" "}
+              <Link href={`/${c.id}/landing`} className="font-semibold text-signal underline-offset-2 hover:underline">
+                {t.about.cityPage}
+              </Link>
             </li>
           ))}
         </ul>
@@ -40,17 +43,17 @@ export default function About() {
         <p className="mt-2 text-sm text-ink-2">{t.about.contributeHint}</p>
         <ul className="mt-2 flex flex-wrap gap-3 text-sm font-semibold text-signal">
           <li>
-            <a href="https://github.com/opentransit/opentransit-api" target="_blank" rel="noreferrer">
+            <a href="https://github.com/jeronimotech/opentransit-api" target="_blank" rel="noreferrer">
               opentransit-api
             </a>
           </li>
           <li>
-            <a href="https://github.com/opentransit/opentransit-web" target="_blank" rel="noreferrer">
+            <a href="https://github.com/jeronimotech/opentransit-web" target="_blank" rel="noreferrer">
               opentransit-web
             </a>
           </li>
           <li>
-            <a href="https://github.com/opentransit/opentransit-mobile" target="_blank" rel="noreferrer">
+            <a href="https://github.com/jeronimotech/opentransit-mobile" target="_blank" rel="noreferrer">
               opentransit-mobile
             </a>
           </li>
