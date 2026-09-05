@@ -1,6 +1,20 @@
 version: 2
 updates:
   - package-ecosystem: npm
+    ignore:
+      # framework majors are deliberate upgrades, not bot PRs
+      - dependency-name: next
+        update-types: ["version-update:semver-major"]
+      - dependency-name: eslint-config-next
+        update-types: ["version-update:semver-major"]
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      - dependency-name: react
+        update-types: ["version-update:semver-major"]
+      - dependency-name: react-dom
+        update-types: ["version-update:semver-major"]
+      - dependency-name: tailwindcss
+        update-types: ["version-update:semver-major"]
     directory: /
     schedule: { interval: weekly }
     groups:
