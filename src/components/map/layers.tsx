@@ -217,12 +217,12 @@ function FitOnce({ bounds }: { bounds: [number, number, number, number] | null }
 }
 
 // ── Single polyline (route pattern / vehicle shape) ─────────────────────────
-export function LineLayer({ id, geometry, color, width = 4, fit = false }: { id: string; geometry: Geometry | null; color: string; width?: number; fit?: boolean }) {
+export function LineLayer({ id, geometry, color, width = 4, fit = false, opacity = 1 }: { id: string; geometry: Geometry | null; color: string; width?: number; fit?: boolean; opacity?: number }) {
   const coords = useMemo(() => decodeGeometry(geometry), [geometry]);
   const data = useMemo(() => fc(coords.length ? [toLineString(coords, { color })] : []), [coords, color]);
   useGeoJsonLayer(id, data, [
-    { id: `${id}-casing`, type: "line", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#ffffff", "line-width": width + 4, "line-opacity": 0.8 } },
-    { id: `${id}-line`, type: "line", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": ["get", "color"], "line-width": width } },
+    { id: `${id}-casing`, type: "line", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#ffffff", "line-width": width + 4, "line-opacity": 0.8 * opacity } },
+    { id: `${id}-line`, type: "line", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": ["get", "color"], "line-width": width, "line-opacity": opacity } },
   ]);
   const bounds = useMemo(() => (fit ? bboxOf(coords) : null), [coords, fit]);
   return fit ? <FitOnce bounds={bounds} /> : null;

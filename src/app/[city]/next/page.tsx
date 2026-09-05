@@ -4,21 +4,24 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCityCtx } from "@/components/shell/CityContext";
-import { SplitLayout } from "@/components/shell/SplitLayout";
+import { SplitLayout, type Snap } from "@/components/shell/SplitLayout";
 import { MapView, useFitBounds } from "@/components/map/MapView";
-import { EtaLegend, StopsLayer, VehiclesLayer } from "@/components/map/layers";
+import { EtaLegend, LineLayer, PinMarker, StopsLayer, VehiclesLayer } from "@/components/map/layers";
 import { NextBuses } from "@/components/next/NextBuses";
 import { EmptyState, Icon, Spinner } from "@/components/ui/primitives";
 import { RouteChip } from "@/components/ui/RouteChip";
 import { ComponentIcon } from "@/components/ui/ComponentIcon";
 import { useI18n } from "@/lib/i18n/provider";
-import { useGeocode, useNextBuses, useStop } from "@/lib/api/hooks";
+import { useGeocode, useNextBuses, useRoute, useStop } from "@/lib/api/hooks";
+import { bboxOf, decodeGeometry } from "@/lib/geo";
+import { routeChipColors } from "@/lib/route-color";
+import { nextStatus, nextStatusText } from "@/lib/next-status";
 import { useVehicleStream } from "@/lib/api/stream";
 import { useInterpolatedVehicles } from "@/lib/interpolate";
 import { useGeolocation } from "@/lib/use-geolocation";
 import { resolveConfig, componentOf, componentsOf, stopComponent } from "@/lib/city-config";
 import { serviceStatus } from "@/lib/service-window";
-import type { GeocodeResult } from "@/lib/api/types";
+import type { GeocodeResult, Pattern } from "@/lib/api/types";
 
 export default function NextPage() {
   return (
@@ -53,6 +56,15 @@ function Next() {
 
   const stop = useStop(city.id, stopId ?? "");
   const next = useNextBuses(city.id, stopId, routeId, cfg.vehiclePollSeconds * 1000);
+  // the chosen route's patterns: the direction serving this stop is drawn strong, the other faint
+  const route = useRoute(city.id, routeId ?? "");
+  const [snap, setSnap] = useState<Snap>("half");
+  const [fitRoute, setFitRoute] = useState(0);
+  useEffect(() => {
+    // phones: once a route is chosen the map is the answer → sheet peeks (map ≥ 50 %)
+    setSnap(routeId ? "peek" : "half");
+    setFitRoute(0);
+  }, [routeId]);
 
   const set = useCallback(
     (patch: { stop?: string | null; route?: string | null }) => {
@@ -85,6 +97,20 @@ function Next() {
   const compColors = useMemo(() => Object.fromEntries(componentsOf(city).map((c) => [c.id, c.color])), [city]);
 
   const s = stop.data;
+  const patterns: Pattern[] = useMemo(() => route.data?.patterns ?? [], [route.data]);
+  const serving = useMemo(() => patterns.find((p) => p.stops.some((x) => x.id === stopId)) ?? patterns[0] ?? null, [patterns, stopId]);
+  const others = useMemo(() => patterns.filter((p) => p !== serving), [patterns, serving]);
+  const routeColor = route.data ? routeChipColors(route.data.color, componentOf(city, route.data.component).color).bg : "#667085";
+  const routeBounds = useMemo(() => bboxOf(patterns.flatMap((p) => decodeGeometry(p.geometry))), [patterns]);
+  // camera: the stop plus the buses heading here (nearest upstream); fallback: the whole route
+  const focusBounds = useMemo(() => {
+    if (!s || !routeId) return null;
+    const pts: [number, number][] = [[s.lon, s.lat]];
+    for (const n of next.data?.next ?? []) if (n.vehicle && (n.source === "live" || n.source === "estimated")) pts.push([n.vehicle.lon, n.vehicle.lat]);
+    if (pts.length === 1) return routeBounds ?? bboxOf(pts);
+    return bboxOf(pts);
+  }, [s, routeId, next.data, routeBounds]);
+  const status = nextStatusText(nextStatus(next.data), t.next.status);
   const routes = useMemo(() => {
     const seen = new Map<string, NonNullable<typeof s>["routes"][number]>();
     for (const r of s?.routes ?? []) if (!seen.has(r.shortName)) seen.set(r.shortName, r);
@@ -203,11 +229,23 @@ function Next() {
           {next.isLoading ? <Spinner /> : null}
           {next.error ? <EmptyState title={t.common.error} hint={(next.error as Error).message} /> : null}
           {next.data ? <NextBuses data={next.data} city={city.id} tz={city.timezone} /> : null}
-          {s ? (
-            <Link href={`/${city.id}/stops/${encodeURIComponent(s.id)}`} className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-signal">
-              {t.board.allRoutes} <Icon.Chevron width={14} height={14} />
-            </Link>
+          {status ? (
+            <p className="mt-2 text-xs text-ink-3" aria-live="polite" data-testid="next-status">
+              {status}
+            </p>
           ) : null}
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+            {routeBounds ? (
+              <button type="button" onClick={() => { setFitRoute((n) => n + 1); setSnap("peek"); }} className="inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-signal" data-testid="next-view-route">
+                <Icon.Route width={14} height={14} /> {t.next.viewRoute}
+              </button>
+            ) : null}
+            {s ? (
+              <Link href={`/${city.id}/stops/${encodeURIComponent(s.id)}`} className="inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-signal">
+                {t.board.allRoutes} <Icon.Chevron width={14} height={14} />
+              </Link>
+            ) : null}
+          </div>
         </section>
       ) : null}
     </div>
@@ -215,13 +253,20 @@ function Next() {
 
   return (
     <SplitLayout
-      defaultSnap="half"
+      snap={snap}
+      onSnapChange={setSnap}
       panel={panel}
       map={
         <MapView center={[city.center.lon, city.center.lat]} zoom={city.defaultZoom} attribution={city.attribution} className="h-full w-full">
+          {others.map((p) => (
+            <LineLayer key={p.id} id={`next-pattern-${p.id}`} geometry={p.geometry} color={routeColor} width={3} opacity={0.3} />
+          ))}
+          {serving ? <LineLayer id="next-pattern-serving" geometry={serving.geometry} color={routeColor} width={5} /> : null}
           {s ? <StopsLayer stops={[s]} /> : null}
-          {s ? <Center lat={s.lat} lon={s.lon} /> : null}
-          {vehicles.length ? <VehiclesLayer vehicles={vehicles} etaById={etaById} colors={compColors} dimOthers focus onClick={(v) => router.push(`/${city.id}/live?vehicle=${encodeURIComponent(v.id)}`)} /> : null}
+          {s && routeId ? <PinMarker kind="to" lat={s.lat} lon={s.lon} /> : null}
+          {s && !routeId ? <Center lat={s.lat} lon={s.lon} /> : null}
+          {routeId ? <Camera focus={focusBounds} route={routeBounds} fitRoute={fitRoute} /> : null}
+          {vehicles.length ? <VehiclesLayer vehicles={vehicles} etaById={etaById} colors={compColors} highlightRouteIds={routeId ? new Set([routeId]) : null} onClick={(v) => router.push(`/${city.id}/live?vehicle=${encodeURIComponent(v.id)}`)} /> : null}
           {routeId && etaById.size ? <EtaLegend labels={{ title: t.live.legend, now: t.live.bucketNow, soon: t.live.bucketSoon, later: t.live.bucketLater, far: t.live.bucketFar }} /> : null}
         </MapView>
       }
@@ -231,5 +276,13 @@ function Next() {
 
 function Center({ lat, lon }: { lat: number; lon: number }) {
   useFitBounds([lon, lat, lon, lat]);
+  return null;
+}
+
+/** Stop + incoming buses by default; "Ver ruta completa" fits the whole route (each press re-fits). */
+function Camera({ focus, route, fitRoute }: { focus: [number, number, number, number] | null; route: [number, number, number, number] | null; fitRoute: number }) {
+  const small = typeof window !== "undefined" && window.innerWidth < 768;
+  const pad = small ? { top: 70, bottom: Math.round((typeof window !== "undefined" ? window.innerHeight : 800) * 0.3) + 20, left: 30, right: 30 } : { top: 80, bottom: 60, left: 470, right: 60 };
+  useFitBounds(fitRoute > 0 ? route : focus, pad, [fitRoute]);
   return null;
 }

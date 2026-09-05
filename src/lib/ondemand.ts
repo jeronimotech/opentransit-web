@@ -73,6 +73,18 @@ export function legLeadPrice(leg: Leg): { provider: LegOnDemandProvider; price: 
   return priced[0] ? { provider: priced[0], price: priced[0].price! } : null;
 }
 
+/** Providers on a leg that carry a numeric estimate, cheapest first (drives the "Ver precios" comparison). */
+export function pricedProviders(leg: Leg): LegOnDemandProvider[] {
+  return (leg.onDemand?.providers ?? []).filter((p) => p.price?.amount != null).sort((a, b) => (a.price!.amount as number) - (b.price!.amount as number));
+}
+
+/** "Pedir taxi · ≈ $11.300–13.900" for a priced provider, "Pedir con Uber" when there is no estimate. */
+export function requestLabel(p: Pick<LegOnDemandProvider, "name" | "kind">, price: string | null, t: { request: string; requestWith: (name: string) => string; taxi: string }): string {
+  if (!price) return t.requestWith(p.name);
+  const what = p.kind === "taxi" ? t.taxi.toLowerCase() : p.name;
+  return `${t.request} ${what} · ${price}`;
+}
+
 export function onDemandLegs(it: Itinerary): Leg[] {
   return it.legs.filter((l) => !!l.onDemand);
 }

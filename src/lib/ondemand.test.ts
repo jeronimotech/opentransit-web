@@ -10,7 +10,9 @@ import {
   localParts,
   onDemandEnabled,
   onDemandShape,
+  pricedProviders,
   providerFallback,
+  requestLabel,
   providersPayload,
   renderTemplate,
   sortProviders,
@@ -209,6 +211,25 @@ describe("itinerary helpers", () => {
     expect(legLeadPrice(car(20000))?.provider.providerId).toBe("taxi");
     expect(itineraryOnDemandTotal(it)).toEqual({ min: 19000, max: 21000, currency: "COP" });
     expect(itineraryOnDemandTotal({ legs: [car(null)] } as unknown as Itinerary)).toBeNull();
+  });
+  it("lists priced providers cheapest first and builds the primary button label", () => {
+    const leg = {
+      mode: "CAR",
+      onDemand: {
+        kind: "mixed",
+        recommendedProviderId: "taxi",
+        providers: [
+          { providerId: "app", name: "App", kind: "ridehail", color: "#000", price: { amount: 25000, min: null, max: null, currency: "COP", estimated: true }, waitSeconds: null, handoffUrl: null, source: "api" },
+          { providerId: "taxi", name: "Taxi", kind: "taxi", color: "#fc0", price: { amount: 20000, min: 18000, max: 22000, currency: "COP", estimated: true }, waitSeconds: null, handoffUrl: null, source: "tariff" },
+          { providerId: "none", name: "Other", kind: "ridehail", color: "#123", price: null, waitSeconds: null, handoffUrl: null, source: "none" },
+        ],
+      },
+    } as unknown as Leg;
+    expect(pricedProviders(leg).map((p) => p.providerId)).toEqual(["taxi", "app"]);
+    const t = { request: "Pedir", requestWith: (n: string) => `Pedir con ${n}`, taxi: "Taxi" };
+    expect(requestLabel({ name: "Taxi", kind: "taxi" }, "≈ $ 18.000–22.000", t)).toBe("Pedir taxi · ≈ $ 18.000–22.000");
+    expect(requestLabel({ name: "App", kind: "ridehail" }, "≈ $ 25.000", t)).toBe("Pedir App · ≈ $ 25.000");
+    expect(requestLabel({ name: "Uber", kind: "ridehail" }, null, t)).toBe("Pedir con Uber");
   });
   it("classifies direct vs combo", () => {
     expect(onDemandShape({ legs: [car(1)] } as unknown as Itinerary)).toBe("direct");

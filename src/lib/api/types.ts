@@ -568,6 +568,9 @@ export type NextResponse = {
   route: RouteRef;
   freshness: Freshness;
   next: NextBus[];
+  /** API deviations (v1.1): live vehicles currently on the route, and whether the route serves this stop at all. */
+  vehiclesOnRoute?: number;
+  servesStop?: boolean;
 };
 
 export type PoiType = "bike_parking" | "toilets" | "atm" | "health" | "library" | "other";
