@@ -5,17 +5,22 @@ import { useI18n } from "@/lib/i18n/provider";
 import { Button, Icon } from "@/components/ui/primitives";
 import { PlaceInput } from "./PlaceInput";
 import { fmtDateTime, fromLocalInput, toLocalInput } from "@/lib/format";
-import { TRANSIT_MODES } from "@/lib/planner-params";
-import { bikeShareEnabled, bikeShareNetworks } from "@/lib/rental";
-import { onDemandEnabled, onDemandProviders } from "@/lib/ondemand";
+import { bikeShareEnabled } from "@/lib/rental";
+import { onDemandEnabled } from "@/lib/ondemand";
+import { plannerToggles, TOGGLES_PER_ROW, type PlannerToggle } from "@/lib/planner-toggles";
 import type { City, Mode } from "@/lib/api/types";
 import type { PlannerPoint, PlannerState } from "@/lib/planner-params";
 
-const MODE_ICON: Partial<Record<Mode, React.ReactNode>> = {
-  BUS: <Icon.Bus width={16} height={16} />,
-  CABLE_CAR: <Icon.Cable width={16} height={16} />,
-  BICYCLE: <Icon.Bike width={16} height={16} />,
-  WALK: <Icon.Walk width={16} height={16} />,
+const TOGGLE_ICON: Partial<Record<Mode | "rental" | "taxi", React.ReactNode>> = {
+  BUS: <Icon.Bus width={18} height={18} />,
+  CABLE_CAR: <Icon.Cable width={18} height={18} />,
+  RAIL: <Icon.Route width={18} height={18} />,
+  SUBWAY: <Icon.Route width={18} height={18} />,
+  TRAM: <Icon.Route width={18} height={18} />,
+  BICYCLE: <Icon.Bike width={18} height={18} />,
+  WALK: <Icon.Walk width={18} height={18} />,
+  rental: <Icon.Bike width={18} height={18} />,
+  taxi: <Icon.Car width={18} height={18} />,
 };
 
 type Props = {
@@ -43,23 +48,12 @@ export function PlannerForm({ city, state, onChange, onSubmit, onUseLocation, on
   const { t, lang } = useI18n();
   const canBike = bikeEnabled && city.modes.includes("BICYCLE");
   // shared bikes: one chip for the city's networks (N per city); colour of the first, names in the hint
-  const networks = bikeShareNetworks(city);
   const canRental = bikeShareEnabled(city);
-  const rentalColor = networks[0]?.color ?? "#00A859";
-  const rentalLabel = t.rental.mode;
-  const rentalHint = t.rental.modeHint(networks.map((n) => n.name).join(" · ") || t.rental.mode);
-  // on-demand: one chip for the city's taxi / ride providers (N per city); colour of the first, names in the hint
-  const providers = onDemandProviders(city);
   const canTaxi = onDemandFlag && onDemandEnabled(city);
-  const taxiColor = providers[0]?.color ?? "#F2C200";
-  const taxiInk = providers[0]?.textColor ?? "#111111";
-  const taxiHint = t.ondemand.modeHint(providers.map((p) => p.name).join(" · ") || t.ondemand.mode);
   const [timeOpen, setTimeOpen] = useState(false);
   const [more, setMore] = useState(state.wheelchair || state.bike);
   const timeRef = useRef<HTMLDivElement>(null);
 
-  const chipCls = (on: boolean, extra = "") =>
-    `inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold ${on ? "border-ink bg-ink text-paper" : "border-line bg-paper-2 text-ink-2 hover:border-line-2"} ${extra}`;
   const set = (patch: Partial<PlannerState>) => onChange({ ...state, ...patch, selected: null });
   const setPoint = (kind: "from" | "to", p: PlannerPoint | null) => set({ [kind]: p });
 
@@ -73,34 +67,26 @@ export function PlannerForm({ city, state, onChange, onSubmit, onUseLocation, on
   }, [timeOpen]);
 
   // Mode row: transit modes the city has + Bici (direct) + A pie
-  const rowModes: Mode[] = [...TRANSIT_MODES.filter((m) => city.modes.includes(m)), ...(city.modes.includes("BICYCLE") ? (["BICYCLE"] as Mode[]) : []), "WALK"];
-  const toggleMode = (m: Mode) => {
+  const toggles = plannerToggles(
+    city,
+    state,
+    { mode: (m) => t.mode[m], bike: t.planner.modeBike, walk: t.planner.modeWalk, rental: t.planner.modeRental, taxi: t.planner.modeTaxi, rentalHint: (n) => t.rental.modeHint(n || t.rental.mode), taxiHint: (n) => t.ondemand.modeHint(n || t.ondemand.mode) },
+    { rental: canRental, taxi: canTaxi },
+  );
+  const onToggle = (tg: PlannerToggle) => {
+    if (tg.kind === "rental") return set({ rental: !state.rental });
+    if (tg.kind === "taxi") return set({ taxi: !state.taxi });
+    const m = tg.mode as Mode;
     const has = state.modes.includes(m);
     const next = has ? state.modes.filter((x) => x !== m) : [...state.modes, m];
     if (!next.length) return;
     if (m === "WALK" && has && !next.includes("BICYCLE")) return; // access on foot is implied
     set({ modes: next });
   };
-  const shortLabel = (m: Mode) => (m === "BICYCLE" ? t.planner.modeBike : m === "WALK" ? t.planner.modeWalk : t.mode[m]);
 
   const timeValue = state.time ? toLocalInput(new Date(state.time), city.timezone) : toLocalInput(new Date(), city.timezone);
   const timeLabel = !state.time ? t.planner.timeNow : `${state.arriveBy ? t.planner.arriveBy : t.planner.departAt} ${fmtDateTime(state.time, city.timezone, lang)}`;
 
-  const taxiChip = canTaxi ? (
-    <button
-      key="taxi"
-      type="button"
-      data-testid="mode-taxi"
-      aria-pressed={state.taxi}
-      onClick={() => set({ taxi: !state.taxi })}
-      title={taxiHint}
-      className={chipCls(state.taxi, "shrink-0 px-3")}
-      style={state.taxi ? { background: taxiColor, borderColor: taxiColor, color: taxiInk } : { borderColor: taxiColor, color: "inherit" }}
-    >
-      <Icon.Car width={16} height={16} />
-      <span className="whitespace-nowrap">{t.ondemand.mode}</span>
-    </button>
-  ) : null;
 
   const chip = (on: boolean, extra = "") =>
     `inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold ${on ? "border-ink bg-ink text-paper" : "border-line bg-paper-2 text-ink-2 hover:border-line-2"} ${extra}`;
@@ -160,47 +146,26 @@ export function PlannerForm({ city, state, onChange, onSubmit, onUseLocation, on
         ) : null}
       </div>
 
-      {/* modes: one row, no wrap */}
-      <div className="rail -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5" role="group" aria-label={t.planner.modes}>
-        {rowModes.map((m) => {
-          const on = state.modes.includes(m);
-          const chipEl = (
-            <button key={m} type="button" aria-pressed={on} onClick={() => toggleMode(m)} className={chip(on, "shrink-0 px-3")} title={t.mode[m]}>
-              {MODE_ICON[m] ?? null}
-              <span className="whitespace-nowrap">{shortLabel(m)}</span>
-            </button>
-          );
-          // "Bici pública" (+ "Taxi / app") sit between transit and the person's own bike
-          if (m === "BICYCLE" && (canRental || canTaxi)) {
-            return [
-              canRental ? (
-              <button
-                key="rental"
-                type="button"
-                aria-pressed={state.rental}
-                onClick={() => set({ rental: !state.rental })}
-                title={rentalHint}
-                className={chip(state.rental, "shrink-0 px-3")}
-                style={state.rental ? { background: rentalColor, borderColor: rentalColor, color: "#ffffff" } : { borderColor: rentalColor, color: rentalColor }}
-              >
-                <Icon.Bike width={16} height={16} />
-                <span className="whitespace-nowrap">{rentalLabel}</span>
-              </button>
-              ) : null,
-              // "Taxi / app" sits with the shared / on-demand options, before the person's own bike
-              taxiChip,
-              chipEl,
-            ];
-          }
-          return chipEl;
-        })}
-        {canRental && !rowModes.includes("BICYCLE") ? (
-          <button type="button" aria-pressed={state.rental} onClick={() => set({ rental: !state.rental })} title={rentalHint} className={chip(state.rental, "shrink-0 px-3")} style={state.rental ? { background: rentalColor, borderColor: rentalColor, color: "#ffffff" } : { borderColor: rentalColor, color: rentalColor }}>
-            <Icon.Bike width={16} height={16} />
-            <span className="truncate">{rentalLabel}</span>
+      {/* modes: non-scrolling grid of compact toggles (icon over label), 6 per row on phones */}
+      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(toggles.length, TOGGLES_PER_ROW)}, minmax(52px, 1fr))` }} role="group" aria-label={t.planner.modes} data-testid="mode-grid">
+        {toggles.map((tg) => (
+          <button
+            key={tg.key}
+            type="button"
+            data-testid={`mode-${tg.key.toLowerCase()}`}
+            aria-pressed={tg.on}
+            aria-label={tg.hint ?? tg.label}
+            title={tg.hint ?? tg.label}
+            onClick={() => onToggle(tg)}
+            className={`flex min-h-11 min-w-[52px] flex-col items-center justify-center gap-0.5 rounded-xl border-2 px-0.5 text-[10px] font-bold leading-none tracking-tight focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal ${tg.on ? "" : "bg-paper-2 text-ink-2 hover:border-line-2"}`}
+            style={tg.on ? { background: tg.color, borderColor: tg.color, color: tg.ink } : { borderColor: tg.color }}
+          >
+            <span className="grid h-5 place-items-center" aria-hidden>
+              {TOGGLE_ICON[tg.kind === "mode" ? (tg.mode as Mode) : tg.kind] ?? null}
+            </span>
+            <span className="max-w-full truncate">{tg.label}</span>
           </button>
-        ) : null}
-        {!rowModes.includes("BICYCLE") ? taxiChip : null}
+        ))}
       </div>
 
       {/* more options */}
