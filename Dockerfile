@@ -10,9 +10,17 @@ COPY scripts ./scripts
 RUN pnpm install --frozen-lockfile
 
 FROM base AS build
+# NEXT_PUBLIC_* values are inlined at build time: every one the app reads must be a build ARG here
+# (Railway and most PaaS pass service variables as build args only when the Dockerfile declares them).
 ARG NEXT_PUBLIC_API_URL=http://localhost:8001
 ARG NEXT_PUBLIC_MOCK=0
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL NEXT_PUBLIC_MOCK=$NEXT_PUBLIC_MOCK
+ARG NEXT_PUBLIC_DEFAULT_CITY=
+ARG NEXT_PUBLIC_ROOT_LANDING=0
+ARG NEXT_PUBLIC_SITE_URL=
+ARG NEXT_PUBLIC_ADMIN_ENABLED=1
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL NEXT_PUBLIC_MOCK=$NEXT_PUBLIC_MOCK \
+    NEXT_PUBLIC_DEFAULT_CITY=$NEXT_PUBLIC_DEFAULT_CITY NEXT_PUBLIC_ROOT_LANDING=$NEXT_PUBLIC_ROOT_LANDING \
+    NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL NEXT_PUBLIC_ADMIN_ENABLED=$NEXT_PUBLIC_ADMIN_ENABLED
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm build
