@@ -18,8 +18,9 @@ import { MobilityTab } from "@/components/admin/MobilityTab";
 import { BrandTab } from "@/components/admin/BrandTab";
 import { LandingTab } from "@/components/admin/LandingTab";
 import { HistoryTab } from "@/components/admin/HistoryTab";
+import { AnalyticsTab } from "@/components/admin/AnalyticsTab";
 
-const TABS = ["fares", "config", "links", "services", "mobility", "brand", "landing", "history"] as const;
+const TABS = ["fares", "config", "links", "services", "mobility", "brand", "landing", "analytics", "history"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function AdminCityPage() {
@@ -100,7 +101,7 @@ function AdminCity({ token, city, allowed, logout }: { token: string; city: stri
           <div role="tablist" aria-label={t.admin.title} className="mt-6 flex gap-1 overflow-x-auto border-b border-line">
             {TABS.map((x) => {
               const active = tab === x;
-              const overridden = x !== "history" && !!data.override?.[x === "brand" ? "branding" : x];
+              const overridden = x !== "history" && x !== "analytics" && !!data.override?.[x === "brand" ? "branding" : x];
               return (
                 <button key={x} role="tab" aria-selected={active} aria-controls={`panel-${x}`} id={`tab-${x}`} type="button" onClick={() => pick(x)} className={`-mb-px flex h-11 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 text-sm font-semibold ${active ? "border-ink text-ink" : "border-transparent text-ink-2 hover:text-ink"}`}>
                   {t.admin.tabs[x]}
@@ -117,6 +118,7 @@ function AdminCity({ token, city, allowed, logout }: { token: string; city: stri
             {tab === "mobility" ? <MobilityTab token={token} city={city} data={data} /> : null}
             {tab === "brand" ? <BrandTab token={token} city={city} data={data} /> : null}
             {tab === "landing" ? <LandingTab token={token} city={city} data={data} /> : null}
+            {tab === "analytics" ? <AnalyticsTab token={token} city={city} data={data} /> : null}
             {tab === "history" ? <HistoryTab token={token} city={city} data={data} /> : null}
           </div>
         </>

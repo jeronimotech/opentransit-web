@@ -175,6 +175,14 @@ type Init = { method: string; body: string | null; headers: Record<string, strin
 
 export async function mockRequest<T>(path: string, q: Q, init: Init = { method: "GET", body: null, headers: {} }): Promise<T> {
   await delay(120 + Math.random() * 200);
+  if (/\/analytics\/[a-z.]+$/.test(path) || /^\/v1\/cities\/[^/]+\/events$/.test(path)) {
+    const { analyticsMock } = await import("./analytics");
+    if (path.startsWith("/v1/admin/")) {
+      const { requireAdmin } = await import("./admin");
+      requireAdmin(init.headers);
+    }
+    return analyticsMock<T>(path, q, init);
+  }
   if (path.startsWith("/v1/admin/")) {
     const { adminMock } = await import("./admin");
     return adminMock<T>(path, q, init);

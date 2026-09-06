@@ -85,6 +85,10 @@ function response(): AdminConfigResponse {
   };
 }
 
+export function requireAdmin(headers: Record<string, string>) {
+  requireToken(headers);
+}
+
 function requireToken(headers: Record<string, string>) {
   const tok = headers["X-Admin-Token"] ?? headers["x-admin-token"];
   if (!tok || !TOKENS.has(tok)) throw new ApiRequestError(401, "UNAUTHORIZED", "missing or invalid X-Admin-Token");

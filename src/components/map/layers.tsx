@@ -17,7 +17,7 @@ type DistributiveOmit<T, K extends keyof never> = T extends unknown ? Omit<T, K>
 type LayerDef = DistributiveOmit<maplibregl.LayerSpecification, "source">;
 
 /** Generic hook: keeps a GeoJSON source in sync and (re)creates layers after style loads. */
-function useGeoJsonLayer(
+export function useGeoJsonLayer(
   id: string,
   data: FeatureCollection,
   layers: LayerDef[],
