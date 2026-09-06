@@ -23,7 +23,7 @@ export function NextBuses({ data, city, tz }: { data: NextResponse; city: string
         </div>
         <FreshnessBadge freshness={data.freshness} realtime={data.freshness.realtime && !data.freshness.stale} className="ml-auto" />
       </div>
-      {!data.next.length ? <EmptyState title={t.next.none} /> : null}
+      {!data.next.length ? <EmptyState title={t.next.none} hint={(data.vehiclesOnRoute ?? 0) === 0 ? t.lote1.emptyLive : undefined} /> : null}
       <ol className="divide-y divide-line rounded-card border border-line bg-paper-2">
         {data.next.map((n, i) => {
           const b = etaBucket(n.minutes);

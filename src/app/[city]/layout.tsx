@@ -10,6 +10,7 @@ import { Spinner } from "@/components/ui/primitives";
 import { ApiRequestError } from "@/lib/api/client";
 import { resolveConfig } from "@/lib/city-config";
 import { Icon } from "@/components/ui/primitives";
+import { NetBar } from "@/components/shell/NetBar";
 
 export default function CityLayout({ children, params }: { children: React.ReactNode; params: Promise<{ city: string }> }) {
   const { city } = use(params);
@@ -49,6 +50,7 @@ export default function CityLayout({ children, params }: { children: React.React
   const cfg = resolveConfig(data);
   return (
     <CityProvider city={data}>
+      <NetBar city={data.id} />
       <CityHeader city={data} />
       {cfg.maintenance.active ? (
         <div role="status" className="pointer-events-none fixed inset-x-0 top-[60px] z-30 flex justify-center px-3 md:top-[72px]">

@@ -3,7 +3,7 @@
 import { cleanHeadsign } from "@/lib/text";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useI18n } from "@/lib/i18n/provider";
 import { fmtDelay, fmtDistance, fmtDuration, fmtTime } from "@/lib/format";
 import { componentColor } from "@/lib/colors";
@@ -21,7 +21,10 @@ import { serviceStatus } from "@/lib/service-window";
 import { RentalLegBlock } from "@/components/rental/RentalLegBlock";
 import { OnDemandLegBlock } from "@/components/ondemand/OnDemandLegBlock";
 import { legLeadPrice } from "@/lib/ondemand";
-import type { City, Itinerary, Leg } from "@/lib/api/types";
+import { useNextBuses } from "@/lib/api/hooks";
+import { retimeItinerary, type Retimed } from "@/lib/retime";
+import { track } from "@/lib/analytics";
+import type { City, Itinerary, Leg, NextBus } from "@/lib/api/types";
 import type { Dict } from "@/lib/i18n/dict";
 
 const GENERIC_NAMES = new Set(["origin", "destination", "origen", "destino"]);
@@ -55,8 +58,17 @@ export function ItineraryDetail({
   const cfg = resolveConfig(city);
   const [copied, setCopied] = useState(false);
   const [following, setFollowing] = useState(false);
-  const itinerary = withEndpointNames(raw, endpoints?.from, endpoints?.to);
+  const named = withEndpointNames(raw, endpoints?.from, endpoints?.to);
+  // Citymapper: pick another departure at the boarding stop → the plan re-times itself (client-side)
+  const [retimed, setRetimed] = useState<Retimed | null>(null);
+  useEffect(() => setRetimed(null), [raw.id]);
+  const itinerary = retimed ? withEndpointNames(retimed.itinerary, endpoints?.from, endpoints?.to) : named;
   const follow = useFollowAlong(itinerary, following);
+  useEffect(() => {
+    if (following) track("go_start", { durationSeconds: itinerary.durationSeconds, legs: itinerary.legs.length });
+    else if (follow.legIndex !== null) track("go_end", { durationSeconds: itinerary.durationSeconds, completed: follow.legIndex >= itinerary.legs.length - 1, legs: itinerary.legs.length });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [following]);
   const fare = estimateFare(itinerary, city.fares);
 
   const share = async () => {
@@ -103,6 +115,12 @@ export function ItineraryDetail({
             {fmtDistance(itinerary.walkDistanceMeters, lang)} {t.planner.walk}
           </span>
           <FareTag fare={fare} />
+          {retimed ? (
+            <span className="inline-flex items-center gap-1" title={t.lote1.retimedHint}>
+              <Badge tone="info">{t.lote1.retimed}</Badge>
+              <button type="button" onClick={() => setRetimed(null)} className="text-xs font-semibold text-signal">{t.lote1.original}</button>
+            </span>
+          ) : null}
           {liveCount ? (
             <span className="inline-flex items-center gap-1">
               <span className="live-dot" style={{ width: 6, height: 6 }} />
@@ -116,14 +134,14 @@ export function ItineraryDetail({
 
       <ol className="relative flex flex-col">
         {itinerary.legs.map((leg, i) => (
-          <LegRow key={i} leg={leg} city={city} tz={tz} last={i === itinerary.legs.length - 1} current={following && follow.legIndex === i} done={following && follow.legIndex !== null && i < follow.legIndex} />
+          <LegRow key={i} leg={leg} city={city} tz={tz} last={i === itinerary.legs.length - 1} current={following && follow.legIndex === i} done={following && follow.legIndex !== null && i < follow.legIndex} onRetime={(dep) => setRetimed(retimeItinerary(named, i, dep))} retimedHere={retimed?.legIndex === i} />
         ))}
       </ol>
     </div>
   );
 }
 
-function LegRow({ leg, city, tz, last, current, done }: { leg: Leg; city: City; tz: string; last: boolean; current: boolean; done: boolean }) {
+function LegRow({ leg, city, tz, last, current, done, onRetime, retimedHere }: { leg: Leg; city: City; tz: string; last: boolean; current: boolean; done: boolean; onRetime: (dep: NextBus) => void; retimedHere: boolean }) {
   const { t, lang } = useI18n();
   const [open, setOpen] = useState(false);
   const odLead = leg.onDemand ? (legLeadPrice(leg)?.provider ?? leg.onDemand.providers[0] ?? null) : null;
@@ -203,6 +221,7 @@ function LegRow({ leg, city, tz, last, current, done }: { leg: Leg; city: City; 
               )}
               {svc.active === false ? <Badge tone="bad">{svc.label}</Badge> : null}
             </div>
+            {leg.from.stopId && leg.route ? <DepartureChips city={city} stopId={leg.from.stopId} routeId={leg.route.id} current={leg.startTime} tz={tz} onPick={onRetime} retimedHere={retimedHere} /> : null}
             {open ? (
               <ul className="ml-1 flex flex-col gap-1 border-l-2 pl-3 text-xs text-ink-2" style={{ borderColor: color }}>
                 {leg.intermediateStops.map((s) => (
@@ -252,4 +271,39 @@ function stepText(dir: string, street: string, instruction: string, t: Dict) {
   if (instruction) return instruction;
   const verb = (t.direction as Record<string, string>)[dir] ?? t.direction.CONTINUE;
   return `${verb} ${street}`.trim();
+}
+
+
+/**
+ * The next departures of this route at the boarding stop, as chips inside the waiting
+ * step (Citymapper). Tapping one re-times the itinerary; live ones carry the green blip.
+ */
+function DepartureChips({ city, stopId, routeId, current, tz, onPick, retimedHere }: { city: City; stopId: string; routeId: string; current: string; tz: string; onPick: (dep: NextBus) => void; retimedHere: boolean }) {
+  const { t, lang } = useI18n();
+  const q = useNextBuses(city.id, stopId, routeId, 20_000);
+  const rows = (q.data?.next ?? []).slice(0, 3);
+  if (!rows.length) return null;
+  const cur = new Date(current).getTime();
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" data-testid="departure-chips" aria-label={t.lote1.nextDepartures}>
+      <span className="text-[11px] font-semibold text-ink-3">{t.lote1.nextDepartures}:</span>
+      {rows.map((n, i) => {
+        const same = Math.abs(new Date(n.time).getTime() - cur) < 30_000;
+        const active = same || (retimedHere && i === 0 && !same);
+        return (
+          <button
+            key={`${n.tripId ?? i}-${n.time}`}
+            type="button"
+            onClick={() => onPick(n)}
+            aria-pressed={active}
+            className={`inline-flex h-7 items-center gap-1 rounded-full border px-2 text-xs font-semibold tabular-nums ${active ? "border-ink bg-ink text-paper" : "border-line bg-paper-2 text-ink-2 hover:border-line-2"}`}
+            title={n.source === "live" ? t.freshness.live : n.source === "estimated" ? t.next.estimated : t.freshness.scheduled}
+          >
+            {fmtTime(n.time, tz, lang)}
+            {n.source === "live" ? <span className="live-dot" style={{ width: 5, height: 5 }} aria-hidden /> : null}
+          </button>
+        );
+      })}
+    </div>
+  );
 }

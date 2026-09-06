@@ -16,7 +16,7 @@ import type { BoardResponse } from "@/lib/api/types";
  */
 export function ArrivalBoard({ board, city, refreshing, onPickRoute }: { board: BoardResponse; city: string; refreshing?: boolean; onPickRoute?: (routeId: string) => void }) {
   const { t, lang } = useI18n();
-  if (!board.rows.length) return <EmptyState title={t.board.none} />;
+  if (!board.rows.length) return <EmptyState title={t.lote1.emptyBoard} />;
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-2 text-xs text-ink-3">
@@ -27,33 +27,24 @@ export function ArrivalBoard({ board, city, refreshing, onPickRoute }: { board: 
           </span>
         ) : null}
       </div>
-      <ul className="divide-y divide-line rounded-card border border-line bg-paper-2">
+      <ul className="divide-y divide-line rounded-card border border-line bg-paper-2" data-testid="board-rows">
         {board.rows.map((row) => {
           const [first, ...rest] = row.next;
           const svc = serviceStatus(t, row.route);
+          const chip = <RouteChip route={row.route} size="lg" />;
           return (
-            <li key={row.route.id} className="flex items-start gap-3 px-3 py-2">
+            <li key={row.route.id} className="flex items-center gap-3 px-3 py-2.5">
               {onPickRoute ? (
                 <button type="button" onClick={() => onPickRoute(row.route.id)} className="inline-flex min-h-11 shrink-0 items-center" aria-label={row.route.shortName}>
-                  <RouteChip route={row.route} />
+                  {chip}
                 </button>
               ) : (
                 <Link href={`/${city}/routes/${encodeURIComponent(row.route.id)}`} className="inline-flex min-h-11 shrink-0 items-center">
-                  <RouteChip route={row.route} />
+                  {chip}
                 </Link>
               )}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold">{cleanHeadsign(row.headsign) ?? cleanHeadsign(row.route.longName)}</p>
-                {first ? (
-                  <p className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 text-xs text-ink-2">
-                    <span>{t.board.nextIn}</span>
-                    <span className={`text-base font-extrabold tabular-nums ${first.realtime ? "text-ink" : "text-ink-2"}`} aria-live="polite">{t.stop.inMin(first.minutes)}</span>
-                    <FreshnessBadge freshness={board.freshness} realtime={first.realtime} />
-                    {first.realtime && first.delaySeconds != null && Math.abs(first.delaySeconds) >= 60 ? (
-                      <span className="text-ink-3">({fmtDelay(first.delaySeconds, lang)})</span>
-                    ) : null}
-                  </p>
-                ) : null}
                 {rest.length ? (
                   <p className="mt-0.5 text-xs text-ink-3">
                     {t.board.then}{" "}
@@ -68,9 +59,20 @@ export function ArrivalBoard({ board, city, refreshing, onPickRoute }: { board: 
                     ))}{" "}
                     {t.common.min}
                   </p>
+                ) : svc.active === false ? (
+                  <p className="mt-0.5 text-xs font-semibold text-severe">{svc.label}</p>
                 ) : null}
-                {svc.active === false ? <p className="mt-0.5 text-xs font-semibold text-brick">{svc.label}</p> : null}
               </div>
+              {first ? (
+                <div className="shrink-0 text-right" aria-live="polite">
+                  <p className={`inline-flex items-baseline gap-1 text-2xl font-extrabold leading-none tabular-nums ${first.realtime ? "text-ink" : "text-ink-2"}`}>
+                    {first.minutes <= 0 ? t.next.arrivingNow : first.minutes}
+                    {first.minutes > 0 ? <span className="text-xs font-semibold text-ink-3">{t.lote1.minShort}</span> : null}
+                    {first.realtime ? <span className="live-dot self-center" style={{ width: 6, height: 6 }} title={t.freshness.live} /> : null}
+                  </p>
+                  {first.realtime && first.delaySeconds != null && Math.abs(first.delaySeconds) >= 60 ? <p className="text-[11px] text-ink-3">{fmtDelay(first.delaySeconds, lang)}</p> : <p className="text-[11px] text-ink-3">{first.realtime ? t.freshness.live : t.freshness.scheduled}</p>}
+                </div>
+              ) : null}
             </li>
           );
         })}

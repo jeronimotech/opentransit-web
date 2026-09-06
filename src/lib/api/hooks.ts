@@ -243,3 +243,15 @@ export function useNearbyRental(city: string, pos: { lat: number; lon: number } 
     retry: retryPolicy,
   });
 }
+
+/** v1.5 — city health for the freshness bar; polled every minute, never retried aggressively. */
+export function useHealth(city: string, enabled = true, refreshMs = 60_000) {
+  return useQuery({
+    queryKey: ["health", city],
+    queryFn: () => api.health(city),
+    enabled,
+    refetchInterval: refreshMs,
+    retry: retryPolicy,
+    staleTime: 30_000,
+  });
+}
