@@ -10,6 +10,7 @@ import { Button, EmptyState, Icon, Spinner } from "@/components/ui/primitives";
 import { RouteChip } from "@/components/ui/RouteChip";
 import { FreshnessBadge } from "@/components/ui/FreshnessBadge";
 import { useI18n } from "@/lib/i18n/provider";
+import { useScreenView } from "@/lib/analytics";
 import { useBoard, useRoute } from "@/lib/api/hooks";
 import { useFavorites, type FavPlace, type FavRoute, type FavStop, type PlaceKind } from "@/lib/favorites";
 import { serviceStatus } from "@/lib/service-window";
@@ -19,6 +20,7 @@ import type { PlannerPoint } from "@/lib/planner-params";
 /** Favorites with live context: stops show their next departures, routes their service window. */
 export default function FavoritesPage() {
   const city = useCityCtx();
+  useScreenView(city.id, "favorites");
   const cfg = resolveConfig(city);
   const { t } = useI18n();
   const fav = useFavorites(city.id);

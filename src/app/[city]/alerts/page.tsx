@@ -1,16 +1,24 @@
 "use client";
 
+import { useEffect } from "react";
+
 import { useCityCtx } from "@/components/shell/CityContext";
 import { AlertCard } from "@/components/alerts/AlertCard";
 import { EmptyState, Spinner } from "@/components/ui/primitives";
 import { useAlerts } from "@/lib/api/hooks";
 import { useI18n } from "@/lib/i18n/provider";
+import { track, useScreenView } from "@/lib/analytics";
 import { PqrsLink } from "@/components/ui/AgencyLinks";
 
 export default function AlertsPage() {
   const city = useCityCtx();
   const { t } = useI18n();
   const { data, isLoading, error, refetch } = useAlerts(city.id);
+  useScreenView(city.id, "alerts");
+  useEffect(() => {
+    for (const a of (data?.alerts ?? []).slice(0, 20)) track("alert_view", { alertId: a.id });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.alerts.length]);
   const alerts = data?.alerts ?? [];
   const order = { SEVERE: 0, WARNING: 1, INFO: 2 } as const;
   const sorted = [...alerts].sort((a, b) => (order[a.severity ?? "INFO"] ?? 2) - (order[b.severity ?? "INFO"] ?? 2));

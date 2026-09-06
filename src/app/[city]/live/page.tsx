@@ -11,6 +11,7 @@ import { VehiclePanel } from "@/components/vehicles/VehiclePanel";
 import { ComponentIcon } from "@/components/ui/ComponentIcon";
 import { FreshnessBadge } from "@/components/ui/FreshnessBadge";
 import { useI18n } from "@/lib/i18n/provider";
+import { useScreenView } from "@/lib/analytics";
 import { useBoard, usePois, useStop, useVehicle } from "@/lib/api/hooks";
 import { useVehicleStream } from "@/lib/api/stream";
 import { useInterpolatedVehicles } from "@/lib/interpolate";
@@ -29,6 +30,7 @@ export default function LivePage() {
 
 function Live() {
   const city = useCityCtx();
+  useScreenView(city.id, "live");
   const cfg = resolveConfig(city);
   const { t } = useI18n();
   const sp = useSearchParams();

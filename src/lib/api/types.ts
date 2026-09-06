@@ -306,6 +306,8 @@ export type CityConfig = {
   }>;
   minAppVersion: { ios: string; android: string; web?: string } | null;
   maintenance: { active: boolean; message: string | null } | null;
+  /** v1.5 — first-party analytics switch (server-side; clients also honour the user's opt-out). */
+  analytics?: { enabled: boolean; retentionDays: number; kThreshold: number } | null;
 };
 
 export type CityLinks = Partial<{
@@ -793,3 +795,99 @@ export type AdminHistoryItem = {
   data: AdminOverride | null;
 };
 export type AdminHistoryResponse = { items: AdminHistoryItem[] };
+
+/* ── v1.5 first-party analytics (usage + mobility), privacy by design ─────── */
+
+export type AnalyticsPlatform = "ios" | "android" | "web";
+
+export type AnalyticsEventType =
+  | "app_open"
+  | "screen_view"
+  | "search_select"
+  | "plan_request"
+  | "plan_result"
+  | "itinerary_select"
+  | "go_start"
+  | "go_end"
+  | "stop_view"
+  | "board_view"
+  | "route_view"
+  | "locate_query"
+  | "handoff"
+  | "rental_station_view"
+  | "favorite_add"
+  | "favorite_remove"
+  | "alert_view"
+  | "layer_toggle"
+  | "mode_toggle"
+  | "error";
+
+export type AnalyticsProps = Record<string, string | number | boolean | string[] | null | undefined>;
+
+export type AnalyticsEvent = { type: AnalyticsEventType; at: string; props: AnalyticsProps };
+
+/** `POST /v1/cities/{city}/events` body (≤ 50 events, coarse coordinates only). */
+export type AnalyticsBatch = {
+  sessionId: string;
+  cohortId: string;
+  platform: AnalyticsPlatform;
+  appVersion: string;
+  locale: string;
+  sentAt: string;
+  events: AnalyticsEvent[];
+};
+
+export type AnalyticsAccepted = { accepted: number; rejected: number[] };
+
+/* ── admin analytics (aggregated, k ≥ 5 applied server-side) ── */
+
+export type AnalyticsRange = { from: string; to: string };
+
+export type AnalyticsKpi = { value: number; previous: number | null };
+
+export type AnalyticsSummary = {
+  range: AnalyticsRange;
+  kThreshold: number;
+  kpis: {
+    sessions: AnalyticsKpi;
+    planRequests: AnalyticsKpi;
+    itinerarySelects: AnalyticsKpi;
+    goStarts: AnalyticsKpi;
+    goCompletions: AnalyticsKpi;
+    handoffs: AnalyticsKpi;
+    activeDays: AnalyticsKpi;
+  };
+  topModes: { modeSet: string; requests: number; selects: number }[];
+  topRoutes: { routeId: string; shortName: string | null; component: string | null; views: number; selects: number; locates: number }[];
+  topStops: { stopId: string; name: string | null; views: number; boards: number; locates: number }[];
+  platforms: { platform: AnalyticsPlatform; sessions: number }[];
+  versions: { appVersion: string; sessions: number }[];
+  lastRollupAt: string | null;
+};
+
+export type AnalyticsOdCellProps = { gh7: string; origins: number; destinations: number; searches: number };
+export type AnalyticsOdResponse = {
+  cells: { type: "FeatureCollection"; features: { type: "Feature"; geometry: { type: "Polygon"; coordinates: number[][][] }; properties: AnalyticsOdCellProps }[] };
+  pairs: { fromGh7: string; toGh7: string; fromCenter: [number, number]; toCenter: [number, number]; n: number }[];
+  kThreshold: number;
+};
+
+export type AnalyticsPlace = { gh7: string; center: [number, number]; label: string | null; n: number };
+export type AnalyticsPlacesResponse = { kind: "origin" | "destination" | "search"; places: AnalyticsPlace[] };
+
+export type AnalyticsRoutesResponse = { routes: AnalyticsSummary["topRoutes"] };
+export type AnalyticsStopsResponse = { stops: AnalyticsSummary["topStops"] };
+export type AnalyticsModesResponse = { modes: AnalyticsSummary["topModes"] };
+export type AnalyticsSearchesResponse = { searches: { resultType: string; resultId: string | null; label: string | null; n: number }[] };
+export type AnalyticsProvidersResponse = { providers: { providerId: string; handoffs: number; hadEstimate: number }[] };
+export type AnalyticsFunnelResponse = {
+  days: { day: string; appOpens: number; sessions: number; planRequests: number; itinerarySelects: number; goStarts: number; goCompletions: number }[];
+  totals: { appOpens: number; sessions: number; planRequests: number; itinerarySelects: number; goStarts: number; goCompletions: number };
+};
+/** weekday 0 = Monday … 6 = Sunday, hour 0..23 (city local time). */
+export type AnalyticsHoursResponse = { cells: { weekday: number; hour: number; planRequests: number }[] };
+
+export type AnalyticsDataset = "od" | "routes" | "stops" | "modes" | "searches" | "providers" | "funnel" | "hours";
+
+/** `config.analytics` (admin-editable). */
+export type AnalyticsConfig = { enabled: boolean; retentionDays: number; kThreshold: number };

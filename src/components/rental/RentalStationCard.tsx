@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useI18n } from "@/lib/i18n/provider";
+import { track } from "@/lib/analytics";
 import { useRentalStation } from "@/lib/api/hooks";
 import { availabilityTone, detectPlatform, networkById, rentalLink, stationAgeSeconds } from "@/lib/rental";
 import { Icon } from "@/components/ui/primitives";
@@ -13,7 +14,12 @@ import type { City, RentalStation } from "@/lib/api/types";
  * desktop: bottom-left). Name, bikes / e-bikes / docks, freshness, "Cómo llegar"
  * (plan to it) and the network's own app/site. Generic over the city's networks.
  */
-export function RentalStationCard({
+export function RentalStationCard(props: Parameters<typeof RentalStationCardInner>[0]) {
+  useEffect(() => track("rental_station_view", { stationId: props.station.id, networkId: props.station.networkId }), [props.station.id, props.station.networkId]);
+  return <RentalStationCardInner {...props} />;
+}
+
+function RentalStationCardInner({
   city,
   station,
   onClose,

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useMemo, useState } from "react";
+import { use, useMemo, useState, useEffect } from "react";
 import { useCityCtx } from "@/components/shell/CityContext";
 import { SplitLayout } from "@/components/shell/SplitLayout";
 import { MapView, useFitBounds } from "@/components/map/MapView";
@@ -20,6 +20,7 @@ import { isNotFound, useAlerts, useBoard, useDepartures, useDeparturesMulti, use
 import { useVehicleStream } from "@/lib/api/stream";
 import { useInterpolatedVehicles } from "@/lib/interpolate";
 import { useI18n } from "@/lib/i18n/provider";
+import { track, useScreenView } from "@/lib/analytics";
 import { resolveConfig, componentOf, componentsOf, stopComponent } from "@/lib/city-config";
 import { onDemandEnabled } from "@/lib/ondemand";
 import type { Stop, StopDetail } from "@/lib/api/types";
@@ -37,8 +38,17 @@ export default function StopPage({ params }: { params: Promise<{ stopId: string 
   const { t } = useI18n();
   const router = useRouter();
   const stop = useStop(city.id, stopId);
+  useScreenView(city.id, "stop");
+  useEffect(() => {
+    if (stop.data) track("stop_view", { stopId, component: stop.data.component ?? null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stop.data?.id]);
   const refreshMs = cfg.departuresRefreshSeconds * 1000;
   const board = useBoard(city.id, stopId, refreshMs, cfg.features.board);
+  useEffect(() => {
+    if (board.data && !board.isRefetching) track("board_view", { stopId, component: stop.data?.component ?? null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [board.data?.generatedAt !== undefined && board.dataUpdatedAt > 0 ? board.data?.stop.id : null]);
   const boardMissing = !cfg.features.board || !!board.error; // v1 API or no times → legacy departures
   const deps = useDepartures(city.id, stopId, refreshMs, boardMissing);
   const alerts = useAlerts(city.id, { stopId });

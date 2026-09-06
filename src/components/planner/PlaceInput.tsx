@@ -6,6 +6,7 @@ import { useT } from "@/lib/i18n/provider";
 import { Icon, Spinner } from "@/components/ui/primitives";
 import { componentColor } from "@/lib/colors";
 import type { GeocodeResult } from "@/lib/api/types";
+import { track } from "@/lib/analytics";
 import type { PlannerPoint } from "@/lib/planner-params";
 
 type Props = {
@@ -65,7 +66,10 @@ export function PlaceInput({
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
-  const pick = (r: GeocodeResult) => {
+  const pick = (r: GeocodeResult, position = 0) => {
+    // only what was CHOSEN, never the typed text; labels only for stops/POIs (addresses are personal)
+    const labelled = r.type === "station" || r.type === "stop" || r.type === "poi";
+    track("search_select", { resultType: r.type, resultId: r.stopId ?? undefined, label: labelled ? r.name : undefined, lat: r.lat, lon: r.lon, field: kind, position });
     onChange({ lat: r.lat, lon: r.lon, name: r.name });
     setText(r.name);
     setOpen(false);
@@ -168,7 +172,7 @@ export function PlaceInput({
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => pick(r)}
+                onClick={() => pick(r, i)}
                 onMouseEnter={() => setActive(i)}
                 className={`flex w-full items-start gap-3 px-3 py-2 text-left ${i === active ? "bg-paper-3" : ""}`}
               >

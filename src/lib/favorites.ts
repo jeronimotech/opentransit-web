@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useSyncExternalStore } from "react";
+import { track } from "@/lib/analytics";
 
 /**
  * Local-first favorites and recent trips (TransMi App + Maas patterns, merged):
@@ -83,6 +84,7 @@ export function useFavorites(city: string) {
       const exists = s.favorites.some((x) => x.kind === f.kind && x.id === f.id);
       const favorites = exists ? s.favorites.filter((x) => !(x.kind === f.kind && x.id === f.id)) : [...s.favorites, f];
       write(city, { ...s, favorites });
+      track(exists ? "favorite_remove" : "favorite_add", { kind: f.kind, ...(f.kind === "place" && f.placeKind !== "custom" ? { label: f.placeKind } : {}) });
     },
     [city],
   );
@@ -93,6 +95,7 @@ export function useFavorites(city: string) {
       const id = placeKind === "custom" ? (p.id ?? `custom-${Date.now()}`) : placeKind;
       const rest = s.favorites.filter((x) => !(x.kind === "place" && x.id === id));
       write(city, { ...s, favorites: [...rest, { kind: "place", id, placeKind, ...p }] });
+      track("favorite_add", { kind: "place", ...(placeKind !== "custom" ? { label: placeKind } : {}) });
     },
     [city],
   );
@@ -101,6 +104,7 @@ export function useFavorites(city: string) {
     (kind: Favorite["kind"], id: string) => {
       const s = read(city);
       write(city, { ...s, favorites: s.favorites.filter((x) => !(x.kind === kind && x.id === id)) });
+      track("favorite_remove", { kind });
     },
     [city],
   );

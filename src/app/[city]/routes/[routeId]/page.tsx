@@ -4,7 +4,7 @@ import { cleanHeadsign } from "@/lib/text";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useMemo, useState } from "react";
+import { use, useMemo, useState, useEffect } from "react";
 import { useCityCtx } from "@/components/shell/CityContext";
 import { SplitLayout } from "@/components/shell/SplitLayout";
 import { MapView } from "@/components/map/MapView";
@@ -20,6 +20,7 @@ import { useRoute } from "@/lib/api/hooks";
 import { useVehicleStream } from "@/lib/api/stream";
 import { useInterpolatedVehicles } from "@/lib/interpolate";
 import { useI18n } from "@/lib/i18n/provider";
+import { track, useScreenView } from "@/lib/analytics";
 import { routeChipColors } from "@/lib/route-color";
 import { resolveConfig, componentOf, componentsOf } from "@/lib/city-config";
 import { serviceStatus } from "@/lib/service-window";
@@ -33,6 +34,11 @@ export default function RoutePage({ params }: { params: Promise<{ routeId: strin
   const { t } = useI18n();
   const router = useRouter();
   const { data: r, isLoading, error } = useRoute(city.id, routeId);
+  useScreenView(city.id, "route");
+  useEffect(() => {
+    if (r) track("route_view", { routeId });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [r?.id]);
   const [dir, setDir] = useState(0);
   const pattern = r?.patterns[dir] ?? r?.patterns[0] ?? null;
   const comp = componentOf(city, r?.component);

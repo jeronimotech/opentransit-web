@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/lib/i18n/provider";
+import { track } from "@/lib/analytics";
 import { Button, Icon } from "@/components/ui/primitives";
 import { PlaceInput } from "./PlaceInput";
 import { fmtDateTime, fromLocalInput, toLocalInput } from "@/lib/format";
@@ -74,6 +75,7 @@ export function PlannerForm({ city, state, onChange, onSubmit, onUseLocation, on
     { rental: canRental, taxi: canTaxi },
   );
   const onToggle = (tg: PlannerToggle) => {
+    track("mode_toggle", { mode: tg.key, on: !tg.on });
     if (tg.kind === "rental") return set({ rental: !state.rental });
     if (tg.kind === "taxi") return set({ taxi: !state.taxi });
     const m = tg.mode as Mode;

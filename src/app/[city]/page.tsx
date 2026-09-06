@@ -8,8 +8,7 @@ import { MapView, useFitBounds, useMap, useMapZoom } from "@/components/map/MapV
 import { ItineraryLayer, LayersControl, LocateButton, NetworkLayer, PinMarker, PoisLayer, RENTAL_MIN_ZOOM, RentalStationsLayer, StopsLayer, VehiclesLayer, ZoomGate, useMapBounds } from "@/components/map/layers";
 import { RentalStationCard } from "@/components/rental/RentalStationCard";
 import { PlannerForm } from "@/components/planner/PlannerForm";
-import { SortChips } from "@/components/planner/SortChips";
-import { ItineraryCard } from "@/components/itinerary/ItineraryCard";
+import { ResultsList } from "@/components/itinerary/ResultsList";
 import { ItineraryDetail } from "@/components/itinerary/ItineraryDetail";
 import { Hub } from "@/components/hub/Hub";
 import { EmptyState, Icon, Spinner } from "@/components/ui/primitives";
@@ -23,7 +22,7 @@ import { useGeolocation } from "@/lib/use-geolocation";
 import { useFavorites } from "@/lib/favorites";
 import { resolveConfig, componentsOf } from "@/lib/city-config";
 import { LIVE_MIN_ZOOM, liveAutoOn } from "@/lib/marker-style";
-import { sortItineraries, type SortKey } from "@/lib/sort";
+import { track, useScreenView } from "@/lib/analytics";
 import { readPlanner, toPlanParams, writePlanner, type PlannerState } from "@/lib/planner-params";
 import type { Itinerary, RentalStation } from "@/lib/api/types";
 
@@ -151,7 +150,6 @@ function Planner() {
   const [picking, setPicking] = useState<"from" | "to" | null>(null);
   const [locating, setLocating] = useState<"from" | "to" | "hub" | null>(null);
   const [snap, setSnap] = useState<Snap>("peek");
-  const [sort, setSort] = useState<SortKey>("default");
   const [showPois, setShowPois] = useState(false);
   const [showLive, setShowLive] = useState(true);
   const [showNet, setShowNet] = useState(true);
@@ -180,8 +178,36 @@ function Planner() {
   const showHub = !urlState.from && !urlState.to && view !== "plan";
   const planParams = useMemo(() => toPlanParams(urlState, lang, rentalModes), [urlState, lang, rentalModes]);
   const plan = usePlan(city.id, planParams);
-  const itineraries = useMemo(() => sortItineraries(plan.data?.itineraries ?? [], sort, city.fares), [plan.data, sort, city.fares]);
+  const itineraries = useMemo(() => plan.data?.itineraries ?? [], [plan.data]);
   const selected = urlState.selected !== null ? ((plan.data?.itineraries ?? [])[urlState.selected] ?? null) : null;
+  useScreenView(city.id, showHub ? "home" : selected ? "itinerary" : planParams ? "results" : "planner");
+
+  // analytics: what people ask for and what they get (coarse coordinates, no free text)
+  useEffect(() => {
+    if (!planParams) return;
+    track("plan_request", {
+      fromLat: planParams.fromLat, fromLon: planParams.fromLon, toLat: planParams.toLat, toLon: planParams.toLon,
+      fromKind: urlState.from?.name === t.planner.myLocation ? "myLocation" : "place", toKind: "place",
+      modes: planParams.modes ?? [], timeType: planParams.time ? (planParams.arriveBy ? "arrive" : "depart") : "now",
+      wheelchair: !!planParams.wheelchair, rental: urlState.rental, onDemand: !!planParams.onDemand, bike: urlState.bike,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planParams]);
+  useEffect(() => {
+    if (!plan.data || !planParams) return;
+    const its = plan.data.itineraries;
+    const best = its[0];
+    track("plan_result", { count: its.length, bestDurationSeconds: best?.durationSeconds ?? null, bestTransfers: best?.transfers ?? null, hasRental: its.some((i) => i.rentalLegs), hasOnDemand: its.some((i) => i.source === "ondemand") });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan.data]);
+  useEffect(() => {
+    if (plan.error) track("error", { code: plan.error instanceof ApiRequestError ? plan.error.code : "PLAN_FAILED", screen: "results" });
+  }, [plan.error]);
+  useEffect(() => {
+    if (!selected || urlState.selected === null) return;
+    track("itinerary_select", { index: urlState.selected, source: selected.source ?? "primary", modes: selected.modesUsed ?? [], durationSeconds: selected.durationSeconds, transfers: selected.transfers, fareAmount: selected.fare?.amount ?? null, routeIds: selected.legs.map((l) => l.route?.id).filter((x): x is string => !!x) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id]);
 
   // Sheet position follows the task: hub peeks, the form needs room, results/detail share the map.
   const stage = showHub ? "hub" : selected ? "detail" : planParams ? "results" : "form";
@@ -196,6 +222,11 @@ function Planner() {
   }, [plan.data?.itineraries]);
 
   const nearby = useNearbyStops(city.id, geo.pos, 700);
+  // layer toggles feed the mobility analytics (which layers people actually use)
+  const toggleTracked = (layer: string, set: (v: boolean) => void) => (v: boolean) => {
+    set(v);
+    track("layer_toggle", { layer, on: v });
+  };
 
   const locateFor = async (kind: "from" | "to" | "hub") => {
     setLocating(kind);
@@ -345,19 +376,7 @@ function Planner() {
             <EmptyState title={t.planner.noResults} hint={t.planner.noResultsHint} />
           ) : (
             <>
-              <div className="flex items-baseline justify-between">
-                <h2 className="text-sm font-semibold text-ink-2">{t.planner.results}</h2>
-                {plan.data?.router.realtime ? (
-                  <span className="inline-flex items-center gap-1.5 text-xs text-ink-3">
-                    <span className="live-dot" /> {t.planner.realtime}
-                  </span>
-                ) : null}
-              </div>
-              <SortChips value={sort} onChange={setSort} hasFares={!!city.fares} />
-              {itineraries.map((it) => {
-                const i = (plan.data?.itineraries ?? []).indexOf(it);
-                return <ItineraryCard key={it.id} index={i} itinerary={it} tz={city.timezone} selected={false} fares={city.fares} onSelect={() => commit({ ...urlState, selected: i })} />;
-              })}
+              <ResultsList itineraries={itineraries} all={plan.data?.itineraries ?? []} tz={city.timezone} fares={city.fares} realtime={!!plan.data?.router.realtime} onSelect={(i) => commit({ ...urlState, selected: i })} onRefresh={() => plan.refetch()} />
               {plan.data?.warnings.map((w) => (
                 <p key={w} className="text-xs text-ink-3">
                   {w}
@@ -400,13 +419,14 @@ function Planner() {
           {draft.from ? <PinMarker kind="from" lat={draft.from.lat} lon={draft.from.lon} /> : null}
           {draft.to ? <PinMarker kind="to" lat={draft.to.lat} lon={draft.to.lon} /> : null}
           {geo.pos ? <PinMarker kind="user" lat={geo.pos.lat} lon={geo.pos.lon} /> : null}
-          <MapControls city={city.id} live={showLive} setLive={setShowLive} pois={showPois} setPois={setShowPois} net={showNet} setNet={setShowNet} zonal={showZonal} setZonal={setShowZonal} bikes={showBikes} setBikes={setShowBikes} onLocate={() => locateFor("hub")} locating={locating === "hub"} />
+          <MapControls city={city.id} live={showLive} setLive={toggleTracked("live", setShowLive)} pois={showPois} setPois={toggleTracked("pois", setShowPois)} net={showNet} setNet={toggleTracked("network", setShowNet)} zonal={showZonal} setZonal={toggleTracked("zonal", setShowZonal)} bikes={showBikes} setBikes={toggleTracked("bikes", setShowBikes)} onLocate={() => locateFor("hub")} locating={locating === "hub"} />
           {bikeStation && !selected ? (
             <RentalStationCard
               city={city}
               station={bikeStation}
               onClose={() => setBikeStation(null)}
               onDirections={(st) => {
+                track("rental_station_view", { stationId: st.id, networkId: st.networkId });
                 setBikeStation(null);
                 planWithPlace({ lat: st.lat, lon: st.lon, name: st.name }, "to");
               }}

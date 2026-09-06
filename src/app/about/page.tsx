@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useI18n } from "@/lib/i18n/provider";
 import { Wordmark } from "@/components/shell/CityHeader";
 import { useCities } from "@/lib/api/hooks";
+import { AnalyticsSettings } from "@/components/settings/AnalyticsSettings";
 
 export default function About() {
   const { t } = useI18n();
@@ -38,6 +39,8 @@ export default function About() {
             </li>
           ))}
         </ul>
+
+        <AnalyticsSettings />
 
         <h2 className="mt-10 text-lg font-bold">{t.about.contribute}</h2>
         <p className="mt-2 text-sm text-ink-2">{t.about.contributeHint}</p>

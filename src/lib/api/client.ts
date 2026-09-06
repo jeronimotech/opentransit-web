@@ -4,6 +4,19 @@ import type {
   AdminHistoryResponse,
   AdminMe,
   AlertsResponse,
+  AnalyticsAccepted,
+  AnalyticsBatch,
+  AnalyticsDataset,
+  AnalyticsFunnelResponse,
+  AnalyticsHoursResponse,
+  AnalyticsModesResponse,
+  AnalyticsOdResponse,
+  AnalyticsPlacesResponse,
+  AnalyticsProvidersResponse,
+  AnalyticsRoutesResponse,
+  AnalyticsSearchesResponse,
+  AnalyticsStopsResponse,
+  AnalyticsSummary,
   ApiError,
   ApiErrorDetail,
   BoardResponse,
@@ -190,6 +203,14 @@ export const api = {
   health: (city: string) => request<CityHealth>(`${c(city)}/health`),
   /** v1.3 — white-label landing page content + live stats (404 LANDING_DISABLED when off). */
   landing: (city: string, init?: RequestInit) => request<LandingResponse>(`${c(city)}/landing`, undefined, init),
+  /** v1.5 — anonymous usage/mobility events, fire-and-forget (≤ 50 per batch). */
+  events: (city: string, batch: AnalyticsBatch) =>
+    request<AnalyticsAccepted>(`${c(city)}/events`, undefined, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(batch),
+      keepalive: true,
+    }),
 };
 
 /* ── Admin: token-authenticated operator endpoints ───────────────────────── */
@@ -213,6 +234,39 @@ export const adminApi = {
     request<AdminConfigResponse | null>(a(city), undefined, adminInit(token, "DELETE")),
   history: (token: string, city: string, limit = 20) =>
     request<AdminHistoryResponse>(`${a(city)}/history`, { limit }, adminInit(token)),
+};
+
+/* ── Admin analytics (v1.5): aggregated, k-anonymous reads ───────────────── */
+
+import { normalizeFunnel, normalizeHours, normalizeModes, normalizeOd, normalizePlaces, normalizeProviders, normalizeRoutes, normalizeSearches, normalizeStops, normalizeSummary } from "@/lib/analytics/normalize";
+
+const an = (city: string) => `/v1/admin/cities/${encodeURIComponent(city)}/analytics`;
+type Range = { from: string; to: string };
+
+export const analyticsApi = {
+  // every read goes through a normalizer: the server's dialect (camel/snake, kpis/totals) never reaches the UI
+  summary: (token: string, city: string, r: Range): Promise<AnalyticsSummary> => request<unknown>(`${an(city)}/summary`, r, adminInit(token)).then(normalizeSummary),
+  od: (token: string, city: string, r: Range, limit = 500): Promise<AnalyticsOdResponse> => request<unknown>(`${an(city)}/od`, { ...r, limit }, adminInit(token)).then(normalizeOd),
+  places: (token: string, city: string, r: Range, kind: "origin" | "destination" | "search"): Promise<AnalyticsPlacesResponse> =>
+    request<unknown>(`${an(city)}/places`, { ...r, kind }, adminInit(token)).then(normalizePlaces),
+  routes: (token: string, city: string, r: Range): Promise<AnalyticsRoutesResponse> => request<unknown>(`${an(city)}/routes`, r, adminInit(token)).then((x) => ({ routes: normalizeRoutes(x) })),
+  stops: (token: string, city: string, r: Range): Promise<AnalyticsStopsResponse> => request<unknown>(`${an(city)}/stops`, r, adminInit(token)).then((x) => ({ stops: normalizeStops(x) })),
+  modes: (token: string, city: string, r: Range): Promise<AnalyticsModesResponse> => request<unknown>(`${an(city)}/modes`, r, adminInit(token)).then((x) => ({ modes: normalizeModes(x) })),
+  searches: (token: string, city: string, r: Range): Promise<AnalyticsSearchesResponse> => request<unknown>(`${an(city)}/searches`, r, adminInit(token)).then(normalizeSearches),
+  providers: (token: string, city: string, r: Range): Promise<AnalyticsProvidersResponse> => request<unknown>(`${an(city)}/providers`, r, adminInit(token)).then(normalizeProviders),
+  funnel: (token: string, city: string, r: Range): Promise<AnalyticsFunnelResponse> => request<unknown>(`${an(city)}/funnel`, r, adminInit(token)).then(normalizeFunnel),
+  hours: (token: string, city: string, r: Range): Promise<AnalyticsHoursResponse> => request<unknown>(`${an(city)}/hours`, r, adminInit(token)).then(normalizeHours),
+  /** CSV download: a URL the browser fetches with the token header via `fetch` + blob (see the tab). */
+  exportPath: (city: string, dataset: AnalyticsDataset, r: Range) => `${an(city)}/export.csv${qs({ dataset, ...r })}`,
+  exportCsv: async (token: string, city: string, dataset: AnalyticsDataset, r: Range): Promise<string> => {
+    if (MOCK) {
+      const { mockRequest } = await import("@/mocks/handlers");
+      return mockRequest<string>(`${an(city)}/export.csv`, { dataset, ...r }, { method: "GET", body: null, headers: { "X-Admin-Token": token } });
+    }
+    const res = await fetch(`${API_URL}${analyticsApi.exportPath(city, dataset, r)}`, { headers: { "X-Admin-Token": token } });
+    if (!res.ok) throw new ApiRequestError(res.status, "HTTP_ERROR", `${res.status} ${res.statusText}`);
+    return res.text();
+  },
 };
 
 export const ALL_MODES: Mode[] = ["BUS", "CABLE_CAR", "RAIL", "SUBWAY", "TRAM", "BICYCLE"];

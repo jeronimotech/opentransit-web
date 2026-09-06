@@ -5,6 +5,7 @@ import { useI18n } from "@/lib/i18n/provider";
 import { fmtDistance, fmtDuration } from "@/lib/format";
 import { formatPriceRange, handoffHref, handoffPlatform, legLeadPrice, pricedProviders, providerById, providerFallback, requestLabel, tariffById, type HandoffPlatform } from "@/lib/ondemand";
 import { API_URL } from "@/lib/api/client";
+import { track } from "@/lib/analytics";
 import { Icon } from "@/components/ui/primitives";
 import type { City, Leg, LegOnDemandProvider } from "@/lib/api/types";
 
@@ -64,6 +65,7 @@ export function OnDemandLegBlock({ leg, city, open, onToggle }: { leg: Leg; city
           target="_blank"
           rel="noreferrer noopener"
           data-testid="ondemand-primary"
+          onClick={() => track("handoff", { providerId: primary.providerId, kind: od.kind, hadEstimate: !!primary.price })}
           aria-label={t.ondemand.requestWith(primary.name)}
           className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold shadow-sm"
           style={{ background: primary.color, color: ink(primary) }}

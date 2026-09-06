@@ -12,6 +12,7 @@ import { EmptyState, Icon, Spinner } from "@/components/ui/primitives";
 import { RouteChip } from "@/components/ui/RouteChip";
 import { ComponentIcon } from "@/components/ui/ComponentIcon";
 import { useI18n } from "@/lib/i18n/provider";
+import { track, useScreenView } from "@/lib/analytics";
 import { useGeocode, useNextBuses, useRoute, useStop } from "@/lib/api/hooks";
 import { bboxOf, decodeGeometry } from "@/lib/geo";
 import { routeChipColors } from "@/lib/route-color";
@@ -56,6 +57,11 @@ function Next() {
 
   const stop = useStop(city.id, stopId ?? "");
   const next = useNextBuses(city.id, stopId, routeId, cfg.vehiclePollSeconds * 1000);
+  useScreenView(city.id, "next");
+  useEffect(() => {
+    if (next.data && stopId && routeId) track("locate_query", { stopId, routeId, liveRows: next.data.next.filter((n) => n.source === "live").length, scheduledRows: next.data.next.filter((n) => n.source !== "live").length });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopId, routeId, next.data?.stop.id]);
   // the chosen route's patterns: the direction serving this stop is drawn strong, the other faint
   const route = useRoute(city.id, routeId ?? "");
   const [snap, setSnap] = useState<Snap>("half");
