@@ -169,6 +169,14 @@ Taxis and ride-hailing apps become options **inside the planner**, direct or as 
 
 Helpers live in `src/lib/ondemand.ts` (price ranges, hand-off platform, template validation/rendering, tariff calculator); screenshots via `pnpm screenshots:ondemand` (`SUFFIX=live-api STOP=bogota:2000 TOKEN=…` against a real API).
 
+## Citymapper-inspired UX and analytics (v1.5)
+
+**Lote 1 UX.** Result cards carry a "Sal en X min / Sal ahora / Ya salió" countdown (15-s clock; departed options sink and an "Actualizar" chip appears once two have left). Results are grouped by scenario — Más rápido · Menos caminata · Menos transbordos · Más barato · En bici · Taxi / app — one expanded card per section and the rest as one-line rows; sorting lives in a secondary "Ordenar" menu. In the itinerary detail every boarding step shows the next three departures of that route as chips (from `/stops/{id}/routes/{routeId}/next`); tapping one re-times the plan client-side ("Re-temporizado"). Stop rows follow the Citymapper layout (big right-aligned minutes with the live blip, "y en 13, 23 min"), empty states say why, and connectivity/feed freshness is a slim top bar (red offline, green when back, amber when the live feed is stale). Semantic colour tokens: `--live`, `--walk`, `--disruption`, `--severe`.
+
+**Analytics (first-party, privacy by design).** `src/lib/analytics/` queues events locally and posts batches to `POST /v1/cities/{city}/events` (every 30 s, at 20 events, or when the tab is hidden). Coordinates are rounded to 3 decimals before they are even queued, typed text is never sent (only selected stops/POIs), ids are random (per-tab session, 30-day rotating cohort) and the person can turn it off or wipe it under *Acerca de → Estadísticas anónimas* (default OFF under Do Not Track / Global Privacy Control). Every contract event is instrumented: app open, screen views, search selections, plan request/result, itinerary select, GO start/end, stop/board/route views, locate queries, hand-offs, rental station views, favorites, alerts, layer/mode toggles, errors.
+
+**Admin → Analítica.** Date range (7/30/90/custom), KPI tiles with deltas, an origins/destinations/searches cell heat map with the top O-D arcs (k ≥ 5 only), hour × weekday heatmap, modes, top routes/stops/searches/providers, funnel, platforms/versions, CSV export per dataset, and a table view for every chart. Charts are plain SVG following the data-viz method (fixed categorical order, one sequential hue, validated light/dark palette). Screenshots: `pnpm screenshots:lote1` → `docs/screenshots/lote1-*.png`, `analytics-*.png`.
+
 ## Admin (operators)
 
 `/admin` lets an operator change a city **without redeploying**: fares (the estimated fare every itinerary shows),

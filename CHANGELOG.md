@@ -2,6 +2,13 @@
 
 All notable changes to opentransit-web. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.0] - 2026-09-06
+### Added
+- Lote 1 (Citymapper-inspired UX): "Sal en X min / Sal ahora / Ya salió" countdown on result cards (15-s ticks, departed options sink, "Actualizar" chip), results grouped by scenario (Más rápido · Menos caminata · Menos transbordos · Más barato · En bici · Taxi / app) with a secondary "Ordenar" menu, live next-3 departure chips inside each boarding step that re-time the itinerary client-side ("Re-temporizado"), Citymapper-style stop rows (big right-aligned minutes with live blip, "y en 13, 23 min"), contextual empty states and a slim top offline/stale bar.
+- First-party analytics client (`src/lib/analytics/`): local queue, batched flushes, coarse coordinates (3 decimals) before enqueue, per-tab session id, 30-day rotating cohort id, opt-out (default OFF under Do Not Track / Global Privacy Control); every contract event instrumented; settings block with "Compartir estadísticas anónimas de uso" and "Borrar mis estadísticas".
+- Admin tab **Analítica**: date range, KPI tiles with deltas, origins/destinations/searches cell heat map with top O-D arcs (k ≥ 5), hour×weekday heatmap, modes, top routes/stops/searches/providers, funnel, platforms/versions, CSV export per dataset, table view for every chart.
+- Semantic colour tokens (live, walk, disruption, severe) and a validated data-viz palette (light + dark).
+
 ## [Unreleased]
 
 ## [1.4.0] — 2026-09-05 — Taxi and ride apps (on-demand)

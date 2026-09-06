@@ -1,6 +1,6 @@
 {
   "name": "opentransit-web",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -17,7 +17,8 @@
     "screenshots:admin": "node scripts/screenshots-admin.mjs",
     "screenshots:bike": "node scripts/screenshots-bike.mjs",
     "screenshots:landing": "node scripts/screenshots-landing.mjs",
-    "screenshots:ondemand": "node scripts/screenshots-ondemand.mjs"
+    "screenshots:ondemand": "node scripts/screenshots-ondemand.mjs",
+    "screenshots:lote1": "node scripts/screenshots-lote1.mjs"
   },
   "dependencies": {
     "@mapbox/polyline": "^1.2.1",
@@ -45,5 +46,5 @@
     "vitest": "^4.1.11"
   },
   "license": "MIT",
-  "description": "Open-source multimodal trip planner — web client"
+  "description": "Open-source multimodal trip planner \u2014 web client"
 }
