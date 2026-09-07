@@ -9,6 +9,7 @@ import { ItineraryLayer, LayersControl, LocateButton, NetworkLayer, PinMarker, P
 import { RentalStationCard } from "@/components/rental/RentalStationCard";
 import { PlannerForm } from "@/components/planner/PlannerForm";
 import { ResultsList } from "@/components/itinerary/ResultsList";
+import { DepartureForecast } from "@/components/planner/DepartureForecast";
 import { ItineraryDetail } from "@/components/itinerary/ItineraryDetail";
 import { Hub } from "@/components/hub/Hub";
 import { EmptyState, Icon, Spinner } from "@/components/ui/primitives";
@@ -157,6 +158,7 @@ function Planner() {
   const [showBikes, setShowBikes] = useState(true);
   const [bikeStation, setBikeStation] = useState<RentalStation | null>(null);
   const [liveCount, setLiveCount] = useState(0);
+  const [forecast, setForecast] = useState(false);
   const rentalModes = useMemo(() => rentalModesFor(bikeShareNetworks(city)), [city]);
   const geo = useGeolocation();
 
@@ -164,6 +166,7 @@ function Planner() {
   useEffect(() => {
     setDraft(urlState);
   }, [urlState]);
+  useEffect(() => setForecast(false), [urlState.from?.lat, urlState.from?.lon, urlState.to?.lat, urlState.to?.lon]);
 
   const commit = useCallback(
     (s: PlannerState, extra?: Record<string, string>) => {
@@ -262,6 +265,13 @@ function Planner() {
   };
 
   const openPlanner = () => commit(draft, { view: "plan" });
+  /** Lote 2 B1 — the commute card hands over a whole trip; plan it straight away. */
+  const planTrip = (patch: Partial<PlannerState>) => {
+    const next: PlannerState = { ...draft, ...patch, selected: null };
+    setDraft(next);
+    if (next.from && next.to) commit(next);
+    else commit(next, { view: "plan" });
+  };
   const planWithPlace = async (p: { lat: number; lon: number; name: string }, kind: "to" | "from") => {
     // "Ir a casa": destination is the place; origin is the device if we can get it
     const next: PlannerState = { ...draft, [kind]: p, selected: null };
@@ -286,7 +296,7 @@ function Planner() {
   const compColors = useMemo(() => Object.fromEntries(componentsOf(city).map((c) => [c.id, c.color])), [city]);
 
   const panel = showHub ? (
-    <Hub city={city} onPlan={openPlanner} onLocate={() => locateFor("hub")} pos={geo.pos} locating={locating === "hub"} onUsePlace={planWithPlace} expanded={snap !== "peek"} />
+    <Hub city={city} onPlan={openPlanner} onLocate={() => locateFor("hub")} pos={geo.pos} locating={locating === "hub"} onUsePlace={planWithPlace} onPlanTrip={planTrip} expanded={snap !== "peek"} />
   ) : (
     <div className="flex flex-col">
       {selected || stage === "results" ? (
@@ -376,7 +386,20 @@ function Planner() {
             <EmptyState title={t.planner.noResults} hint={t.planner.noResultsHint} />
           ) : (
             <>
-              <ResultsList itineraries={itineraries} all={plan.data?.itineraries ?? []} tz={city.timezone} fares={city.fares} realtime={!!plan.data?.router.realtime} onSelect={(i) => commit({ ...urlState, selected: i })} onRefresh={() => plan.refetch()} />
+              {forecast && urlState.from && urlState.to ? (
+                <DepartureForecast
+                  city={city}
+                  from={urlState.from}
+                  to={urlState.to}
+                  modes={planParams?.modes}
+                  onClose={() => setForecast(false)}
+                  onPick={(departAt) => {
+                    setForecast(false);
+                    commit({ ...urlState, time: departAt, arriveBy: false, selected: null });
+                  }}
+                />
+              ) : null}
+              <ResultsList itineraries={itineraries} all={plan.data?.itineraries ?? []} tz={city.timezone} fares={city.fares} realtime={!!plan.data?.router.realtime} onSelect={(i) => commit({ ...urlState, selected: i })} onRefresh={() => plan.refetch()} onForecast={() => setForecast((v) => !v)} />
               {plan.data?.warnings.map((w) => (
                 <p key={w} className="text-xs text-ink-3">
                   {w}

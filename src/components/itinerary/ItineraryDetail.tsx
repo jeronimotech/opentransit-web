@@ -16,6 +16,7 @@ import { FollowAlong } from "./FollowAlong";
 import { AlertCard } from "@/components/alerts/AlertCard";
 import { estimateFare } from "@/lib/fare";
 import { useFollowAlong } from "@/lib/follow";
+import { api } from "@/lib/api/client";
 import { resolveConfig } from "@/lib/city-config";
 import { serviceStatus } from "@/lib/service-window";
 import { RentalLegBlock } from "@/components/rental/RentalLegBlock";
@@ -57,6 +58,7 @@ export function ItineraryDetail({
   const tz = city.timezone;
   const cfg = resolveConfig(city);
   const [copied, setCopied] = useState(false);
+  const [sharing, setSharing] = useState<"idle" | "busy" | "done" | "error">("idle");
   const [following, setFollowing] = useState(false);
   const named = withEndpointNames(raw, endpoints?.from, endpoints?.to);
   // Citymapper: pick another departure at the boarding stop → the plan re-times itself (client-side)
@@ -70,6 +72,30 @@ export function ItineraryDetail({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [following]);
   const fare = estimateFare(itinerary, city.fares);
+
+  /**
+   * Lote 3 C6 — a public link that carries the live arrival, not just the plan.
+   * The write key stays in this tab (only this browser may update the progress).
+   */
+  const shareTrip = async () => {
+    setSharing("busy");
+    try {
+      const res = await api.shareCreate(city.id, { itinerary: itinerary as unknown, startedAt: new Date().toISOString(), label: `${itinerary.legs[0].from.name} → ${itinerary.legs[itinerary.legs.length - 1].to.name}` });
+      const url = res.url || `${window.location.origin}/${city.id}/eta/${res.token}`;
+      try {
+        sessionStorage.setItem(`opentransit.share.${res.token}`, res.writeKey ?? "");
+      } catch {
+        /* private mode: the link still works, it just cannot be updated from here */
+      }
+      if (navigator.share) await navigator.share({ title: "opentransit", url });
+      else await navigator.clipboard.writeText(url);
+      setSharing("done");
+      setTimeout(() => setSharing("idle"), 2200);
+    } catch {
+      setSharing("error");
+      setTimeout(() => setSharing("idle"), 2600);
+    }
+  };
 
   const share = async () => {
     const url = window.location.href;
@@ -91,10 +117,16 @@ export function ItineraryDetail({
         <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm font-semibold text-signal">
           <Icon.Back /> {t.planner.back}
         </button>
-        <Button size="sm" variant="ghost" onClick={share}>
-          <Icon.Share width={16} height={16} />
-          {copied ? t.planner.copied : t.planner.share}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button size="sm" variant="ghost" onClick={shareTrip} title={t.lote23.share.shareHint} data-testid="share-trip">
+            <Icon.Locate width={16} height={16} />
+            {sharing === "busy" ? t.lote23.share.creating : sharing === "done" ? t.lote23.share.copied : sharing === "error" ? t.lote23.share.failed : t.lote23.share.share}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={share}>
+            <Icon.Share width={16} height={16} />
+            {copied ? t.planner.copied : t.planner.share}
+          </Button>
+        </div>
       </div>
 
       <div>

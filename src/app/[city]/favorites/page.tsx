@@ -250,6 +250,14 @@ function RouteCard({ fav, city, onRemove }: { fav: FavRoute; city: string; onRem
           {cleanHeadsign(fav.longName)}
         </Link>
         {svc.label ? <p className={`text-xs ${svc.active ? "text-moss" : "font-semibold text-brick"}`}>{svc.label}</p> : null}
+        {/* Lote 2 B3 (web half): a saved route says so when it is disrupted. */}
+        {route.data?.alerts?.length ? (
+          <p className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-disruption" data-testid="fav-route-alert">
+            <Icon.Alert width={12} height={12} />
+            <span className="truncate">{route.data.alerts[0].header}</span>
+            {route.data.alerts.length > 1 ? <span className="shrink-0 text-ink-3">+{route.data.alerts.length - 1}</span> : null}
+          </p>
+        ) : null}
       </div>
       <button type="button" onClick={onRemove} className="shrink-0 text-xs font-semibold text-ink-3 hover:text-brick">
         {t.favorites.remove}

@@ -12,6 +12,8 @@ import { ComponentIcon } from "@/components/ui/ComponentIcon";
 import { RouteChip } from "@/components/ui/RouteChip";
 import { StatusText } from "@/components/ui/FreshnessBadge";
 import { AlertCarousel } from "./AlertCarousel";
+import { CommuteCard } from "./CommuteCard";
+import type { PlannerState } from "@/lib/planner-params";
 import type { City, NearbyRentalStation, NearbyStop } from "@/lib/api/types";
 
 /**
@@ -26,6 +28,7 @@ export function Hub({
   pos,
   locating,
   onUsePlace,
+  onPlanTrip,
   expanded,
   showSearch = true,
 }: {
@@ -35,6 +38,8 @@ export function Hub({
   pos: { lat: number; lon: number } | null;
   locating: boolean;
   onUsePlace: (p: { lat: number; lon: number; name: string }, kind: "to" | "from") => void;
+  /** Lote 2 B1 — the commute card opens a whole trip at once. */
+  onPlanTrip: (s: Partial<PlannerState>) => void;
   expanded: boolean;
   /** Desktop renders the search pill inside the panel; phones float it over the map. */
   showSearch?: boolean;
@@ -127,6 +132,8 @@ export function Hub({
 
       {expanded ? (
         <>
+          <CommuteCard city={city} pos={pos} onOpen={onPlanTrip} />
+
           {home || work ? (
             <div className="flex gap-2">
               {home ? (

@@ -19,7 +19,7 @@ const SCENARIO_ICON: Record<Scenario, keyof typeof Icon> = { fastest: "Route", l
  * drives the "Sal en X min" countdown; departed options sink to the bottom of their
  * section and, once two or more have left, an "Actualizar" chip offers a re-plan.
  */
-export function ResultsList({ itineraries, all, tz, fares, realtime, onSelect, onRefresh }: { itineraries: Itinerary[]; all: Itinerary[]; tz: string; fares?: CityFares | null; realtime: boolean; onSelect: (index: number) => void; onRefresh: () => void }) {
+export function ResultsList({ itineraries, all, tz, fares, realtime, onSelect, onRefresh, onForecast }: { itineraries: Itinerary[]; all: Itinerary[]; tz: string; fares?: CityFares | null; realtime: boolean; onSelect: (index: number) => void; onRefresh: () => void; onForecast?: () => void }) {
   const { t } = useI18n();
   const now = useNow(15_000);
   const [sort, setSort] = useState<SortKey>("default");
@@ -45,6 +45,11 @@ export function ResultsList({ itineraries, all, tz, fares, realtime, onSelect, o
             <span className="inline-flex items-center gap-1.5 text-xs text-ink-3">
               <span className="live-dot" /> {t.planner.realtime}
             </span>
+          ) : null}
+          {onForecast ? (
+            <button type="button" onClick={onForecast} data-testid="forecast-open" className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line px-2.5 text-xs font-semibold text-ink-2 hover:border-ink hover:text-ink">
+              <Icon.Clock width={13} height={13} /> {t.lote23.forecast.open}
+            </button>
           ) : null}
           <SortMenu value={sort} onChange={setSort} hasFares={!!fares} />
         </div>
