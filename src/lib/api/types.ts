@@ -891,3 +891,61 @@ export type AnalyticsDataset = "od" | "routes" | "stops" | "modes" | "searches" 
 
 /** `config.analytics` (admin-editable). */
 export type AnalyticsConfig = { enabled: boolean; retentionDays: number; kThreshold: number };
+
+/* ── v1.7 — departure forecast ("Cuándo salir") ───────────────────────────── */
+
+export type ForecastOption = {
+  departAt: string;
+  arriveAt: string;
+  durationSeconds: number;
+  transfers: number;
+  walkMeters: number;
+  modesUsed: string[];
+  routeIds: string[];
+  fare: Fare | null;
+  realtime: boolean;
+  recommended: boolean;
+  /** Seconds until the next option after this one; > 20 min is called out as a gap. */
+  gapAfterSeconds: number | null;
+};
+
+export type ForecastNoteKind = "long_gap" | "last_service" | "service_ends";
+/** The API spells the timestamp `at`; an early draft used `atrs`, so both are accepted. */
+export type ForecastNote = { kind: ForecastNoteKind; at?: string | null; atrs?: string | null; text: string };
+
+export type ForecastResponse = {
+  from: Place;
+  to: Place;
+  generatedAt: string;
+  options: ForecastOption[];
+  notes: ForecastNote[];
+};
+
+/* ── v1.7 — shared ETA (a live trip on a public link) ─────────────────────── */
+
+export type ShareState = "on_time" | "delayed" | "arrived" | "cancelled";
+
+export type ShareProgress = {
+  legIndex: number;
+  atStopId?: string | null;
+  lat?: number | null;
+  lon?: number | null;
+  etaAt: string;
+  state: ShareState;
+};
+
+/** POST answer: `writeKey` is returned once and only the creator keeps it. */
+export type ShareCreated = { token: string; url: string; expiresAt: string; writeKey?: string | null };
+
+/** The city fields the public page needs; the API may send the whole City. */
+export type SharedEtaCity = Pick<City, "id" | "name" | "timezone"> &
+  Partial<Pick<City, "center" | "branding" | "attribution" | "defaultZoom" | "locale">>;
+
+export type SharedEta = {
+  label: string | null;
+  itinerary: Itinerary;
+  progress: ShareProgress | null;
+  updatedAt: string;
+  expiresAt: string;
+  city: SharedEtaCity;
+};

@@ -23,6 +23,7 @@ import type {
   City,
   CityHealth,
   DeparturesResponse,
+  ForecastResponse,
   GeocodeResponse,
   Healthz,
   LandingResponse,
@@ -40,6 +41,9 @@ import type {
   RentalStationDetail,
   RentalStationsResponse,
   ReverseResponse,
+  ShareCreated,
+  SharedEta,
+  ShareProgress,
   RouteDetail,
   RoutesResponse,
   StopDetail,
@@ -132,6 +136,44 @@ export const api = {
       fromName: p.fromName,
       toName: p.toName,
       onDemand: p.onDemand || undefined,
+    }),
+
+  /** v1.7 — "Cuándo salir": the same trip planned across a window, one row per departure. */
+  planForecast: (
+    city: string,
+    p: { fromLat: number; fromLon: number; toLat: number; toLon: number; modes?: Mode[]; windowMinutes?: number; maxOptions?: number; arriveBy?: boolean; locale?: "es" | "en" },
+  ) =>
+    request<ForecastResponse>(`${c(city)}/plan/forecast`, {
+      fromLat: p.fromLat,
+      fromLon: p.fromLon,
+      toLat: p.toLat,
+      toLon: p.toLon,
+      modes: p.modes?.join(","),
+      windowMinutes: p.windowMinutes ?? 90,
+      maxOptions: p.maxOptions ?? 8,
+      arriveBy: p.arriveBy || undefined,
+      locale: p.locale,
+    }),
+
+  /** v1.7 — shared ETA. `writeKey` comes back once; only its holder may patch or revoke. */
+  shareCreate: (city: string, body: { itinerary: unknown; startedAt: string; label?: string }) =>
+    request<ShareCreated>(`${c(city)}/share/eta`, undefined, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  shareRead: (city: string, token: string) =>
+    request<SharedEta>(`${c(city)}/share/eta/${encodeURIComponent(token)}`, undefined, { cache: "no-store" }),
+  shareProgress: (city: string, token: string, writeKey: string, progress: ShareProgress) =>
+    request<SharedEta>(`${c(city)}/share/eta/${encodeURIComponent(token)}`, undefined, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "X-Share-Key": writeKey },
+      body: JSON.stringify({ progress }),
+    }),
+  shareRevoke: (city: string, token: string, writeKey: string) =>
+    request<null>(`${c(city)}/share/eta/${encodeURIComponent(token)}`, undefined, {
+      method: "DELETE",
+      headers: { "X-Share-Key": writeKey },
     }),
 
   geocode: (city: string, q: string, near?: { lat: number; lon: number }, limit = 8) =>

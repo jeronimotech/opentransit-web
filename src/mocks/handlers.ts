@@ -8,12 +8,15 @@ import type {
   BoardResponse,
   Departure,
   Freshness,
+  ForecastOption,
+  ForecastResponse,
   GeocodeResult,
   NearbyRentalStation,
   NextResponse,
   OnDemandEstimateResponse,
   OnDemandHandoffResponse,
   Place,
+  ShareProgress,
   RentalNetworkInfo,
   RentalStationDetail,
   StopDetail,
@@ -222,6 +225,91 @@ export async function mockRequest<T>(path: string, q: Q, init: Init = { method: 
       warnings: [],
     } as T;
   }
+  /** v1.7 — "Cuándo salir": the same trip planned across the window, one row per departure. */
+  if (p === "/plan/forecast") {
+    await delay(420);
+    const from = placeFor(num(q, "fromLat"), num(q, "fromLon"));
+    const to = placeFor(num(q, "toLat"), num(q, "toLon"));
+    const win = num(q, "windowMinutes", 90);
+    const maxOptions = num(q, "maxOptions", 8);
+    const base = new Date();
+    const options: ForecastOption[] = [];
+    const seen = new Set<string>();
+    // walk the window in 11-minute steps, keep the first itinerary of each plan
+    for (let m = 2; m < win && options.length < maxOptions; m += 11) {
+      const at = new Date(base.getTime() + m * 60_000);
+      const it = buildItineraries(from, to, at, false)[0];
+      if (!it) continue;
+      const sig = it.legs.map((l) => `${l.route?.id ?? l.mode}@${l.startTime}`).join("|");
+      if (seen.has(sig)) continue;
+      seen.add(sig);
+      options.push({
+        departAt: it.startTime,
+        arriveAt: it.endTime,
+        durationSeconds: it.durationSeconds,
+        transfers: it.transfers,
+        walkMeters: Math.round(it.walkDistanceMeters),
+        modesUsed: it.modesUsed ?? [],
+        routeIds: it.legs.map((l) => l.route?.id).filter((x): x is string => !!x),
+        fare: it.fare,
+        realtime: it.legs.some((l) => l.realtime),
+        recommended: false,
+        gapAfterSeconds: null,
+      });
+    }
+    options.sort((a, b) => Date.parse(a.departAt) - Date.parse(b.departAt));
+    // a believable service gap before the last option, so the panel shows the callout
+    if (options.length >= 3) {
+      const gapAt = options.length - 2;
+      const push = 26 * 60_000;
+      for (let i = gapAt + 1; i < options.length; i++) {
+        options[i] = { ...options[i], departAt: iso(new Date(Date.parse(options[i].departAt) + push)), arriveAt: iso(new Date(Date.parse(options[i].arriveAt) + push)) };
+      }
+    }
+    for (let i = 0; i < options.length - 1; i++) {
+      options[i].gapAfterSeconds = Math.round((Date.parse(options[i + 1].departAt) - Date.parse(options[i].departAt)) / 1000);
+    }
+    // recommend the earliest arrival
+    let best = 0;
+    options.forEach((o, i) => {
+      if (Date.parse(o.arriveAt) < Date.parse(options[best].arriveAt)) best = i;
+    });
+    if (options[best]) options[best].recommended = true;
+    const last = options[options.length - 1];
+    const gapRow = options.find((o) => (o.gapAfterSeconds ?? 0) >= 20 * 60);
+    const notes: ForecastResponse["notes"] = [
+      ...(gapRow ? [{ kind: "long_gap" as const, at: gapRow.departAt, text: "Intervalo largo entre salidas" }] : []),
+      ...(last ? [{ kind: "last_service" as const, at: last.departAt, text: "Última salida en esta ventana" }] : []),
+    ];
+    return { from, to, generatedAt: iso(new Date()), options, notes } as T;
+  }
+
+  /** v1.7 — shared ETA: create, read, patch progress, revoke. */
+  if (p === "/share/eta" && init.method === "POST") {
+    const { shareCreate } = await import("./share");
+    const body = init.body ? JSON.parse(init.body) : {};
+    return shareCreate(cityId ?? "bogota", body) as T;
+  }
+  {
+    const sm = p.match(/^\/share\/eta\/([^/]+)$/);
+    if (sm) {
+      const tok = decodeURIComponent(sm[1]);
+      const demo = () => {
+        const from = placeFor(4.6845, -74.053);
+        const to = placeFor(4.5978, -74.1616);
+        return buildItineraries(from, to, new Date(Date.now() - 12 * 60_000), false)[0];
+      };
+      const { shareRead, sharePatch, shareRevoke } = await import("./share");
+      const key = init.headers["X-Share-Key"] ?? init.headers["x-share-key"] ?? "";
+      if (init.method === "PATCH") {
+        const body = init.body ? (JSON.parse(init.body) as { progress: ShareProgress }) : { progress: null as unknown as ShareProgress };
+        return sharePatch(tok, key, body.progress, demo) as T;
+      }
+      if (init.method === "DELETE") return shareRevoke(tok, key) as T;
+      return shareRead(tok, demo) as T;
+    }
+  }
+
   if (p === "/geocode") {
     const near = q.lat != null && q.lon != null && q.lat !== "" ? { lat: num(q, "lat"), lon: num(q, "lon") } : undefined;
     return { results: geocode(str(q, "q"), num(q, "limit", 8), near) } as T;

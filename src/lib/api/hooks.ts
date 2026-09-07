@@ -2,7 +2,7 @@
 
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { ApiRequestError, api } from "./client";
-import type { Departure, NearbyRentalStation, PlanParams } from "./types";
+import type { Departure, Mode, NearbyRentalStation, PlanParams } from "./types";
 
 const HOUR = 60 * 60 * 1000;
 
@@ -253,5 +253,41 @@ export function useHealth(city: string, enabled = true, refreshMs = 60_000) {
     refetchInterval: refreshMs,
     retry: retryPolicy,
     staleTime: 30_000,
+  });
+}
+
+/* ── v1.7 — departure forecast and shared ETA ─────────────────────────────── */
+
+/**
+ * "Cuándo salir": the same trip planned across the next window. Only fetched when
+ * the panel is open — it costs the API several plans. A 404 means the API predates
+ * v1.7, and the caller shows the feature as unavailable instead of an error.
+ */
+export function useForecast(
+  city: string,
+  p: { fromLat: number; fromLon: number; toLat: number; toLon: number; modes?: Mode[]; windowMinutes?: number; locale?: "es" | "en" } | null,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: ["forecast", city, p],
+    queryFn: () => api.planForecast(city, p!),
+    enabled: enabled && !!p,
+    staleTime: 60_000,
+    retry: retryPolicy,
+  });
+}
+
+/** A shared trip, refreshed while it is still running (the API answers `no-store`). */
+export function useSharedEta(city: string, token: string, refreshMs = 20_000) {
+  return useQuery({
+    queryKey: ["share", city, token],
+    queryFn: () => api.shareRead(city, token),
+    refetchInterval: (q) => {
+      const st = q.state.data?.progress?.state;
+      if (q.state.error || st === "arrived" || st === "cancelled") return false;
+      return refreshMs;
+    },
+    retry: retryPolicy,
+    staleTime: 5_000,
   });
 }
