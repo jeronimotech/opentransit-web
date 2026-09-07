@@ -267,6 +267,11 @@ Screenshots: `docs/screenshots/assistant-*`, mock and `-live-api`. `pnpm screens
 
 ## Admin (operators)
 
+An override is a **patch, not a replacement**: the panel merges it onto the YAML exactly as the
+server does, so a field the patch omits (or carries as null, which is what the endpoint writes
+for a masked secret) is inherited rather than blank. Reading a patch as a whole section is what
+made the Asistente tab refuse to save a city whose key lives in an environment variable.
+
 `/admin` lets an operator change a city **without redeploying**: fares (the estimated fare every itinerary shows),
 remote config (polling cadence, visible modules, minimum app version, maintenance mode), agency links, the service
 tiles on the home screen and the primary colour. It is not linked from the public navigation.

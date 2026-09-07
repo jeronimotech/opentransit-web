@@ -68,10 +68,46 @@ export function fieldOverridden<K extends AdminSection>(
   return path in o && !deepEqual(o[path], y[path]);
 }
 
-/** Effective section value = override when present, else YAML. */
+const isObject = (v: Json): v is Record<string, Json> => !!v && typeof v === "object" && !Array.isArray(v);
+
+/**
+ * The merge the server applies to an override (`deep_merge` in
+ * `admin_config.py`): nested objects merge key by key, lists and scalars
+ * replace, and a key the patch does not carry is inherited from the YAML.
+ *
+ * The panel has to compute this, not take the override wholesale. An override
+ * is a *patch*: Bogotá's is `{config: {assistant: {enabled: true}}}`, meaning
+ * "turn it on, and keep everything else from the YAML". Read as if it were the
+ * whole section it looks like a city with no fares, no features and an
+ * assistant with no key, and the form then refuses to save a configuration
+ * that is in fact valid and already running.
+ *
+ * `null` inherits rather than deletes, and that is deliberate: the admin
+ * endpoint masks secrets on the way out and writes `config.assistant.apiKey`
+ * as null when the key it is masking is not the panel's to see. Treating that
+ * as a deletion would put the operator right back in front of "the assistant is
+ * on and has no key".
+ */
+export function deepMerge<T>(base: T, patch: Json): T {
+  if (!isObject(patch)) return (patch === undefined || patch === null ? base : (patch as T));
+  const out: Record<string, Json> = isObject(base as Json) ? { ...(base as Record<string, Json>) } : {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === null || v === undefined) continue; // inherit
+    else if (isObject(v) && isObject(out[k])) out[k] = deepMerge(out[k], v);
+    else out[k] = v;
+  }
+  return out as T;
+}
+
+/**
+ * What this section will actually be once the override is applied: the YAML
+ * with the patch merged on top. A field the patch does not mention, or sets to
+ * null, is inherited — it is not an empty field, and it is not an invalid one.
+ */
 export function effectiveSection<K extends AdminSection>(override: AdminOverride | null | undefined, yaml: AdminEditable, section: K): AdminEditable[K] {
-  const o = override?.[section];
-  return (o !== undefined && o !== null ? o : yaml[section]) as AdminEditable[K];
+  const o = override?.[section] as Json;
+  if (o === undefined || o === null) return yaml[section] as AdminEditable[K];
+  return deepMerge(yaml[section], o) as AdminEditable[K];
 }
 
 const SECTIONS: AdminSection[] = ["fares", "config", "links", "services", "branding", "mobility", "landing"];

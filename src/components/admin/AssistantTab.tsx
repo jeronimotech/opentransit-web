@@ -6,6 +6,7 @@ import { Badge, Button, Icon, Spinner, inputCls } from "@/components/ui/primitiv
 import { assistantHealth, streamChat } from "@/lib/assistant/client";
 import { DEFAULT_ASSISTANT, PROVIDERS, PROVIDER_DEFAULT_MODEL, PROVIDER_NAMES, assistantPayload, chatSessionId, isMaskedKey, keyIsNew, spentToday } from "@/lib/assistant";
 import { validateAssistant, type Errors } from "@/lib/admin/validate";
+import { effectiveSection } from "@/lib/admin/diff";
 import { Control, NumberInput, SaveBar, SectionCard, TextInput, Toggle, saveErrorsFrom, useSectionDraft, type SaveState } from "./form";
 import { useSaveConfig } from "./useAdmin";
 import type { AdminConfigResponse, AssistantConfig, AssistantHealth, AssistantProvider, CityConfig } from "@/lib/api/types";
@@ -32,7 +33,9 @@ export function AssistantTab({ token, city, data }: { token: string; city: strin
   const [serverErrors, setServerErrors] = useState<Errors>({});
   const [probe, setProbe] = useState<Probe>({ status: "idle" });
 
-  const stored = ((data.override?.config ?? data.yaml.config)?.assistant ?? null) as AssistantConfig | null;
+  // What the city runs today, patch merged onto the YAML — not the patch alone,
+  // whose `apiKey: null` means "keep the YAML key", never "there is no key".
+  const stored = ((effectiveSection(data.override, data.yaml, "config") as CityConfig | null)?.assistant ?? null) as AssistantConfig | null;
   const a: AssistantConfig = { ...DEFAULT_ASSISTANT, ...((draft?.assistant as AssistantConfig | null) ?? {}) };
   const errors: Errors = { ...validateAssistant(a, t.admin.errors), ...serverErrors };
   const set = (patch: Partial<AssistantConfig>) => {

@@ -2,6 +2,18 @@
 
 All notable changes to opentransit-web. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.9.2] - 2026-09-07
+### Fixed
+- **The admin panel validated the override instead of the configuration it produces, and blocked the operator.** An override is a patch: Bogotá's is `{config: {assistant: {enabled: true}}}`, meaning "turn the assistant on and keep everything else from the YAML". The panel read it as if it were the whole section, so the Asistente tab showed a city with no provider and no key, refused to save with "Corrige los campos marcados antes de guardar", and would have written those blanks over the YAML on the next save. `effectiveSection` now merges the patch onto the YAML the way the server does (`deep_merge` in `admin_config.py`): nested objects merge key by key, lists and scalars replace, and a field the patch omits — or carries as null, which is what the admin endpoint writes for a masked secret — is inherited. The fix is in the shared draft layer, so every tab gets it; a test per tab pins a partial override that used to fail.
+- The Asistente tab read the stored key from the raw override too, so `keyIsNew` compared against nothing.
+
+### Changed
+- The live screenshot run blanks the API key field before capturing the admin tab. The panel's mask keeps the key's last characters on purpose, which is right in front of an operator and wrong in a PNG that ships in a public repo.
+
+### Notes
+- Verified against the live API: the Asistente tab for Bogotá opens with DeepSeek and the masked key, saves a limit change twice without touching the key, and the assistant keeps answering with `hasKey: true` afterwards.
+- The cross-repo contract tests now pin the expected kinds and health fields and assert them on every run; the comparison against `opentransit-api`'s source is a second test that skips when the neighbouring repo is absent, so a clone of this repo alone — and CI — stays green.
+
 ## [1.9.1] - 2026-09-07
 ### Fixed
 - **The assistant rendered most answers as bare prose.** `ChatCard` switched on `alerts, board, fare, itinerary, next, route, stop`, while the API emits `alerts, bikeStations, board, fares, itineraries, next, place, routes, stops, vehicles`. Seven of the ten kinds fell through, so a trip, a fare, a route, a stop, a place, a vehicle or a bike station arrived with no card at all. Every kind now renders with the screen's own component and links into the real screen; the singular spellings an older server used are still accepted. The `itineraries` payload is read as `{from, to, itineraries}` (it was read as a single itinerary), and a plan with more than two options offers "N opciones más".

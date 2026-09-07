@@ -140,6 +140,16 @@ try {
   await ap.goto(`${BASE}/admin/${CITY}#assistant`);
   await ap.waitForSelector('[id="config.assistant.provider"]', { timeout: 20_000 }).catch(() => console.warn("assistant tab did not render"));
   await ap.waitForTimeout(500);
+  // The panel's mask keeps the key's last characters so an operator can tell
+  // which key is stored. That is right in a browser and wrong in a PNG that
+  // ships in a public repo, so blank the field for the camera only — through
+  // the DOM, which leaves the form's own state (and its dirty flag) alone.
+  await ap
+    .evaluate(() => {
+      const el = document.getElementById("config.assistant.apiKey");
+      if (el instanceof HTMLInputElement && el.value) el.value = "••••••••";
+    })
+    .catch(() => {});
   await ap.screenshot({ path: file("admin", null) });
 
   // the "Probar" button: one fixed question, its answer and its cost

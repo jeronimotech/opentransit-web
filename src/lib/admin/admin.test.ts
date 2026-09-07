@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { fareForTransfers, farePreview } from "./fare-preview";
-import { EN_MESSAGES, errorsFromDetails, isHttpsUrl, validateConfig, validateFares, validateLinks, validateMobility, validateServices } from "./validate";
+import { EN_MESSAGES, errorsFromDetails, isHttpsUrl, validateConfig, validateFares, validateLinks, validateMobility, validateSection, validateServices } from "./validate";
 import { changedKeys, effectiveChanges, effectiveSection, fieldOverridden, flatten, sectionOverridden } from "./diff";
-import type { AdminEditable, CityFares } from "../api/types";
+import type { AdminEditable, AdminOverride, AssistantConfig, CityConfig, CityFares, CityLanding, CityLinks, CityMobility } from "../api/types";
 
 const bogota: CityFares = { currency: "COP", base: 3200, transfer: 0, transferWindowMinutes: 110, maxTransfers: 2, note: null, estimated: true };
 
@@ -106,5 +106,132 @@ describe("overrides and history diff", () => {
   });
   it("flattens arrays with indexes", () => {
     expect(flatten({ services: [{ id: "a" }] })).toEqual({ "services.0.id": "a" });
+  });
+});
+
+/* ── a partial override is a patch, not a whole section ──────────────────── */
+
+describe("partial overrides", () => {
+  // What a real city looks like: the YAML holds everything, the override holds
+  // only what an operator changed. Bogotá's is literally
+  // {config: {assistant: {enabled: true, apiKey: null}}}.
+  const yamlFull: AdminEditable = {
+    fares: bogota,
+    config: {
+      vehiclePollSeconds: 15,
+      departuresRefreshSeconds: 30,
+      features: { liveVehicles: true, board: true, bike: true },
+      minAppVersion: { ios: "1.4.0", android: "1.4.0" },
+      maintenance: { active: false, message: null },
+      assistant: {
+        enabled: false,
+        provider: "deepseek",
+        model: null,
+        apiKey: "••••1a2b", // masked: the real one lives in the environment
+        baseUrl: null,
+        maxRepliesPerSession: 30,
+        maxToolCallsPerReply: 6,
+        dailyBudgetUsd: 5,
+        rateLimitPerMinute: 6,
+        systemExtra: null,
+        logConversations: false,
+      },
+    },
+    links: { pqrs: "https://pqrs.example", recharge: "https://recarga.example" },
+    services: [{ id: "recharge", label: "Recargar", url: "https://recarga.example", icon: null }],
+    branding: { primaryColor: "#D32F2F" },
+    mobility: {
+      bikeShare: [{ id: "tembici", name: "Tembici", network: "tembici_bogota", gbfsUrl: "https://gbfs.example/gbfs.json", color: "#00A66C", formFactors: ["bicycle"] }],
+    },
+    landing: {
+      enabled: true,
+      slug: "bogota",
+      locale: "es",
+      theme: { primaryColor: "#D32F2F", accentColor: null, logoUrl: null, heroImageUrl: null, darkHero: false },
+      hero: { title: "Muévete por Bogotá", subtitle: null, ctaPrimary: null, ctaSecondary: null },
+      apps: { ios: null, android: null, web: null },
+      highlights: [],
+      screenshots: [],
+      stats: { show: false, items: [] },
+      partners: [],
+      openData: { show: false, links: [] },
+      faq: [],
+      contact: { email: null, url: null, social: { x: null, instagram: null, github: null } },
+      footer: { legalName: null, privacyUrl: null, termsUrl: null, attribution: null },
+    },
+  } as unknown as AdminEditable;
+
+  const eff = <K extends keyof AdminEditable>(override: AdminOverride, section: K) => effectiveSection(override, yamlFull, section);
+  const errorsFor = <K extends keyof AdminEditable>(override: AdminOverride, section: K) => validateSection(section, eff(override, section), EN_MESSAGES);
+
+  it("Asistente: `apiKey: null` means «keep the YAML key», not «there is no key»", () => {
+    // The override that blocked the operator: the tab refused to save because it
+    // validated the patch, where the assistant is on and the key is missing.
+    const override = { config: { assistant: { enabled: true, apiKey: null } } } as unknown as AdminOverride;
+    const config = eff(override, "config") as CityConfig;
+    const assistant = config.assistant as AssistantConfig;
+    expect(assistant.enabled).toBe(true); // the patch applied
+    expect(assistant.apiKey).toBe("••••1a2b"); // inherited, so the city still has a key
+    expect(assistant.provider).toBe("deepseek"); // and everything the patch is silent about
+    expect(config.vehiclePollSeconds).toBe(15);
+    expect(errorsFor(override, "config")).toEqual({});
+  });
+
+  it("Configuración: a patch that touches one number keeps the rest of the section", () => {
+    const override = { config: { vehiclePollSeconds: 20 } } as unknown as AdminOverride;
+    const config = eff(override, "config") as CityConfig;
+    expect(config.vehiclePollSeconds).toBe(20);
+    expect(config.departuresRefreshSeconds).toBe(30);
+    expect(config.minAppVersion?.ios).toBe("1.4.0"); // a semver the patch never mentions
+    expect(errorsFor(override, "config")).toEqual({});
+  });
+
+  it("Tarifas: a patch with only the base keeps the currency and the window", () => {
+    const override = { fares: { base: 3400 } } as unknown as AdminOverride;
+    const fares = eff(override, "fares") as CityFares;
+    expect(fares.base).toBe(3400);
+    expect(fares.currency).toBe("COP");
+    expect(fares.transferWindowMinutes).toBe(110);
+    expect(errorsFor(override, "fares")).toEqual({});
+  });
+
+  it("Movilidad: a patch that adds a tariff keeps the bike networks", () => {
+    const override = {
+      mobility: {
+        taxiTariffs: [{ id: "taxi", name: "Taxi", currency: "COP", flagFall: 3500, unitMeters: 100, unitPrice: 120, unitSeconds: 0, minimumFare: 5000 }],
+      },
+    } as unknown as AdminOverride;
+    const mobility = eff(override, "mobility") as CityMobility;
+    expect(mobility.taxiTariffs?.length).toBe(1);
+    expect(mobility.bikeShare?.[0]?.id).toBe("tembici"); // not wiped by a patch about taxis
+    expect(errorsFor(override, "mobility")).toEqual({});
+  });
+
+  it("Página: a patch that changes the hero keeps the rest of the landing", () => {
+    const override = { landing: { hero: { title: "Bogotá se mueve" } } } as unknown as AdminOverride;
+    const landing = eff(override, "landing") as CityLanding;
+    expect(landing.hero.title).toBe("Bogotá se mueve");
+    expect(landing.slug).toBe("bogota"); // a slug the patch never mentions
+    expect(landing.theme.primaryColor).toBe("#D32F2F");
+    expect(errorsFor(override, "landing")).toEqual({});
+  });
+
+  it("Enlaces: a patch about one link does not drop the others", () => {
+    const override = { links: { pqrs: "https://nuevo.example" } } as unknown as AdminOverride;
+    const links = eff(override, "links") as CityLinks;
+    expect(links.pqrs).toBe("https://nuevo.example");
+    expect(links.recharge).toBe("https://recarga.example");
+  });
+
+  it("lists replace and null deletes, exactly as the server merges", () => {
+    // A list is a value, not a thing to merge: the server replaces it wholesale.
+    const replaced = eff({ services: [] } as unknown as AdminOverride, "services");
+    expect(replaced).toEqual([]);
+    // null inherits: the admin endpoint writes null for a secret it masked away,
+    // so reading it as "delete this field" would break the very case this fixes
+    const cleared = eff({ fares: { note: null } } as unknown as AdminOverride, "fares") as CityFares;
+    expect(cleared.note).toBe(bogota.note);
+    // and a section the override does not mention comes straight from the YAML
+    expect(eff({} as AdminOverride, "branding")).toEqual({ primaryColor: "#D32F2F" });
   });
 });
