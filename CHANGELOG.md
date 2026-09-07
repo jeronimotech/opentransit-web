@@ -2,6 +2,15 @@
 
 All notable changes to opentransit-web. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.8.0] - 2026-09-07
+### Added
+- **"Cerca de mí"** mode on `/{city}/live` (`?near=me`): follow-me camera that yields to any manual pan or zoom and offers "Volver a mi ubicación"; 300 m / 600 m / 1 km radius drawn as a soft circle and remembered per city with the component filter; nearby buses listed by distance with an approaching/away arrow derived from bearing (omitted when the feed carries none); tapping a row highlights that bus and opens its detail; empty state with a one-tap widen; a denied-geolocation path that lets you pick a point on the map.
+- The vehicle stream accepts server-side filters and can pause while the tab is hidden: the mode subscribes to the bbox enclosing the radius, so a radius change re-subscribes instead of filtering a city-wide firehose, and leaving the page or backgrounding the tab closes the connection.
+
+### Fixed
+- The bbox grid used for that subscription derived its longitude step from the *unsnapped* latitude, so the grid slid as a user walked north and every GPS fix opened a new subscription. The longitude grid now hangs off the snapped latitude.
+- Distances under 5 m rendered as "a 0 m", which reads as broken rather than as "it is right here"; they now say "a menos de 10 m".
+
 ## [1.7.0] - 2026-09-06
 ### Added
 - **Casa ⇄ Trabajo card** on the home sheet: next viable departure with countdown, route chips and arrival; direction inferred from the city clock and invertible; "Ruta con desvío · Replanear" when an active alert touches the plan.

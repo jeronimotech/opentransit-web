@@ -52,6 +52,7 @@ The map is the product. Every screen with a map gives it ≥ 65 % of a phone vie
 | `/{city}/routes` | Route finder by code or name, filtered by component, with service hours |
 | `/{city}/routes/{routeId}` | Route patterns on the map, stop list, live vehicles, service window ("Fuera de horario · próximo 04:00"), alerts, QR code, favorite star |
 | `/{city}/live` | Whole fleet in real time (SSE stream with deltas, interpolated motion), filter by component or route, `?stop=` tints buses by ETA to that stop, click a bus for details |
+| `/{city}/live?near=me` | **Cerca de mí**: follow-me camera, 300 m / 600 m / 1 km radius, the nearby buses listed by distance with an approaching/away arrow, component filter — all remembered |
 | `/{city}/favorites` | Casa, Trabajo and custom places, favorite stops with their next departures, favorite routes with service hours, recent trips — all local to the browser |
 | `/{city}/alerts` | Service alerts, most severe first, with the agency's official PQRS channel |
 | `/{city}/landing` | **City landing page** (white-label, config-driven, see below) |
@@ -188,6 +189,31 @@ Helpers live in `src/lib/ondemand.ts` (price ranges, hand-off platform, template
 **Shared ETA.** `POST /share/eta` creates a public link and `/{city}/eta/{token}` renders it: map, big ETA, an honest status (En camino · Con retraso · Llegó) with how stale the position is, no app chrome, `noindex`, and a "Planea tu viaje" call to action. Expired, revoked and unknown tokens all land on a plain "este viaje ya terminó" page. The write key stays in the creator's tab, so only they can update the progress. Follow-along itself (GO) lives in the mobile app.
 
 Screenshots: `docs/screenshots/lote23-*.png` (mock) and `-live-api` (against a running API).
+
+## Cerca de mí (v1.9)
+
+`/{city}/live?near=me`, or the toggle at the top of the live page. It answers one
+question — *what is moving around me right now* — instead of showing the whole city.
+
+- **Follow-me camera** re-centres on each fix and **stops the moment you pan or zoom**,
+  offering "Volver a mi ubicación" rather than fighting the gesture.
+- **Radius** 300 m · 600 m · 1 km, remembered per city along with the component filter.
+  The vehicle stream subscribes to the bbox enclosing the circle, so changing the radius
+  re-subscribes and bandwidth tracks the radius rather than the city. The bbox centre is
+  snapped to a grid (a quarter of the radius) so walking does not reopen the stream on
+  every GPS fix.
+- **Nearby list** sorted by distance; tapping a row selects the bus, highlights it and
+  opens the existing vehicle detail. The empty state offers a one-tap widen.
+- **Approaching / away** comes from the vehicle bearing versus the bearing to you, with a
+  dead band around 90° so a bus crossing your street is not labelled either way. The arrow
+  is **omitted entirely when the frame carries no bearing** — note that Bogotá's live feed
+  currently publishes none, so the arrow only appears in mock mode or on feeds that do.
+- The stream **closes when you leave the page or hide the tab**; location is foreground-only
+  and there is no background tracking.
+- Geolocation denied or unavailable: the mode explains it and lets you tap the map to place
+  your point instead.
+
+Screenshots: `docs/screenshots/nearme-*`, mock and `-live-api`. `pnpm screenshots:nearme`.
 
 ## Admin (operators)
 
