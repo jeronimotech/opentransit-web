@@ -215,6 +215,44 @@ question — *what is moving around me right now* — instead of showing the who
 
 Screenshots: `docs/screenshots/nearme-*`, mock and `-live-api`. `pnpm screenshots:nearme`.
 
+## Asistente conversacional (v2.0, fase 1: texto)
+
+"Pregúntame" opens a chat sheet that answers **only from the city's own data**. The model
+never answers a transit question from memory: it calls our tools and paraphrases what they
+return, because a hallucinated departure time is worse than no answer.
+
+- **Two entry points**, as the contract asks: a chip in the home action row and a button on
+  the search bar. Both are hidden when the city has the assistant off **or the browser is
+  offline** — every answer comes from the API, so offering the chat with no network would
+  only produce an error sheet.
+- **Streaming over `fetch`**, not `EventSource`, which is GET-only. `src/lib/assistant/sse.ts`
+  splits the body into frames and accepts both framings a server might pick (`event: token`
+  with a bare payload, or `{"type":"token"}` inside `data:`); when both are present the
+  payload's own type wins. Closing the sheet aborts the request.
+- **Cards land before the prose.** Each `card` frame is rendered with the screen's own
+  component — the itinerary card, the arrival board, the alert list, the fare tag — so an
+  answer is tappable and leads into the real screen instead of being a parallel rendering.
+  A card kind the client does not know is skipped silently rather than breaking the reply.
+- **"Pensando…" names the tool** that is running ("Buscando rutas…", "Revisando desvíos…").
+- **Errors are plain**: budget exhausted, provider down, rate limited, assistant off.
+- **A one-time notice per session** says that questions go to an external provider and names
+  it. The name comes from the endpoint; the client never learns anything else about it.
+
+**Privacy.** Chat text never enters analytics: the only event is `assistant_query` with
+`{toolsUsed, latencyMs, ok}` — no text, no coordinates. The API key lives server-side, is
+masked on read like the on-demand credentials, and never reaches a browser: mock mode
+enforces the same boundary (`publicCity()` reduces the block to `{enabled, provider,
+providerName, model}`).
+
+**Admin → "Asistente"**: enable, provider (Anthropic · OpenAI · DeepSeek · Gemini), model
+with the provider's default as the placeholder, the masked key, base URL for self-hosted
+deployments, the limits (replies per session, tool calls per reply, daily budget, rate
+limit), an optional note for the system prompt, a conversation-logging toggle behind a
+privacy warning, and **"Probar"**, which sends one fixed question and shows the answer with
+its reported cost and today's spend.
+
+Screenshots: `docs/screenshots/assistant-*`, mock and `-live-api`. `pnpm screenshots:assistant`.
+
 ## Admin (operators)
 
 `/admin` lets an operator change a city **without redeploying**: fares (the estimated fare every itinerary shows),
@@ -223,7 +261,7 @@ tiles on the home screen and the primary colour. It is not linked from the publi
 
 - **Auth**: paste the API's `ADMIN_TOKEN`. The token is validated with `GET /v1/admin/me` and kept in
   `sessionStorage` only (never in the URL, never in `localStorage`), so closing the tab forgets it. "Salir" clears it.
-- **Tabs**: Tarifas (landing) · Configuración · Enlaces · Servicios · Marca · Historial. Each tab edits one section of
+- **Tabs**: Tarifas (landing) · Configuración · Enlaces · Servicios · Movilidad · Marca · Página · Asistente · Analítica · Historial. Each tab edits one section of
   `GET/PUT /v1/admin/cities/{city}/config`; a section can be reset to the YAML values ("Restablecer a YAML" sends
   `null`), and "Restablecer todo" is `DELETE`. Badges mark what is overridden versus what comes from `cities/*.yaml`.
 - **Tarifas** validates inline with the API's rules and shows a live preview ("un viaje con 1 transbordo dentro de
@@ -271,6 +309,12 @@ re-add their sources when the basemap style reloads (theme switch).
 | `pnpm screenshots` | regenerate `docs/screenshots/` from a running `dev:mock` (needs `npx playwright install chromium`) |
 | `pnpm screenshots:admin` | admin flow screenshots (login → validation error → save → history); `TOKEN=… SUFFIX=live-api RESET=1` for the real API |
 | `pnpm screenshots:bike` | shared-bike screenshots (planner chip, rental results/detail, station layer + card, admin Movilidad); `SUFFIX=live-api TOKEN=…` for the real API |
+| `pnpm screenshots:assistant` | assistant screenshots (sheet, a planned trip with its card, an error state, the admin tab); `SUFFIX=live-api TOKEN=…` for the real API |
+
+> Run the mock and live dev servers **one at a time**. Both share the `.next` directory, and
+> `NEXT_PUBLIC_MOCK` is inlined at compile time, so a second server on another port recompiles
+> the first one's bundles without mock mode — the mock server then quietly serves live data.
+> `pnpm build` clobbers the same directory, so build after capturing, not before.
 
 ## Contributing
 

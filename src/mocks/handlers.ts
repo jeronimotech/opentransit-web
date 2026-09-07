@@ -65,8 +65,8 @@ function normalize(s: string) {
 
 /** The public city, with any admin overrides made in this session applied. */
 async function liveCity() {
-  const { effectiveCity } = await import("./admin");
-  return effectiveCity();
+  const { publicCity } = await import("./admin");
+  return publicCity();
 }
 
 let seq = 1;

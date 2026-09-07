@@ -74,6 +74,20 @@ export const city: City = {
     features: { liveVehicles: true, board: true, pois: true, followAlong: true, bike: true, next: true, favorites: true, alerts: true },
     minAppVersion: { ios: "1.0.0", android: "1.0.0" },
     maintenance: { active: false, message: null },
+    assistant: {
+      enabled: true,
+      provider: "anthropic",
+      model: "claude-opus-5",
+      // server-side only: `publicCity()` strips it and the admin store masks it
+      apiKey: "sk-ant-demo-000000001a2b",
+      baseUrl: null,
+      maxRepliesPerSession: 30,
+      maxToolCallsPerReply: 6,
+      dailyBudgetUsd: 5,
+      rateLimitPerMinute: 6,
+      systemExtra: null,
+      logConversations: false,
+    },
   },
   links: {
     pqrs: "https://www.transmilenio.gov.co/publicaciones/147212/pqrs/",

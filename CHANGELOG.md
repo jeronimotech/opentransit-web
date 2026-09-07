@@ -2,6 +2,24 @@
 
 All notable changes to opentransit-web. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.9.0] - 2026-09-07
+### Added
+- **Conversational assistant, phase 1 (text)** (`CONTRACT-assistant.md`): a "Pregúntame" sheet reachable from the home action row and from the search bar, streaming `POST /v1/cities/{city}/chat` over SSE. Prose arrives token by token; every `card` frame is rendered with the screen's own component (itinerary card, arrival board, alert list, fare tag, route chip) so an answer is tappable and leads into the real screen. "Pensando…" names the tool that is running. Suggested prompts on first open, and a one-time notice per session naming the external provider the questions go to.
+- **Admin tab "Asistente"**: enable, provider (Anthropic · OpenAI · DeepSeek · Gemini), model with the provider's default as the placeholder, masked API key, base URL, limits (replies per session, tool calls per reply, daily budget, rate limit), an optional note for the system prompt, a conversation-logging toggle behind a privacy warning, and "Probar", which sends one fixed question and reports the answer, its cost and today's spend.
+- `pnpm screenshots:assistant` (`docs/screenshots/assistant-*`, mock and `-live-api`).
+
+### Privacy
+- Chat text never enters analytics. The only event emitted is `assistant_query` with `{toolsUsed, latencyMs, ok}`: no text, no coordinates. A failed reply emits `error` with its code and nothing else.
+- The API key is masked on read like the on-demand credentials and never reaches a browser. Mock mode now enforces the same boundary: the public city is reduced to `{enabled, provider, providerName, model}`, the admin store masks the key in both `effective` and `yaml`, and an echoed mask on save keeps the stored key instead of overwriting it with bullets.
+
+### Changed
+- `validateConfig` now also validates `config.assistant`, so the rules that stop an operator enabling the assistant with no key — or with an out-of-range limit — hold on save, not only in the form.
+- The entry point is hidden when the city has the assistant off **and** when the browser is offline (`src/lib/use-online.ts`), since every answer comes from the API.
+
+### Notes
+- The live API exposes the endpoint and refuses with `ASSISTANT_DISABLED`, but Bogotá has **no provider key configured** (`apiKey: null`), so the live run captures the admin tab and the correctly hidden entry point only. No live answer was staged.
+- Provider default models pinned on 2026-09-07: Anthropic `claude-opus-5` (from the contract), OpenAI `gpt-5`, DeepSeek `deepseek-chat`, Gemini `gemini-2.5-flash`. The model field stays free text so an operator can move on without waiting for a release.
+
 ## [1.8.0] - 2026-09-07
 ### Added
 - **"Cerca de mí"** mode on `/{city}/live` (`?near=me`): follow-me camera that yields to any manual pan or zoom and offers "Volver a mi ubicación"; 300 m / 600 m / 1 km radius drawn as a soft circle and remembered per city with the component filter; nearby buses listed by distance with an approaching/away arrow derived from bearing (omitted when the feed carries none); tapping a row highlights that bus and opens its detail; empty state with a one-tap widen; a denied-geolocation path that lets you pick a point on the map.

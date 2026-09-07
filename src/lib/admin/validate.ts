@@ -1,4 +1,4 @@
-import type { AdminEditable, BikeShareNetwork, CityConfig, CityFares, CityLanding, CityLinks, CityMobility, CityService, OnDemandProvider, TaxiTariff } from "../api/types";
+import type { AdminEditable, AssistantConfig, BikeShareNetwork, CityConfig, CityFares, CityLanding, CityLinks, CityMobility, CityService, OnDemandProvider, TaxiTariff } from "../api/types";
 import { validateTemplate } from "../ondemand";
 import { LANDING_ICONS, LANDING_STAT_KEYS } from "../api/types";
 
@@ -55,6 +55,8 @@ export function validateConfig(c: CityConfig | null | undefined, msg: Messages):
     if (!SEMVER.test(c.minAppVersion.android ?? "")) e["config.minAppVersion.android"] = msg.semver;
   }
   if (c.maintenance?.active && !(c.maintenance.message ?? "").trim()) e["config.maintenance.message"] = msg.maintenanceMessage;
+  // the assistant lives inside `config`, so saving the section validates it too
+  Object.assign(e, validateAssistant(c.assistant as AssistantConfig | null | undefined, msg));
   return e;
 }
 
@@ -373,5 +375,35 @@ export function errorsFromDetails(details: { path: string; message: string }[] |
       if (m && PATHISH.test(m[1].trim())) e[normPath(m[1].trim())] = m[2].trim();
     }
   }
+  return e;
+}
+
+/* ── v2.0 assistant ──────────────────────────────────────────────────────── */
+
+export const ASSISTANT_RULES = {
+  maxRepliesPerSession: [1, 200],
+  maxToolCallsPerReply: [1, 20],
+  rateLimitPerMinute: [1, 120],
+} as const;
+
+/**
+ * `config.assistant`. The key is deliberately not validated by shape: providers
+ * change their prefixes, and rejecting a valid key locally would be worse than
+ * letting the server say no.
+ */
+export function validateAssistant(a: AssistantConfig | null | undefined, msg: Messages): Errors {
+  const e: Errors = {};
+  if (!a) return e;
+  const k = (f: string) => `config.assistant.${f}`;
+  if (a.model !== null && (typeof a.model !== "string" || a.model.length > 120)) e[k("model")] = msg.maxLen(120);
+  if (a.baseUrl !== null && a.baseUrl !== "" && !isHttpsUrl(a.baseUrl)) e[k("baseUrl")] = msg.https;
+  if (a.systemExtra !== null && (a.systemExtra?.length ?? 0) > 500) e[k("systemExtra")] = msg.maxLen(500);
+  for (const [f, range] of Object.entries(ASSISTANT_RULES) as [keyof typeof ASSISTANT_RULES, readonly [number, number]][]) {
+    const v = a[f];
+    if (!isInt(v) || !inRange(v as number, range)) e[k(f)] = msg.intRange(range[0], range[1]);
+  }
+  if (!isNum(a.dailyBudgetUsd) || a.dailyBudgetUsd < 0) e[k("dailyBudgetUsd")] = msg.nonNegative;
+  // enabled without a key can only fail at the first question; say so here instead
+  if (a.enabled && !a.apiKey) e[k("apiKey")] = msg.required;
   return e;
 }

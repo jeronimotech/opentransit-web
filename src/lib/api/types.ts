@@ -308,6 +308,11 @@ export type CityConfig = {
   maintenance: { active: boolean; message: string | null } | null;
   /** v1.5 — first-party analytics switch (server-side; clients also honour the user's opt-out). */
   analytics?: { enabled: boolean; retentionDays: number; kThreshold: number } | null;
+  /**
+   * v2.0 — conversational assistant. The public city sends the reduced shape
+   * (`AssistantPublic`); the admin read sends the full one with a masked key.
+   */
+  assistant?: AssistantConfig | AssistantPublic | null;
 };
 
 export type CityLinks = Partial<{
@@ -820,6 +825,8 @@ export type AnalyticsEventType =
   | "alert_view"
   | "layer_toggle"
   | "mode_toggle"
+  /** v2.0 — the assistant: which tools ran and how long, never the question. */
+  | "assistant_query"
   | "error";
 
 export type AnalyticsProps = Record<string, string | number | boolean | string[] | null | undefined>;
@@ -948,4 +955,91 @@ export type SharedEta = {
   updatedAt: string;
   expiresAt: string;
   city: SharedEtaCity;
+};
+
+/* ── v2.0 conversational assistant (phase 1: text) ───────────────────────── */
+
+export type AssistantProvider = "anthropic" | "openai" | "deepseek" | "gemini";
+
+/**
+ * `config.assistant`. The key never reaches a client: reads come back masked and
+ * a save that omits it keeps whatever the server already stored.
+ */
+export type AssistantConfig = {
+  enabled: boolean;
+  provider: AssistantProvider;
+  model: string | null;
+  /** Masked on read ("••••1a2b"); send a plain value only when the operator changed it. */
+  apiKey: string | null;
+  baseUrl: string | null;
+  maxRepliesPerSession: number;
+  maxToolCallsPerReply: number;
+  dailyBudgetUsd: number;
+  rateLimitPerMinute: number;
+  systemExtra: string | null;
+  logConversations: boolean;
+};
+
+/** What the public city exposes: enough to render the entry point, never the key. */
+export type AssistantPublic = {
+  enabled: boolean;
+  provider: AssistantProvider;
+  /** Display name of the provider, when the API sends one ("Anthropic"). */
+  providerName?: string | null;
+  model?: string | null;
+};
+
+export type ChatRole = "user" | "assistant";
+export type ChatMessage = { role: ChatRole; content: string };
+
+export type ChatContext = {
+  lat?: number | null;
+  lon?: number | null;
+  locale?: string;
+  favorites?: { label: string; lat: number; lon: number }[];
+};
+
+export type ChatRequest = { sessionId: string; messages: ChatMessage[]; context?: ChatContext };
+
+/** Structured tool output the client renders with the screens' own components. */
+export type ChatCardKind =
+  | "itinerary"
+  | "board"
+  | "next"
+  | "alerts"
+  | "fare"
+  | "stop"
+  | "route"
+  | "rental"
+  | "vehicles"
+  | "place";
+
+export type ChatCard = { kind: ChatCardKind | string; payload: unknown };
+
+export type ChatUsage = { inputTokens?: number; outputTokens?: number; costUsd?: number | null };
+
+export type ChatErrorCode =
+  | "ASSISTANT_DISABLED"
+  | "ASSISTANT_BUDGET"
+  | "ASSISTANT_RATE_LIMITED"
+  | "ASSISTANT_UPSTREAM"
+  | string;
+
+/** SSE frames. `card` arrives as soon as its tool returns, before the prose. */
+export type ChatEvent =
+  | { type: "token"; text: string }
+  | { type: "tool"; name: string; args?: Record<string, unknown> }
+  | { type: "card"; kind: ChatCardKind | string; payload: unknown }
+  | { type: "done"; usage?: ChatUsage | null; costUsd?: number | null }
+  | { type: "error"; code: ChatErrorCode; message: string };
+
+/** `GET /v1/cities/{city}/chat/health` (admin). */
+export type AssistantHealth = {
+  enabled: boolean;
+  provider: AssistantProvider | null;
+  model: string | null;
+  spendTodayUsd: number;
+  dailyBudgetUsd: number | null;
+  calls: number;
+  errors: number;
 };

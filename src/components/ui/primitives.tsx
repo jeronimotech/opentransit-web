@@ -306,4 +306,15 @@ export const Icon = {
       <path d="M13 13l4 4" />
     </svg>
   ),
+  Chat: (p: ComponentProps<"svg">) => (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}>
+      <path d="M3 8.5a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2a4 4 0 0 1-4 4H8.5L5 17.5V14a4 4 0 0 1-2-3.5Z" />
+    </svg>
+  ),
+  Send: (p: ComponentProps<"svg">) => (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" {...p}>
+      <path d="M17 3 9 11" />
+      <path d="M17 3l-5.5 14-2.5-6-6-2.5L17 3Z" />
+    </svg>
+  ),
 };

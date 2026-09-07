@@ -32,6 +32,7 @@ export function Hub({
   onPlanTrip,
   expanded,
   showSearch = true,
+  onAsk,
 }: {
   city: City;
   onPlan: () => void;
@@ -44,6 +45,8 @@ export function Hub({
   expanded: boolean;
   /** Desktop renders the search pill inside the panel; phones float it over the map. */
   showSearch?: boolean;
+  /** Opens the assistant. Absent when the city has it off or the browser is offline. */
+  onAsk?: () => void;
 }) {
   const { t } = useI18n();
   // The sheet only exists on phones; a desktop panel is tall enough to show everything.
@@ -68,11 +71,19 @@ export function Hub({
   return (
     <div className="flex flex-col gap-4 px-4 pb-4 pt-1 md:pt-4">
       {showSearch ? (
-        <button type="button" onClick={onPlan} className="hidden h-12 w-full items-center gap-3 rounded-xl border border-line bg-paper px-3 text-left text-[15px] text-ink-3 shadow-sm hover:border-line-2 md:flex">
-          <Icon.Search className="text-ink-2" />
-          <span className="flex-1">{t.hub.searchPlaceholder}</span>
-          <span className="rounded-md bg-signal px-2 py-1 text-xs font-bold text-signal-ink">{t.planner.search}</span>
-        </button>
+        <div className="hidden gap-2 md:flex">
+          <button type="button" onClick={onPlan} className="flex h-12 min-w-0 flex-1 items-center gap-3 rounded-xl border border-line bg-paper px-3 text-left text-[15px] text-ink-3 shadow-sm hover:border-line-2">
+            <Icon.Search className="text-ink-2" />
+            <span className="flex-1 truncate">{t.hub.searchPlaceholder}</span>
+            <span className="rounded-md bg-signal px-2 py-1 text-xs font-bold text-signal-ink">{t.planner.search}</span>
+          </button>
+          {onAsk ? (
+            <button type="button" onClick={onAsk} className="flex h-12 shrink-0 items-center gap-1.5 rounded-xl border border-line bg-paper px-3 text-sm font-bold text-ink shadow-sm hover:border-ink" data-testid="assistant-open-search">
+              <Icon.Chat width={18} height={18} className="text-signal" />
+              {t.assistant.entry}
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       {/* 1 · three actions, one line */}
@@ -88,6 +99,11 @@ export function Hub({
         <Link href={`${base}/routes`} className={chip}>
           <Icon.Search width={20} height={20} /> <span className="whitespace-nowrap">{t.hub.routes}</span>
         </Link>
+        {onAsk ? (
+          <button type="button" onClick={onAsk} className={chip} data-testid="assistant-open-hub">
+            <Icon.Chat width={20} height={20} className="text-signal" /> <span className="whitespace-nowrap">{t.assistant.entry}</span>
+          </button>
+        ) : null}
       </div>
 
       {/* 2 · Cerca de ti */}

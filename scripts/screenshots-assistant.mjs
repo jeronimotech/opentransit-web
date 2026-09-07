@@ -1,0 +1,140 @@
+/**
+ * Assistant screenshots (docs/screenshots/assistant-*.png) from a running dev server.
+ *
+ *   pnpm dev:mock -p 3100
+ *   BASE_URL=http://localhost:3100 pnpm screenshots:assistant
+ *   SUFFIX=live-api BASE_URL=http://localhost:3101 TOKEN=<ADMIN_TOKEN> pnpm screenshots:assistant
+ *
+ * Shots (desktop + phone): the sheet on first open with its suggestions and the
+ * provider notice, a planned trip with the itinerary card above the prose, an
+ * error state, and the admin "Asistente" tab.
+ *
+ * The live run is only honest if the city actually has the assistant on with a
+ * provider key. When the entry point never appears the script says so and skips
+ * the chat shots rather than staging an answer that no model produced.
+ */
+import { chromium } from "@playwright/test";
+import { mkdirSync } from "node:fs";
+
+const BASE = process.env.BASE_URL ?? "http://localhost:3100";
+const OUT = "docs/screenshots";
+const SUFFIX = process.env.SUFFIX ? `-${process.env.SUFFIX}` : "";
+const CITY = process.env.CITY ?? "bogota";
+const TOKEN = process.env.TOKEN ?? "demo";
+const HERE = { latitude: 4.6841, longitude: -74.0517 }; // Calle 100
+const viewports = { desktop: { width: 1280, height: 800 }, mobile: { width: 390, height: 844 } };
+const file = (n, vp) => `${OUT}/assistant-${n}${vp ? `-${vp}` : ""}${SUFFIX}.png`;
+
+const waitMap = (page) => page.waitForFunction(() => !!window.__otMap, null, { timeout: 30_000 }).catch(() => console.warn("map missing"));
+const settle = (page) =>
+  page.waitForFunction(() => { const m = window.__otMap; return !!m && m.areTilesLoaded() && !m.isMoving(); }, null, { timeout: 30_000 }).catch(() => {});
+
+/** Opens the sheet from whichever entry point this viewport shows. */
+async function openChat(page, vpName) {
+  const entry = vpName === "mobile" ? "[data-testid=assistant-open-overlay]" : "[data-testid=assistant-open-search]";
+  const btn = page.locator(entry).first();
+  if (!(await btn.isVisible().catch(() => false))) return false;
+  await btn.click();
+  return page.waitForSelector("[data-testid=assistant-sheet]", { timeout: 10_000 }).then(() => true, () => false);
+}
+
+/** Types a question and waits for the stream to stop (or for an error). */
+async function ask(page, text) {
+  const input = page.locator("[data-testid=assistant-sheet] input").first();
+  await input.fill(text);
+  await input.press("Enter");
+  // wait for the request to start before waiting for it to finish, or the
+  // "not busy" check passes on the frame before React flips the flag
+  await page.waitForSelector("[data-testid=assistant-sheet] [aria-busy=true]", { timeout: 5000 }).catch(() => {});
+  await page
+    .waitForFunction(() => {
+      const sheet = document.querySelector("[data-testid=assistant-sheet]");
+      if (!sheet) return false;
+      if (sheet.querySelector("[data-testid=assistant-error]")) return true;
+      const busy = sheet.querySelector("[aria-busy=true]");
+      return !busy;
+    }, null, { timeout: 45_000 })
+    .catch(() => console.warn(`the reply to "${text}" never finished`));
+  await page.waitForTimeout(600);
+}
+
+mkdirSync(OUT, { recursive: true });
+const browser = await chromium.launch();
+let sawChat = false;
+try {
+  for (const [vpName, vp] of Object.entries(viewports)) {
+    const ctx = await browser.newContext({
+      viewport: vp,
+      locale: "es-CO",
+      geolocation: HERE,
+      permissions: ["geolocation"],
+      hasTouch: vpName === "mobile",
+      isMobile: vpName === "mobile",
+    });
+    const page = await ctx.newPage();
+    await page.goto(`${BASE}/${CITY}`);
+    await waitMap(page);
+    await settle(page);
+
+    // 1 · first open: suggestions and the one-time provider notice
+    if (!(await openChat(page, vpName))) {
+      // Not a failure: the contract says the entry point is hidden when the city has
+      // the assistant off. Record that, and do not stage an answer no model produced.
+      console.warn(`!! ${vpName}: no assistant entry point — the city has it off, or the API has no provider key. Chat shots skipped.`);
+      await page.screenshot({ path: file("hidden", vpName) });
+      await ctx.close();
+      continue;
+    }
+    sawChat = true;
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: file("intro", vpName) });
+
+    // 2 · a planned trip: the itinerary card lands above the prose
+    await ask(page, "¿Cómo llego al Portal Sur?");
+    const cards = await page.locator("[data-testid^=card-]").count().catch(() => 0);
+    if (!cards) console.warn(`${vpName}: the answer carried no card`);
+    await page.screenshot({ path: file("trip", vpName) });
+
+    // 3 · a second answer whose card is an arrival board
+    await ask(page, "¿A qué hora pasa el próximo bus en Portal Norte?");
+    await page.screenshot({ path: file("board", vpName) });
+
+    // 4 · an error state, reached through the endpoint's own refusal
+    await ask(page, "presupuesto");
+    const errored = await page.locator("[data-testid=assistant-error]").count().catch(() => 0);
+    if (!errored) console.warn(`${vpName}: no error state on this run (the live API may not expose a budget trigger)`);
+    await page.screenshot({ path: file("error", vpName) });
+    await ctx.close();
+  }
+
+  // 5 · the admin tab
+  const admin = await browser.newContext({ viewport: viewports.desktop, locale: "es-CO" });
+  const ap = await admin.newPage();
+  await ap.goto(`${BASE}/admin`);
+  await ap.getByLabel("Token").waitFor({ timeout: 15_000 });
+  await ap.getByLabel("Token").fill(TOKEN);
+  await ap.getByRole("button", { name: /Entrar/ }).click();
+  await ap.getByRole("link", { name: /Configurar/ }).first().waitFor({ timeout: 15_000 });
+  await ap.goto(`${BASE}/admin/${CITY}#assistant`);
+  await ap.waitForSelector('[id="config.assistant.provider"]', { timeout: 20_000 }).catch(() => console.warn("assistant tab did not render"));
+  await ap.waitForTimeout(500);
+  await ap.screenshot({ path: file("admin", null) });
+
+  // the "Probar" button: one fixed question, its answer and its cost
+  const probe = ap.getByRole("button", { name: /^Probar$/ });
+  if (await probe.isEnabled().catch(() => false)) {
+    await probe.click();
+    // the result card is appended at the end of the tab; bring it into view
+    await ap.getByText(/Pregunta de prueba/).waitFor({ timeout: 45_000 }).catch(() => console.warn("the test never returned"));
+    await ap.waitForTimeout(4000);
+    await ap.getByText(/Pregunta de prueba/).scrollIntoViewIfNeeded().catch(() => {});
+    await ap.waitForTimeout(400);
+    await ap.screenshot({ path: file("admin-test", null) });
+  } else {
+    console.warn("!! 'Probar' is disabled — the city has the assistant off, so no test shot");
+  }
+  await admin.close();
+} finally {
+  await browser.close();
+}
+if (!sawChat) console.warn("!! the chat sheet was never reachable on this run; only the admin shots were captured");

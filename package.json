@@ -1,6 +1,6 @@
 {
   "name": "opentransit-web",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -20,7 +20,8 @@
     "screenshots:ondemand": "node scripts/screenshots-ondemand.mjs",
     "screenshots:lote1": "node scripts/screenshots-lote1.mjs",
     "screenshots:lote23": "node scripts/screenshots-lote23.mjs",
-    "screenshots:nearme": "node scripts/screenshots-nearme.mjs"
+    "screenshots:nearme": "node scripts/screenshots-nearme.mjs",
+    "screenshots:assistant": "node scripts/screenshots-assistant.mjs"
   },
   "dependencies": {
     "@mapbox/polyline": "^1.2.1",

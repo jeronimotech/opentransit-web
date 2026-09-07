@@ -12,6 +12,7 @@ import { ResultsList } from "@/components/itinerary/ResultsList";
 import { DepartureForecast } from "@/components/planner/DepartureForecast";
 import { ItineraryDetail } from "@/components/itinerary/ItineraryDetail";
 import { Hub } from "@/components/hub/Hub";
+import { ChatSheet } from "@/components/assistant/ChatSheet";
 import { EmptyState, Icon, Spinner } from "@/components/ui/primitives";
 import { useI18n } from "@/lib/i18n/provider";
 import { useNearbyStops, useNetwork, usePlan, usePois, useRentalStations } from "@/lib/api/hooks";
@@ -20,6 +21,8 @@ import { api, ApiRequestError } from "@/lib/api/client";
 import { useVehicleStream } from "@/lib/api/stream";
 import { useInterpolatedVehicles } from "@/lib/interpolate";
 import { useGeolocation } from "@/lib/use-geolocation";
+import { useOnline } from "@/lib/use-online";
+import { assistantEnabled } from "@/lib/assistant";
 import { useFavorites } from "@/lib/favorites";
 import { resolveConfig, componentsOf } from "@/lib/city-config";
 import { LIVE_MIN_ZOOM, liveAutoOn } from "@/lib/marker-style";
@@ -159,6 +162,7 @@ function Planner() {
   const [bikeStation, setBikeStation] = useState<RentalStation | null>(null);
   const [liveCount, setLiveCount] = useState(0);
   const [forecast, setForecast] = useState(false);
+  const [chat, setChat] = useState(false);
   const rentalModes = useMemo(() => rentalModesFor(bikeShareNetworks(city)), [city]);
   const geo = useGeolocation();
 
@@ -291,12 +295,18 @@ function Planner() {
     commit(next, { view: "plan" });
   };
 
+  // The assistant answers through the API, so it is hidden offline and when the city turned it off.
+  const online = useOnline();
+  const canAsk = assistantEnabled(city, online);
+  const openChat = useCallback(() => setChat(true), []);
+  const closeChat = useCallback(() => setChat(false), []);
+
   const routerDown = plan.error instanceof ApiRequestError && plan.error.status >= 500;
   const onCount = useCallback((n: number) => setLiveCount(n), []);
   const compColors = useMemo(() => Object.fromEntries(componentsOf(city).map((c) => [c.id, c.color])), [city]);
 
   const panel = showHub ? (
-    <Hub city={city} onPlan={openPlanner} onLocate={() => locateFor("hub")} pos={geo.pos} locating={locating === "hub"} onUsePlace={planWithPlace} onPlanTrip={planTrip} expanded={snap !== "peek"} />
+    <Hub city={city} onPlan={openPlanner} onLocate={() => locateFor("hub")} pos={geo.pos} locating={locating === "hub"} onUsePlace={planWithPlace} onPlanTrip={planTrip} expanded={snap !== "peek"} onAsk={canAsk ? openChat : undefined} />
   ) : (
     <div className="flex flex-col">
       {selected || stage === "results" ? (
@@ -414,14 +424,23 @@ function Planner() {
 
   // Phone-only floating search pill (desktop has it inside the panel)
   const overlay = showHub ? (
-    <button type="button" onClick={openPlanner} className="absolute left-3 right-3 top-[60px] z-10 flex h-12 items-center gap-3 rounded-2xl border border-line bg-paper-2/95 px-4 text-left text-[15px] text-ink-3 shadow-card backdrop-blur" aria-label={t.hub.searchPlaceholder}>
-      <Icon.Search className="text-ink-2" />
-      <span className="flex-1 truncate">{t.hub.searchPlaceholder}</span>
-    </button>
+    <div className="absolute left-3 right-3 top-[60px] z-10 flex gap-2">
+      <button type="button" onClick={openPlanner} className="flex h-12 min-w-0 flex-1 items-center gap-3 rounded-2xl border border-line bg-paper-2/95 px-4 text-left text-[15px] text-ink-3 shadow-card backdrop-blur" aria-label={t.hub.searchPlaceholder}>
+        <Icon.Search className="text-ink-2" />
+        <span className="flex-1 truncate">{t.hub.searchPlaceholder}</span>
+      </button>
+      {canAsk ? (
+        <button type="button" onClick={openChat} className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-line bg-paper-2/95 text-signal shadow-card backdrop-blur" aria-label={t.assistant.entry} title={t.assistant.entry} data-testid="assistant-open-overlay">
+          <Icon.Chat width={20} height={20} />
+        </button>
+      ) : null}
+    </div>
   ) : null;
 
   return (
-    <SplitLayout
+    <>
+      {canAsk ? <ChatSheet city={city} open={chat} onClose={closeChat} pos={geo.pos} /> : null}
+      <SplitLayout
       snap={snap}
       onSnapChange={setSnap}
       overlay={overlay}
@@ -462,6 +481,7 @@ function Planner() {
           <span className="sr-only">{LIVE_MIN_ZOOM}</span>
         </MapView>
       }
-    />
+      />
+    </>
   );
 }

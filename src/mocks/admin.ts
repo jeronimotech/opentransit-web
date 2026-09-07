@@ -4,6 +4,7 @@
  */
 import { ApiRequestError } from "@/lib/api/client";
 import { EN_MESSAGES, validateSection } from "@/lib/admin/validate";
+import { PROVIDER_NAMES } from "@/lib/assistant";
 import type {
   AdminConfigPatch,
   AdminConfigResponse,
@@ -11,7 +12,9 @@ import type {
   AdminHistoryItem,
   AdminOverride,
   AdminSection,
+  AssistantConfig,
   City,
+  CityConfig,
 } from "@/lib/api/types";
 import { city as yamlCity, landing as yamlLanding } from "./data";
 import type { CityLanding } from "@/lib/api/types";
@@ -30,9 +33,11 @@ const state = {
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
 function yaml(): AdminEditable {
+  const config = clone(yamlCity.config ?? null);
+  maskAssistant(config);
   return {
     fares: clone(yamlCity.fares ?? null),
-    config: clone(yamlCity.config ?? null),
+    config,
     links: clone(yamlCity.links ?? null),
     services: clone(yamlCity.services ?? null),
     branding: { primaryColor: yamlCity.branding.primaryColor },
@@ -66,17 +71,41 @@ export function effectiveCity(): City {
 }
 
 const MASK = /^[•*]{2,}/;
+const mask = (v: string) => `••••${v.slice(-4)}`;
+
 /** Credentials never leave the store in clear: "••••" + last 4 chars, like the API. */
 function maskOverride(o: AdminOverride | null): AdminOverride | null {
-  if (!o?.mobility?.onDemand) return o;
+  if (!o) return o;
   const m = clone(o);
-  m.mobility!.onDemand = m.mobility!.onDemand!.map((p) => (p.credentials?.clientId ? { ...p, credentials: { clientId: `••••${p.credentials.clientId.slice(-4)}` } } : p));
+  if (m.mobility?.onDemand) m.mobility.onDemand = m.mobility.onDemand.map((p) => (p.credentials?.clientId ? { ...p, credentials: { clientId: mask(p.credentials.clientId) } } : p));
+  maskAssistant(m.config as CityConfig | null | undefined);
   return m;
 }
 
+/** The assistant key follows the same rule as the on-demand credentials. */
+function maskAssistant(c: CityConfig | null | undefined): void {
+  const a = c?.assistant as AssistantConfig | null | undefined;
+  if (a?.apiKey && !MASK.test(a.apiKey)) a.apiKey = mask(a.apiKey);
+}
+
+/**
+ * What the public `/cities/{id}` serves: the assistant is reduced to the slice a
+ * client is allowed to see. The key never reaches a browser, masked or not.
+ */
+export function publicCity(): City {
+  const c = effectiveCity();
+  const a = c.config?.assistant as AssistantConfig | null | undefined;
+  if (c.config && a) {
+    c.config.assistant = { enabled: !!a.enabled, provider: a.provider, providerName: PROVIDER_NAMES[a.provider] ?? null, model: a.model ?? null };
+  }
+  return c;
+}
+
 function response(): AdminConfigResponse {
+  const effective = effectiveCity();
+  maskAssistant(effective.config);
   return {
-    effective: effectiveCity(),
+    effective,
     override: maskOverride(state.override ? clone(state.override) : null),
     yaml: yaml(),
     revision: state.revision,
@@ -139,6 +168,14 @@ export function adminMock<T>(path: string, q: Record<string, unknown>, init: { m
       for (const [p, msg] of Object.entries(errs)) details.push({ path: p, message: msg });
       // fares.estimated is always true: operators can only estimate, never publish official fares
       (next as Record<string, unknown>)[s] = s === "fares" ? { ...(v as object), estimated: true } : clone(v);
+      if (s === "config") {
+        // a masked assistant key means "keep what is stored" (YAML or the previous override)
+        const cur = next.config?.assistant as AssistantConfig | null | undefined;
+        if (cur?.apiKey && MASK.test(cur.apiKey)) {
+          const storedKey = ((state.override?.config?.assistant ?? yamlCity.config?.assistant) as AssistantConfig | null | undefined)?.apiKey ?? null;
+          cur.apiKey = storedKey;
+        }
+      }
       if (s === "mobility") {
         // a masked client id means "keep what is stored" (YAML or the previous override)
         const stored = new Map((state.override?.mobility?.onDemand ?? yamlCity.mobility?.onDemand ?? []).map((p) => [p.id, p.credentials?.clientId ?? null]));
