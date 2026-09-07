@@ -230,16 +230,28 @@ return, because a hallucinated departure time is worse than no answer.
   with a bare payload, or `{"type":"token"}` inside `data:`); when both are present the
   payload's own type wins. Closing the sheet aborts the request.
 - **Cards land before the prose.** Each `card` frame is rendered with the screen's own
-  component — the itinerary card, the arrival board, the alert list, the fare tag — so an
-  answer is tappable and leads into the real screen instead of being a parallel rendering.
-  A card kind the client does not know is skipped silently rather than breaking the reply.
+  component — the itinerary card, the arrival board, the alert list, the fare tag, the stop
+  and route rows, the bike station — so an answer is tappable and leads into the real screen
+  instead of being a parallel rendering. A card kind the client does not know is skipped
+  silently rather than breaking the reply.
+  The kinds are the API's, in the API's spelling: `place`, `itineraries`, `fares`, `board`,
+  `next`, `alerts`, `vehicles`, `bikeStations`, `stops`, `routes`. The singular spellings an
+  older server used are still accepted. `assistant.test.ts` derives that list from the API's
+  own `app/assistant/tools.py`, so a kind added or renamed there fails the web build instead
+  of silently rendering as bare prose.
+- **"Nueva conversación"** in the sheet header clears the thread and starts a **new session
+  id**: the reply limit is counted per session on the server, so reusing the old id would
+  hand the new conversation the old one's spent quota. It asks before wiping, and is
+  disabled while there is nothing to clear.
 - **"Pensando…" names the tool** that is running ("Buscando rutas…", "Revisando desvíos…").
 - **Errors are plain**: budget exhausted, provider down, rate limited, assistant off.
 - **A one-time notice per session** says that questions go to an external provider and names
   it. The name comes from the endpoint; the client never learns anything else about it.
 
 **Privacy.** Chat text never enters analytics: the only event is `assistant_query` with
-`{toolsUsed, latencyMs, ok}` — no text, no coordinates. The API key lives server-side, is
+`{toolsUsed, latencyMs, ok}` — no text, no coordinates. The position sent *with* a question
+is coarsened to three decimals (~110 m) before it leaves the browser, the same rounding the
+mobile client and the analytics queue apply, and the notice says so in those words. The API key lives server-side, is
 masked on read like the on-demand credentials, and never reaches a browser: mock mode
 enforces the same boundary (`publicCity()` reduces the block to `{enabled, provider,
 providerName, model}`).
@@ -309,7 +321,7 @@ re-add their sources when the basemap style reloads (theme switch).
 | `pnpm screenshots` | regenerate `docs/screenshots/` from a running `dev:mock` (needs `npx playwright install chromium`) |
 | `pnpm screenshots:admin` | admin flow screenshots (login → validation error → save → history); `TOKEN=… SUFFIX=live-api RESET=1` for the real API |
 | `pnpm screenshots:bike` | shared-bike screenshots (planner chip, rental results/detail, station layer + card, admin Movilidad); `SUFFIX=live-api TOKEN=…` for the real API |
-| `pnpm screenshots:assistant` | assistant screenshots (sheet, a planned trip with its card, an error state, the admin tab); `SUFFIX=live-api TOKEN=…` for the real API |
+| `pnpm screenshots:assistant` | assistant screenshots (sheet, a planned trip, an arrival board, bike stations, the new-conversation confirmation, an error state, the admin tab); `SUFFIX=live-api TOKEN=…` for the real API. An answer that renders no card is reported as a failure, not a style choice |
 
 > Run the mock and live dev servers **one at a time**. Both share the `.next` directory, and
 > `NEXT_PUBLIC_MOCK` is inlined at compile time, so a second server on another port recompiles

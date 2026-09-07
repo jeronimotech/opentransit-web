@@ -317,4 +317,10 @@ export const Icon = {
       <path d="M17 3l-5.5 14-2.5-6-6-2.5L17 3Z" />
     </svg>
   ),
+  NewChat: (p: ComponentProps<"svg">) => (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" {...p}>
+      <path d="M17 10.5v1.5a4 4 0 0 1-4 4H8.5L5 19.5V16a4 4 0 0 1-2-3.5v-2a4 4 0 0 1 4-4h2" />
+      <path d="M14.5 2.5v6M11.5 5.5h6" />
+    </svg>
+  ),
 };

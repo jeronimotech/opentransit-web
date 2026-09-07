@@ -1002,17 +1002,28 @@ export type ChatContext = {
 export type ChatRequest = { sessionId: string; messages: ChatMessage[]; context?: ChatContext };
 
 /** Structured tool output the client renders with the screens' own components. */
+/**
+ * The kinds the API actually emits, from the assistant's tools. The singular
+ * spellings after them are legacy: an older server sent `itinerary`/`fare`/
+ * `stop`/`route`/`rental`, and the renderer still accepts those.
+ */
 export type ChatCardKind =
-  | "itinerary"
+  | "place"
+  | "itineraries"
+  | "fares"
   | "board"
   | "next"
   | "alerts"
+  | "vehicles"
+  | "bikeStations"
+  | "stops"
+  | "routes"
+  // legacy singulars
+  | "itinerary"
   | "fare"
   | "stop"
   | "route"
-  | "rental"
-  | "vehicles"
-  | "place";
+  | "rental";
 
 export type ChatCard = { kind: ChatCardKind | string; payload: unknown };
 
@@ -1033,13 +1044,22 @@ export type ChatEvent =
   | { type: "done"; usage?: ChatUsage | null; costUsd?: number | null }
   | { type: "error"; code: ChatErrorCode; message: string };
 
-/** `GET /v1/cities/{city}/chat/health` (admin). */
+/**
+ * `GET /v1/cities/{city}/chat/health` (admin).
+ *
+ * The spend field is called `spentUsd` on the wire. `spendTodayUsd` is the name
+ * an older client used, kept optional so an older server still renders.
+ */
 export type AssistantHealth = {
   enabled: boolean;
   provider: AssistantProvider | null;
   model: string | null;
-  spendTodayUsd: number;
+  spentUsd?: number;
+  /** legacy spelling */
+  spendTodayUsd?: number;
   dailyBudgetUsd: number | null;
   calls: number;
   errors: number;
+  hasKey?: boolean;
+  startedAt?: string | null;
 };

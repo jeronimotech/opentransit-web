@@ -62,14 +62,28 @@ export async function mockChatStream(body: ChatRequest, emit: Emit, signal: Abor
   if (q.includes("como llego") || q.includes("how do i get") || q.includes("llegar a") || q.includes("ir a")) {
     const to = findPlace(q) ?? PLACES["portal sur"];
     const from = body.context?.lat != null && body.context?.lon != null ? { lat: body.context.lat, lon: body.context.lon, name: "tu ubicación" } : PLACES["portal norte"];
+    emit({ type: "tool", name: "find_place", args: { query: to.name } });
+    await sleep(300);
+    if (signal.aborted) return;
+    emit({
+      type: "card",
+      kind: "place",
+      payload: { id: `place:${to.name}`, name: to.name, label: "Estación", lat: to.lat, lon: to.lon, type: "station", stopId: null, component: "trunk", source: "gtfs", distanceMeters: null },
+    });
     emit({ type: "tool", name: "plan_trip", args: { to: to.name } });
     await sleep(700);
     if (signal.aborted) return;
     const plan = await mockRequest<{ itineraries: unknown[] }>("/v1/cities/bogota/plan", {
       fromLat: from.lat, fromLon: from.lon, toLat: to.lat, toLon: to.lon, numItineraries: 3,
     });
-    const it = plan.itineraries[0];
-    if (it) emit({ type: "card", kind: "itinerary", payload: it });
+    // Exactly what the API emits: kind "itineraries", payload {from, to, itineraries}.
+    if (plan.itineraries.length) {
+      emit({
+        type: "card",
+        kind: "itineraries",
+        payload: { from: { name: from.name, lat: from.lat, lon: from.lon }, to: { name: to.name, lat: to.lat, lon: to.lon }, itineraries: plan.itineraries.slice(0, 3) },
+      });
+    }
     await say(`La mejor opción hasta ${to.name} sale desde ${from.name}. Toca la tarjeta para verla en el mapa y arrancar el viaje.`, emit, signal);
     emit({ type: "done", usage: { inputTokens: 1840, outputTokens: 96 }, costUsd: 0.0042 });
     return;
@@ -105,17 +119,78 @@ export async function mockChatStream(body: ChatRequest, emit: Emit, signal: Abor
     emit({ type: "tool", name: "fare_estimate" });
     await sleep(450);
     if (signal.aborted) return;
-    emit({ type: "card", kind: "fare", payload: { amount: 3200, currency: "COP", estimated: true, breakdown: [{ label: "base", amount: 3200 }] } });
+    const priced = await mockRequest<{ itineraries: unknown[] }>("/v1/cities/bogota/plan", {
+      fromLat: PLACES["portal norte"].lat, fromLon: PLACES["portal norte"].lon,
+      toLat: PLACES["portal sur"].lat, toLon: PLACES["portal sur"].lon, numItineraries: 3, onDemand: true,
+    });
+    // The API answers a cost question with kind "fares" and {itineraries}.
+    emit({ type: "card", kind: "fares", payload: { itineraries: priced.itineraries.slice(0, 3) } });
     await say("Un pasaje cuesta 3.200 pesos, y el transbordo dentro de la ventana no cobra de nuevo. Es un valor estimado con la tarifa configurada para la ciudad.", emit, signal);
     emit({ type: "done", usage: { inputTokens: 1180, outputTokens: 61 }, costUsd: 0.0019 });
     return;
   }
 
-  // 5 · nothing matched: say so, do not invent
+  // 5 · bikes nearby → bikeStations
+  if (q.includes("bici") || q.includes("bike")) {
+    emit({ type: "tool", name: "bike_stations" });
+    await sleep(480);
+    if (signal.aborted) return;
+    const near = await mockRequest<{ rental?: unknown[] }>("/v1/cities/bogota/stops/nearby", {
+      lat: PLACES["calle 100"].lat, lon: PLACES["calle 100"].lon, radius: 600, include: "rental",
+    });
+    const stations = (near.rental ?? []).slice(0, 4);
+    if (stations.length) emit({ type: "card", kind: "bikeStations", payload: { stations } });
+    await say("Estas son las estaciones de bici más cercanas, con las bicis y los puestos libres que reporta el operador.", emit, signal);
+    emit({ type: "done", usage: { inputTokens: 1240, outputTokens: 48 }, costUsd: 0.0021 });
+    return;
+  }
+
+  // 6 · stops nearby → stops
+  if (q.includes("parada") && (q.includes("cerca") || q.includes("near"))) {
+    emit({ type: "tool", name: "nearby_stops" });
+    await sleep(430);
+    if (signal.aborted) return;
+    const near = await mockRequest<{ stops?: unknown[] }>("/v1/cities/bogota/stops/nearby", {
+      lat: PLACES["calle 100"].lat, lon: PLACES["calle 100"].lon, radius: 500,
+    });
+    const stops = (near.stops ?? []).slice(0, 5);
+    if (stops.length) emit({ type: "card", kind: "stops", payload: { stops } });
+    await say("Estas son las paradas más cercanas. Toca una para ver sus próximas salidas.", emit, signal);
+    emit({ type: "done", usage: { inputTokens: 1190, outputTokens: 41 }, costUsd: 0.0018 });
+    return;
+  }
+
+  // 7 · a route by name → routes
+  if (q.includes("ruta") || q.includes("route")) {
+    emit({ type: "tool", name: "route_info" });
+    await sleep(400);
+    if (signal.aborted) return;
+    const found = await mockRequest<{ routes?: unknown[] }>("/v1/cities/bogota/routes", { q: "G12" });
+    const routes = (found.routes ?? []).slice(0, 3);
+    if (routes.length) emit({ type: "card", kind: "routes", payload: { routes } });
+    await say("Esto es lo que sé de esa ruta. Toca para ver su recorrido y sus buses en vivo.", emit, signal);
+    emit({ type: "done", usage: { inputTokens: 1150, outputTokens: 39 }, costUsd: 0.0017 });
+    return;
+  }
+
+  // 8 · buses around me → vehicles
+  if (q.includes("buses cerca") || q.includes("buses around") || q.includes("cerca de mi")) {
+    emit({ type: "tool", name: "vehicles_near" });
+    await sleep(460);
+    if (signal.aborted) return;
+    const live = await mockRequest<{ vehicles?: { lat: number; lon: number }[] }>("/v1/cities/bogota/vehicles", {});
+    const vehicles = (live.vehicles ?? []).slice(0, 5).map((v, i) => ({ ...v, metres: 120 + i * 90 }));
+    if (vehicles.length) emit({ type: "card", kind: "vehicles", payload: { vehicles } });
+    await say("Estos son los buses que tengo cerca de ti ahora mismo.", emit, signal);
+    emit({ type: "done", usage: { inputTokens: 1310, outputTokens: 37 }, costUsd: 0.0019 });
+    return;
+  }
+
+  // 9 · nothing matched: say so, do not invent
   await say("No tengo una herramienta que responda eso. Puedo planear un viaje, decirte las próximas salidas de una parada, o contarte si hay desvíos hoy.", emit, signal);
   emit({ type: "done", usage: { inputTokens: 980, outputTokens: 44 }, costUsd: 0.0012 });
 }
 
 export function mockAssistantHealth(): AssistantHealth {
-  return { enabled: true, provider: "anthropic", model: "claude-opus-5", spendTodayUsd: 0.34, dailyBudgetUsd: 5, calls: 42, errors: 0 };
+  return { enabled: true, provider: "anthropic", model: "claude-opus-5", spentUsd: 0.34, hasKey: true, dailyBudgetUsd: 5, calls: 42, errors: 0 };
 }

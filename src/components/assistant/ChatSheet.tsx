@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { coarsen } from "@/lib/analytics/core";
 import { useI18n } from "@/lib/i18n/provider";
 import { Button, Icon, Spinner } from "@/components/ui/primitives";
 import { track } from "@/lib/analytics";
 import { streamChat, type ChatHandle } from "@/lib/assistant/client";
-import { applyChatEvent, assistantErrorKey, assistantQueryProps, assistantOf, chatSessionId, emptyAssistantTurn, markNoticeShown, providerLabel, shouldShowNotice, toolLabel, wireMessages, type ChatTurn } from "@/lib/assistant";
+import { applyChatEvent, assistantErrorKey, assistantQueryProps, assistantOf, chatSessionId, emptyAssistantTurn, markNoticeShown, providerLabel, resetConversation, shouldShowNotice, toolLabel, wireMessages, type ChatTurn } from "@/lib/assistant";
 import { ChatCardView } from "./ChatCard";
 import type { City } from "@/lib/api/types";
 
@@ -24,6 +25,7 @@ export function ChatSheet({ city, open, onClose, pos }: { city: City; open: bool
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(false);
+  const [confirmNew, setConfirmNew] = useState(false);
   const handle = useRef<ChatHandle | null>(null);
   const startedAt = useRef(0);
   const toolsUsed = useRef<string[]>([]);
@@ -55,6 +57,7 @@ export function ChatSheet({ city, open, onClose, pos }: { city: City; open: bool
     handle.current?.abort();
     handle.current = null;
     setBusy(false);
+    setConfirmNew(false);
   }, [open]);
   useEffect(
     () => () => {
@@ -95,7 +98,14 @@ export function ChatSheet({ city, open, onClose, pos }: { city: City; open: bool
         {
           sessionId: chatSessionId(),
           messages: wireMessages(next.slice(0, -1)),
-          context: { lat: pos?.lat ?? null, lon: pos?.lon ?? null, locale: lang },
+          // Rounded to ~110 m before it leaves the browser, matching what the
+          // notice promises and what the mobile client sends. A question never
+          // needs a precise fix, and an exact one would identify a doorway.
+          context: {
+            lat: pos ? coarsen(pos.lat) : null,
+            lon: pos ? coarsen(pos.lon) : null,
+            locale: lang,
+          },
         },
         (ev) => {
           patch((x) => applyChatEvent(x, ev));
@@ -114,6 +124,22 @@ export function ChatSheet({ city, open, onClose, pos }: { city: City; open: bool
     [busy, city.id, lang, notice, pos, turns],
   );
 
+  /**
+   * "New conversation": drop the history and start a new session id. The reply
+   * limit is counted per session on the server, so carrying the old id over
+   * would start the new conversation with the old one's quota already spent.
+   */
+  const startNew = useCallback(() => {
+    handle.current?.abort();
+    handle.current = null;
+    const fresh = resetConversation();
+    setTurns(fresh.turns);
+    setInput("");
+    setBusy(false);
+    setConfirmNew(false);
+    inputRef.current?.focus();
+  }, []);
+
   const suggestions = useMemo(() => t.assistant.suggestions, [t]);
   if (!open) return null;
 
@@ -130,10 +156,35 @@ export function ChatSheet({ city, open, onClose, pos }: { city: City; open: bool
         <h2 id="assistant-title" className="flex-1 text-base font-extrabold tracking-tight">
           {t.assistant.title}
         </h2>
+        <Button
+          size="iconSm"
+          variant="ghost"
+          onClick={() => setConfirmNew(true)}
+          disabled={!turns.length}
+          aria-label={t.assistant.newChat}
+          title={t.assistant.newChat}
+          data-testid="assistant-new"
+        >
+          <Icon.NewChat width={18} height={18} />
+        </Button>
         <Button size="iconSm" variant="ghost" onClick={onClose} aria-label={t.common.close}>
           <Icon.Close width={18} height={18} />
         </Button>
       </header>
+
+      {confirmNew ? (
+        <div className="border-b border-line bg-paper-3 px-4 py-2.5" role="alertdialog" aria-label={t.assistant.newChat} data-testid="assistant-new-confirm">
+          <p className="text-xs text-ink-2">{t.assistant.newChatConfirm}</p>
+          <div className="mt-2 flex justify-end gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setConfirmNew(false)}>
+              {t.assistant.newChatNo}
+            </Button>
+            <Button size="sm" variant="primary" onClick={startNew} data-testid="assistant-new-confirm-yes">
+              {t.assistant.newChatYes}
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {notice ? (
         <p className="border-b border-line bg-paper-3 px-4 py-2 text-xs text-ink-2" role="note">

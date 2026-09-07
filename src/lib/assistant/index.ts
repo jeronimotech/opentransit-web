@@ -53,6 +53,17 @@ export function providerLabel(a: AssistantPublic | null): string {
   return a.providerName || PROVIDER_NAMES[a.provider] || a.provider;
 }
 
+/**
+ * Today's spend from a health payload. The API calls the field `spentUsd`; an
+ * older one called it `spendTodayUsd`, and a server that answers with neither
+ * must not take the admin page down.
+ */
+export function spentToday(h: { spentUsd?: number | null; spendTodayUsd?: number | null } | null): number | null {
+  if (!h) return null;
+  const v = h.spentUsd ?? h.spendTodayUsd;
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
 /* ── session identity and the one-time provider notice ───────────────────── */
 
 const SESSION_KEY = "ot.assistant.session";
@@ -77,6 +88,24 @@ export function chatSessionId(): string {
       : `s-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
   s?.setItem(SESSION_KEY, id);
   return id;
+}
+
+/**
+ * Forgets the current id and returns a fresh one, for "new conversation".
+ * The server counts replies per session, so a new conversation has to arrive
+ * under a new id: reusing the old one would carry its spent quota along.
+ */
+export function newChatSession(): string {
+  store()?.removeItem(SESSION_KEY);
+  return chatSessionId();
+}
+
+/**
+ * What "new conversation" leaves behind: no history at all, and an id that is
+ * not the one the previous conversation used.
+ */
+export function resetConversation(): { turns: ChatTurn[]; sessionId: string } {
+  return { turns: [], sessionId: newChatSession() };
 }
 
 /** True the first time in this session; the caller then shows the provider notice. */

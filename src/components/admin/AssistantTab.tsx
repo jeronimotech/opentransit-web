@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useI18n } from "@/lib/i18n/provider";
 import { Badge, Button, Icon, Spinner, inputCls } from "@/components/ui/primitives";
 import { assistantHealth, streamChat } from "@/lib/assistant/client";
-import { DEFAULT_ASSISTANT, PROVIDERS, PROVIDER_DEFAULT_MODEL, PROVIDER_NAMES, assistantPayload, chatSessionId, isMaskedKey, keyIsNew } from "@/lib/assistant";
+import { DEFAULT_ASSISTANT, PROVIDERS, PROVIDER_DEFAULT_MODEL, PROVIDER_NAMES, assistantPayload, chatSessionId, isMaskedKey, keyIsNew, spentToday } from "@/lib/assistant";
 import { validateAssistant, type Errors } from "@/lib/admin/validate";
 import { Control, NumberInput, SaveBar, SectionCard, TextInput, Toggle, saveErrorsFrom, useSectionDraft, type SaveState } from "./form";
 import { useSaveConfig } from "./useAdmin";
@@ -187,10 +187,12 @@ export function AssistantTab({ token, city, data }: { token: string; city: strin
                 {probe.cost != null ? <Badge tone="info">US$ {probe.cost.toFixed(4)}</Badge> : null}
                 {probe.health ? (
                   <>
-                    <Badge tone="neutral">
-                      {t.admin.assistant.spend}: US$ {probe.health.spendTodayUsd.toFixed(2)}
-                      {probe.health.dailyBudgetUsd ? ` / ${probe.health.dailyBudgetUsd.toFixed(2)}` : ""}
-                    </Badge>
+                    {spentToday(probe.health) != null ? (
+                      <Badge tone="neutral">
+                        {t.admin.assistant.spend}: US$ {spentToday(probe.health)!.toFixed(2)}
+                        {probe.health.dailyBudgetUsd ? ` / ${probe.health.dailyBudgetUsd.toFixed(2)}` : ""}
+                      </Badge>
+                    ) : null}
                     <Badge tone="neutral">
                       {t.admin.assistant.calls}: {probe.health.calls}
                     </Badge>

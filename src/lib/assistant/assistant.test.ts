@@ -11,7 +11,10 @@ import {
   emptyAssistantTurn,
   isMaskedKey,
   keyIsNew,
+  chatSessionId,
   providerLabel,
+  resetConversation,
+  spentToday,
   toolLabel,
   wireMessages,
   type ChatTurn,
@@ -359,5 +362,144 @@ describe("what analytics is allowed to see", () => {
 
   it("never reports a negative latency, whatever the clock did", () => {
     expect(assistantQueryProps([], -5, false).latencyMs).toBe(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The card kinds are a contract with the API, not a guess. These read the API's
+// own source so a kind renamed there fails here instead of silently rendering
+// nothing — which is exactly how the web shipped dropping seven of ten kinds.
+
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { ChatCardView } from "@/components/assistant/ChatCard";
+import { coarsen } from "@/lib/analytics/core";
+
+function kindsEmittedByTheApi(): string[] {
+  const src = readFileSync(join(process.cwd(), "..", "opentransit-api", "app", "assistant", "tools.py"), "utf8");
+  return [...new Set([...src.matchAll(/"kind":\s*"([A-Za-z]+)"/g)].map((m) => m[1]))].sort();
+}
+
+describe("card kinds", () => {
+  it("the renderer handles every kind the API emits", () => {
+    const emitted = kindsEmittedByTheApi();
+    expect(emitted.length).toBeGreaterThan(5); // the file was found and parsed
+    const rendered = ChatCardView.toString();
+    const missing = emitted.filter((k) => !rendered.includes(`"${k}"`));
+    expect(missing).toEqual([]);
+  });
+
+  it("the type union lists every kind the API emits", () => {
+    const types = readFileSync(join(process.cwd(), "src", "lib", "api", "types.ts"), "utf8");
+    const union = types.slice(types.indexOf("export type ChatCardKind ="), types.indexOf("export type ChatCard ="));
+    const missing = kindsEmittedByTheApi().filter((k) => !union.includes(`"${k}"`));
+    expect(missing).toEqual([]);
+  });
+
+  it("the mock emits kinds the renderer knows", () => {
+    const mock = readFileSync(join(process.cwd(), "src", "mocks", "assistant.ts"), "utf8");
+    const mocked = [...new Set([...mock.matchAll(/kind:\s*"([A-Za-z]+)"/g)].map((m) => m[1]))];
+    const rendered = ChatCardView.toString();
+    expect(mocked.filter((k) => !rendered.includes(`"${k}"`))).toEqual([]);
+  });
+});
+
+describe("the position sent with a question", () => {
+  it("is coarsened to ~110 m before it leaves the browser", () => {
+    // The notice promises we do not send an exact location; the sheet must round
+    // to the same 3 decimals the mobile client and the analytics queue use.
+    const sheet = readFileSync(join(process.cwd(), "src", "components", "assistant", "ChatSheet.tsx"), "utf8");
+    expect(sheet).toMatch(/lat:\s*pos\s*\?\s*coarsen\(pos\.lat\)/);
+    expect(sheet).toMatch(/lon:\s*pos\s*\?\s*coarsen\(pos\.lon\)/);
+    expect(sheet).not.toMatch(/lat:\s*pos\?\.lat\s*\?\?/);
+  });
+
+  it("coarsen keeps three decimals", () => {
+    expect(coarsen(4.6766217)).toBe(4.677);
+    expect(coarsen(-74.0467209)).toBe(-74.047);
+  });
+});
+
+/* ── starting a new conversation ─────────────────────────────────────────── */
+
+describe("new conversation", () => {
+  /** sessionStorage does not exist under vitest's node environment. */
+  function fakeStorage() {
+    const map = new Map<string, string>();
+    const store = {
+      getItem: (k: string) => map.get(k) ?? null,
+      setItem: (k: string, v: string) => void map.set(k, v),
+      removeItem: (k: string) => void map.delete(k),
+      clear: () => map.clear(),
+      key: (i: number) => [...map.keys()][i] ?? null,
+      get length() {
+        return map.size;
+      },
+    } as Storage;
+    (globalThis as { sessionStorage?: Storage }).sessionStorage = store;
+    return store;
+  }
+
+  it("clears the history and starts a session the server has not counted yet", () => {
+    fakeStorage();
+    const before = chatSessionId();
+    expect(chatSessionId()).toBe(before); // stable while the conversation lasts
+
+    const fresh = resetConversation();
+    expect(fresh.turns).toEqual([]);
+    expect(fresh.sessionId).not.toBe(before);
+    expect(chatSessionId()).toBe(fresh.sessionId); // the next question uses the new one
+    delete (globalThis as { sessionStorage?: Storage }).sessionStorage;
+  });
+
+  it("the sheet offers the button and only wipes after a confirmation", () => {
+    const sheet = readFileSync(join(process.cwd(), "src", "components", "assistant", "ChatSheet.tsx"), "utf8");
+    expect(sheet).toMatch(/data-testid="assistant-new"/);
+    expect(sheet).toMatch(/disabled=\{!turns\.length\}/); // nothing to clear, nothing to press
+    expect(sheet).toMatch(/onClick=\{startNew\}/); // the wipe hangs off the confirmation, not the header button
+    expect(sheet).toMatch(/onClick=\{\(\) => setConfirmNew\(true\)\}/);
+  });
+});
+
+/* ── the admin health payload ────────────────────────────────────────────── */
+
+describe("assistant health", () => {
+  /** What `GET /chat/health` really answers, read from the API's own router. */
+  function healthFieldsFromTheApi(): string[] {
+    const src = readFileSync(join(process.cwd(), "..", "opentransit-api", "app", "routers", "chat.py"), "utf8");
+    const body = src.slice(src.indexOf("async def chat_health"), src.indexOf("async def chat_health") + 1200);
+    return [...new Set([...body.matchAll(/"([a-zA-Z]+)":/g)].map((m) => m[1]))];
+  }
+
+  it("the type carries the spend field the API sends", () => {
+    const fields = healthFieldsFromTheApi();
+    expect(fields).toContain("spentUsd"); // the file was found and parsed
+    const types = readFileSync(join(process.cwd(), "src", "lib", "api", "types.ts"), "utf8");
+    const block = types.slice(types.indexOf("export type AssistantHealth ="));
+    const decl = block.slice(0, block.indexOf("};"));
+    // a declaration, not a substring: "spentUsdX" must not satisfy "spentUsd"
+    expect(fields.filter((f) => !new RegExp(`\\b${f}\\??:`).test(decl))).toEqual([]);
+  });
+
+  it("reads either spelling and survives a payload with neither", () => {
+    // the shape the live API answers with
+    expect(spentToday({ spentUsd: 0.178151 })).toBeCloseTo(0.178151, 6);
+    // the shape an older server answers with
+    expect(spentToday({ spendTodayUsd: 0.34 })).toBe(0.34);
+    // and the crash the admin page used to take
+    expect(spentToday({})).toBeNull();
+    expect(spentToday(null)).toBeNull();
+  });
+
+  it("the admin tab never dereferences the spend field directly", () => {
+    const tab = readFileSync(join(process.cwd(), "src", "components", "admin", "AssistantTab.tsx"), "utf8");
+    expect(tab).not.toMatch(/health\.spendTodayUsd\.toFixed/);
+    expect(tab).not.toMatch(/health\.spentUsd\.toFixed/);
+    expect(tab).toMatch(/spentToday\(probe\.health\)/);
+  });
+
+  it("the mock answers with the field name the API uses", () => {
+    const mock = readFileSync(join(process.cwd(), "src", "mocks", "assistant.ts"), "utf8");
+    expect(mock).toMatch(/spentUsd:/);
   });
 });

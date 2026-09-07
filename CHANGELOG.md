@@ -2,6 +2,25 @@
 
 All notable changes to opentransit-web. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.9.1] - 2026-09-07
+### Fixed
+- **The assistant rendered most answers as bare prose.** `ChatCard` switched on `alerts, board, fare, itinerary, next, route, stop`, while the API emits `alerts, bikeStations, board, fares, itineraries, next, place, routes, stops, vehicles`. Seven of the ten kinds fell through, so a trip, a fare, a route, a stop, a place, a vehicle or a bike station arrived with no card at all. Every kind now renders with the screen's own component and links into the real screen; the singular spellings an older server used are still accepted. The `itineraries` payload is read as `{from, to, itineraries}` (it was read as a single itinerary), and a plan with more than two options offers "N opciones más".
+- **The screenshots and the tests agreed with the bug**: the mocks emitted the singular kinds the renderer expected, so the captures looked right. The mocks now emit exactly what the API emits, and `assistant.test.ts` derives the kind list from the API's own `app/assistant/tools.py`, so a rename there fails the web suite instead of silently degrading an answer. The mock's bike branch also read `rentalStations` from a nearby response that answers with `rental`, which is why no station card appeared once the kind was right.
+- **The admin "Probar" result crashed the page against the live API** with `Cannot read properties of undefined (reading 'toFixed')`: the health payload calls today's spend `spentUsd`, while the client read `spendTodayUsd` — a name only the mock ever produced. Both spellings are now accepted, a payload with neither renders without the badge instead of taking the tab down, and the field list is checked against `app/routers/chat.py`.
+- The screenshot script no longer writes an `assistant-error-*` file when no error state occurred, and reports an answer that carried no card as a failure.
+
+### Privacy
+- **The position sent with a question is coarsened to ~110 m** (three decimals, `coarsen()`) before it leaves the browser. It was sent at full precision while the notice promised otherwise and while the mobile client rounded. The notice now states the rounding in both locales, so the wording matches the code.
+
+### Added
+- **"Nueva conversación"** in the chat header: clears the thread, brings the suggestions back and starts a **new session id**, because the server counts replies per session and reusing the id would carry the spent quota into the new conversation. It confirms before wiping an existing thread and is disabled when there is nothing to clear.
+- `assistant-bikes-*` and `assistant-new-*` screenshots, in mock and live mode.
+
+### Notes
+- Verified against the live API (Bogotá, DeepSeek): "¿Cómo llego del Parque de la 93 al Portal Sur?" → `place, place, itineraries`; "¿Cuánto cuesta un taxi al aeropuerto?" → `place, place, fares`; "¿Qué buses pasan por Portal Norte?" → `place, board`; "¿Hay bicis cerca de la Calle 100?" → `place, place, bikeStations`. Each rendered its card in the sheet.
+- The live API has no budget trigger, so no live `assistant-error-*` capture exists. The mock keeps that state.
+- Still open: in live mode the Asistente tab shows "Corrige los campos marcados antes de guardar", because Bogotá's override is a partial patch (`{enabled: true, apiKey: null}`) and the form validates it as if it were the whole block. That is the admin draft layer, shared by every tab, not the chat.
+
 ## [1.9.0] - 2026-09-07
 ### Added
 - **Conversational assistant, phase 1 (text)** (`CONTRACT-assistant.md`): a "Pregúntame" sheet reachable from the home action row and from the search bar, streaming `POST /v1/cities/{city}/chat` over SSE. Prose arrives token by token; every `card` frame is rendered with the screen's own component (itinerary card, arrival board, alert list, fare tag, route chip) so an answer is tappable and leads into the real screen. "Pensando…" names the tool that is running. Suggested prompts on first open, and a one-time notice per session naming the external provider the questions go to.

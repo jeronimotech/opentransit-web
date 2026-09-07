@@ -6,8 +6,8 @@
  *   SUFFIX=live-api BASE_URL=http://localhost:3101 TOKEN=<ADMIN_TOKEN> pnpm screenshots:assistant
  *
  * Shots (desktop + phone): the sheet on first open with its suggestions and the
- * provider notice, a planned trip with the itinerary card above the prose, an
- * error state, and the admin "Asistente" tab.
+ * provider notice, a planned trip with the itinerary card above the prose, a bike-station
+ * card, an error state, and the admin "Asistente" tab.
  *
  * The live run is only honest if the city actually has the assistant on with a
  * provider key. When the entry point never appears the script says so and skips
@@ -58,6 +58,10 @@ async function ask(page, text) {
   await page.waitForTimeout(600);
 }
 
+/** How many cards are on screen; a card that never arrives is a bug, not a style. */
+const cardCount = (page) => page.locator("[data-testid^=card-]").count().catch(() => 0);
+let cardless = 0;
+
 mkdirSync(OUT, { recursive: true });
 const browser = await chromium.launch();
 let sawChat = false;
@@ -90,24 +94,42 @@ try {
     await page.screenshot({ path: file("intro", vpName) });
 
     // 2 · a planned trip: the itinerary card lands above the prose
-    await ask(page, "¿Cómo llego al Portal Sur?");
-    const cards = await page.locator("[data-testid^=card-]").count().catch(() => 0);
-    if (!cards) console.warn(`${vpName}: the answer carried no card`);
-    await page.screenshot({ path: file("trip", vpName) });
+    let seen = 0;
+    for (const [name, question] of [
+      // the origin is spelled out: a bare "al Portal Sur" makes the live model ask where from
+      ["trip", "¿Cómo llego del Parque de la 93 al Portal Sur?"],
+      ["board", "¿A qué hora pasa el próximo bus en Portal Norte?"],
+      // bikes: a station card, one of the kinds the renderer used to drop
+      ["bikes", "¿Hay bicis cerca de la Calle 100?"],
+    ]) {
+      await ask(page, question);
+      const now = await cardCount(page);
+      if (now <= seen) {
+        console.warn(`!! ${vpName}/${name}: "${question}" answered with no card`);
+        cardless++;
+      }
+      seen = now;
+      await page.screenshot({ path: file(name, vpName) });
+    }
 
-    // 3 · a second answer whose card is an arrival board
-    await ask(page, "¿A qué hora pasa el próximo bus en Portal Norte?");
-    await page.screenshot({ path: file("board", vpName) });
+    // 5 · "new conversation": the header button asks before wiping the thread
+    await page.locator("[data-testid=assistant-new]").first().click().catch(() => console.warn(`${vpName}: no new-conversation button`));
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: file("new", vpName) });
+    await page.locator("[data-testid=assistant-new-confirm-yes]").first().click().catch(() => {});
+    await page.waitForTimeout(400);
 
-    // 4 · an error state, reached through the endpoint's own refusal
+    // 6 · an error state, reached through the endpoint's own refusal
     await ask(page, "presupuesto");
     const errored = await page.locator("[data-testid=assistant-error]").count().catch(() => 0);
-    if (!errored) console.warn(`${vpName}: no error state on this run (the live API may not expose a budget trigger)`);
-    await page.screenshot({ path: file("error", vpName) });
+    // No shot when the state never happened: a file named "error" showing an
+    // ordinary answer is worse than no file.
+    if (errored) await page.screenshot({ path: file("error", vpName) });
+    else console.warn(`${vpName}: no error state on this run (the live API exposes no budget trigger); error shot skipped`);
     await ctx.close();
   }
 
-  // 5 · the admin tab
+  // 7 · the admin tab
   const admin = await browser.newContext({ viewport: viewports.desktop, locale: "es-CO" });
   const ap = await admin.newPage();
   await ap.goto(`${BASE}/admin`);
@@ -137,4 +159,5 @@ try {
 } finally {
   await browser.close();
 }
+if (cardless) console.warn(`!! ${cardless} answer(s) rendered without a card — the renderer or the data behind it is wrong`);
 if (!sawChat) console.warn("!! the chat sheet was never reachable on this run; only the admin shots were captured");
