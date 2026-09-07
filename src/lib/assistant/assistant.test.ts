@@ -366,34 +366,51 @@ describe("what analytics is allowed to see", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// The card kinds are a contract with the API, not a guess. These read the API's
-// own source so a kind renamed there fails here instead of silently rendering
-// nothing — which is exactly how the web shipped dropping seven of ten kinds.
+// The card kinds are a contract with the API, not a guess. The list below is
+// the contract as of the revision named next to it, and it is asserted on every
+// run — this repo alone is enough to catch a renderer that drops a kind, which
+// is exactly how the web shipped dropping seven of ten.
+//
+// When the API repo happens to sit next to this one, a second test compares the
+// pinned list against the API's own source, so a rename there is caught the day
+// it lands instead of the day someone notices an answer went blank. A clone of
+// this repo alone skips that comparison rather than failing on a missing file.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ChatCardView } from "@/components/assistant/ChatCard";
 import { coarsen } from "@/lib/analytics/core";
 
-function kindsEmittedByTheApi(): string[] {
-  const src = readFileSync(join(process.cwd(), "..", "opentransit-api", "app", "assistant", "tools.py"), "utf8");
-  return [...new Set([...src.matchAll(/"kind":\s*"([A-Za-z]+)"/g)].map((m) => m[1]))].sort();
-}
+/** Every `{"kind": …}` the assistant's tools emit (opentransit-api, 2026-09-07). */
+const API_CARD_KINDS = ["alerts", "bikeStations", "board", "fares", "itineraries", "next", "place", "routes", "stops", "vehicles"];
+
+/** Every field `GET /chat/health` answers with (opentransit-api, 2026-09-07). */
+const API_HEALTH_FIELDS = ["enabled", "provider", "model", "hasKey", "dailyBudgetUsd", "spentUsd", "calls", "errors", "startedAt"];
+
+const apiFile = (...parts: string[]) => join(process.cwd(), "..", "opentransit-api", ...parts);
+const TOOLS_PY = apiFile("app", "assistant", "tools.py");
+const CHAT_PY = apiFile("app", "routers", "chat.py");
+/** The neighbouring repo is a bonus, not a requirement: CI checks out this one alone. */
+const hasApiRepo = existsSync(TOOLS_PY) && existsSync(CHAT_PY);
+const DRIFT = "the API contract moved: update the pinned list in this file (and whatever consumes it)";
 
 describe("card kinds", () => {
   it("the renderer handles every kind the API emits", () => {
-    const emitted = kindsEmittedByTheApi();
-    expect(emitted.length).toBeGreaterThan(5); // the file was found and parsed
     const rendered = ChatCardView.toString();
-    const missing = emitted.filter((k) => !rendered.includes(`"${k}"`));
-    expect(missing).toEqual([]);
+    expect(API_CARD_KINDS.filter((k) => !rendered.includes(`"${k}"`))).toEqual([]);
   });
 
   it("the type union lists every kind the API emits", () => {
     const types = readFileSync(join(process.cwd(), "src", "lib", "api", "types.ts"), "utf8");
     const union = types.slice(types.indexOf("export type ChatCardKind ="), types.indexOf("export type ChatCard ="));
-    const missing = kindsEmittedByTheApi().filter((k) => !union.includes(`"${k}"`));
-    expect(missing).toEqual([]);
+    expect(API_CARD_KINDS.filter((k) => !union.includes(`"${k}"`))).toEqual([]);
+  });
+
+  it.skipIf(!hasApiRepo)("the pinned list still matches the API's own source", () => {
+    const src = readFileSync(TOOLS_PY, "utf8");
+    const emitted = [...new Set([...src.matchAll(/"kind":\s*"([A-Za-z]+)"/g)].map((m) => m[1]))].sort();
+    expect(emitted.length).toBeGreaterThan(5); // the file was found and parsed
+    expect(emitted, DRIFT).toEqual([...API_CARD_KINDS].sort());
   });
 
   it("the mock emits kinds the renderer knows", () => {
@@ -464,21 +481,20 @@ describe("new conversation", () => {
 /* ── the admin health payload ────────────────────────────────────────────── */
 
 describe("assistant health", () => {
-  /** What `GET /chat/health` really answers, read from the API's own router. */
-  function healthFieldsFromTheApi(): string[] {
-    const src = readFileSync(join(process.cwd(), "..", "opentransit-api", "app", "routers", "chat.py"), "utf8");
-    const body = src.slice(src.indexOf("async def chat_health"), src.indexOf("async def chat_health") + 1200);
-    return [...new Set([...body.matchAll(/"([a-zA-Z]+)":/g)].map((m) => m[1]))];
-  }
-
-  it("the type carries the spend field the API sends", () => {
-    const fields = healthFieldsFromTheApi();
-    expect(fields).toContain("spentUsd"); // the file was found and parsed
+  it("the type carries every field the API sends, spend included", () => {
     const types = readFileSync(join(process.cwd(), "src", "lib", "api", "types.ts"), "utf8");
     const block = types.slice(types.indexOf("export type AssistantHealth ="));
     const decl = block.slice(0, block.indexOf("};"));
     // a declaration, not a substring: "spentUsdX" must not satisfy "spentUsd"
-    expect(fields.filter((f) => !new RegExp(`\\b${f}\\??:`).test(decl))).toEqual([]);
+    expect(API_HEALTH_FIELDS.filter((f) => !new RegExp(`\\b${f}\\??:`).test(decl))).toEqual([]);
+  });
+
+  it.skipIf(!hasApiRepo)("the pinned field list still matches the API's own router", () => {
+    const src = readFileSync(CHAT_PY, "utf8");
+    const at = src.indexOf("async def chat_health");
+    const body = src.slice(at, at + 1200);
+    const fields = [...new Set([...body.matchAll(/"([a-zA-Z]+)":/g)].map((m) => m[1]))];
+    expect(fields, DRIFT).toEqual(API_HEALTH_FIELDS);
   });
 
   it("reads either spelling and survives a payload with neither", () => {
