@@ -81,7 +81,8 @@ export function ItineraryDetail({
     setSharing("busy");
     try {
       const res = await api.shareCreate(city.id, { itinerary: itinerary as unknown, startedAt: new Date().toISOString(), label: `${itinerary.legs[0].from.name} → ${itinerary.legs[itinerary.legs.length - 1].to.name}` });
-      const url = res.url || `${window.location.origin}/${city.id}/eta/${res.token}`;
+      // the API returns its own absolute URL; the page that renders a shared trip is ours
+      const url = `${window.location.origin}/${city.id}/eta/${res.token}`;
       try {
         sessionStorage.setItem(`opentransit.share.${res.token}`, res.writeKey ?? "");
       } catch {

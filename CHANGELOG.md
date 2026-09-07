@@ -2,6 +2,18 @@
 
 All notable changes to opentransit-web. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.7.0] - 2026-09-06
+### Added
+- **Casa ⇄ Trabajo card** on the home sheet: next viable departure with countdown, route chips and arrival; direction inferred from the city clock and invertible; "Ruta con desvío · Replanear" when an active alert touches the plan.
+- **"Cuándo salir"** panel over the results (`GET /plan/forecast`): departures across the window as a timeline, recommended option highlighted, service gaps called out between rows, last departure flagged, and re-plan on pick.
+- **Line page timeline**: live buses placed on the stop list (matched by the stop they are heading to, else snapped within 700 m) and a per-stop "GO rápido" hand-off to the mobile app with a web fallback.
+- **Shared ETA page** `/{city}/eta/{token}`: map, live ETA, status and staleness, `noindex`, graceful expired/revoked/not-found states; "Compartir viaje" in the itinerary detail creates the link and keeps the write key in that tab.
+- Favourite routes show their active alerts inline.
+
+### Fixed
+- The home sheet's expanded content (commute card, recents, notices, services) was gated on the *phone* sheet position, so it never appeared on desktop where the panel is always tall.
+- The share link now always points at the web page; the API returns its own absolute URL, which would have sent readers to raw JSON.
+
 ## [1.5.0] - 2026-09-06
 ### Added
 - Lote 1 (Citymapper-inspired UX): "Sal en X min / Sal ahora / Ya salió" countdown on result cards (15-s ticks, departed options sink, "Actualizar" chip), results grouped by scenario (Más rápido · Menos caminata · Menos transbordos · Más barato · En bici · Taxi / app) with a secondary "Ordenar" menu, live next-3 departure chips inside each boarding step that re-time the itinerary client-side ("Re-temporizado"), Citymapper-style stop rows (big right-aligned minutes with live blip, "y en 13, 23 min"), contextual empty states and a slim top offline/stale bar.

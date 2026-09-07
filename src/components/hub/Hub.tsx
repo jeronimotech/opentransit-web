@@ -8,6 +8,7 @@ import { availabilityTone, bikeShareEnabled, formatAvailability, networkById, st
 import { useFavorites } from "@/lib/favorites";
 import { resolveConfig, componentOf } from "@/lib/city-config";
 import { Icon, Spinner } from "@/components/ui/primitives";
+import { useSheet } from "@/components/shell/SplitLayout";
 import { ComponentIcon } from "@/components/ui/ComponentIcon";
 import { RouteChip } from "@/components/ui/RouteChip";
 import { StatusText } from "@/components/ui/FreshnessBadge";
@@ -45,6 +46,9 @@ export function Hub({
   showSearch?: boolean;
 }) {
   const { t } = useI18n();
+  // The sheet only exists on phones; a desktop panel is tall enough to show everything.
+  const sheet = useSheet();
+  const open = expanded || sheet.expanded;
   const cfg = resolveConfig(city);
   const base = `/${city.id}`;
   const alerts = useAlerts(city.id);
@@ -128,9 +132,9 @@ export function Hub({
         )}
       </section>
 
-      {!expanded ? <p className="text-center text-[11px] text-ink-3 md:hidden">{t.hub.dragHint}</p> : null}
+      {!open ? <p className="text-center text-[11px] text-ink-3 md:hidden">{t.hub.dragHint}</p> : null}
 
-      {expanded ? (
+      {open ? (
         <>
           <CommuteCard city={city} pos={pos} onOpen={onPlanTrip} />
 

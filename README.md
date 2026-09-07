@@ -177,6 +177,18 @@ Helpers live in `src/lib/ondemand.ts` (price ranges, hand-off platform, template
 
 **Admin → Analítica.** Date range (7/30/90/custom), KPI tiles with deltas, an origins/destinations/searches cell heat map with the top O-D arcs (k ≥ 5 only), hour × weekday heatmap, modes, top routes/stops/searches/providers, funnel, platforms/versions, CSV export per dataset, and a table view for every chart. Charts are plain SVG following the data-viz method (fixed categorical order, one sequential hue, validated light/dark palette). Screenshots: `pnpm screenshots:lote1` → `docs/screenshots/lote1-*.png`, `analytics-*.png`.
 
+## Lotes 2 and 3 (Citymapper playbook, v1.7)
+
+**Casa ⇄ Trabajo.** With Home or Work saved, the home sheet shows the trip you are most likely to make right now: the next viable departure with its countdown, route chips and arrival. The direction is guessed from the *city's* clock (work before midday, home after) and can be inverted; when an active alert touches a route of the plan the card turns into "Ruta con desvío · Replanear".
+
+**"Cuándo salir".** A "Salidas" button on the results view opens `GET /plan/forecast`: every departure in the next 90 minutes as a timeline (salida → llegada, duración, transbordos), the recommended one highlighted, long service gaps drawn *between* the rows where they happen ("Después no hay servicio hasta las 22:45") and the last departure flagged. Picking a row re-plans the trip at that time.
+
+**Line page.** The route page places the live buses on the stop timeline — a bus is drawn on the segment above the stop it is heading to, or snapped to the nearest stop within 700 m when the feed sends no `stopId`, and dropped when even that would be a guess. Every stop offers "GO rápido", which hands the trip to the mobile app (`opentransit://…`) and falls back to the web page when the app is not installed.
+
+**Shared ETA.** `POST /share/eta` creates a public link and `/{city}/eta/{token}` renders it: map, big ETA, an honest status (En camino · Con retraso · Llegó) with how stale the position is, no app chrome, `noindex`, and a "Planea tu viaje" call to action. Expired, revoked and unknown tokens all land on a plain "este viaje ya terminó" page. The write key stays in the creator's tab, so only they can update the progress. Follow-along itself (GO) lives in the mobile app.
+
+Screenshots: `docs/screenshots/lote23-*.png` (mock) and `-live-api` (against a running API).
+
 ## Admin (operators)
 
 `/admin` lets an operator change a city **without redeploying**: fares (the estimated fare every itinerary shows),
