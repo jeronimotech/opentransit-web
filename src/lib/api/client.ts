@@ -176,12 +176,15 @@ export const api = {
       headers: { "X-Share-Key": writeKey },
     }),
 
-  geocode: (city: string, q: string, near?: { lat: number; lon: number }, limit = 8) =>
+  geocode: (city: string, q: string, near?: { lat: number; lon: number }, limit = 8, locale?: "es" | "en") =>
     request<GeocodeResponse>(`${c(city)}/geocode`, {
       q,
       lat: near?.lat,
       lon: near?.lon,
       limit,
+      // A stop's label carries one word of UI text ("Estación" / "Station"); without
+      // this the API answers in the city's language whoever is reading.
+      locale,
     }),
   reverse: (city: string, lat: number, lon: number) =>
     request<ReverseResponse>(`${c(city)}/reverse`, { lat, lon }),

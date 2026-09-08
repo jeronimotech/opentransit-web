@@ -3,6 +3,7 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { ApiRequestError, api } from "./client";
 import type { Departure, Mode, NearbyRentalStation, PlanParams } from "./types";
+import { useI18n } from "@/lib/i18n/provider";
 
 const HOUR = 60 * 60 * 1000;
 
@@ -35,9 +36,13 @@ export function usePlan(city: string, p: PlanParams | null) {
 }
 
 export function useGeocode(city: string, q: string, near?: { lat: number; lon: number }) {
+  // A stop's label carries one word of UI text, so the reader's language is part of
+  // the request — and part of the cache key, or switching language would show the
+  // previous language's results from cache.
+  const { lang } = useI18n();
   return useQuery({
-    queryKey: ["geocode", city, q, near?.lat, near?.lon],
-    queryFn: () => api.geocode(city, q, near),
+    queryKey: ["geocode", city, q, near?.lat, near?.lon, lang],
+    queryFn: () => api.geocode(city, q, near, 8, lang),
     enabled: q.trim().length >= 2,
     staleTime: 5 * 60_000,
     placeholderData: (prev) => prev,
