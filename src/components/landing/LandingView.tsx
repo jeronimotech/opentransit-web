@@ -153,7 +153,11 @@ export function LandingView({ data, appHref, preview, onClosePreview, diagramCol
   const attribution = l.footer.attribution?.trim() || data.city.attribution;
   type Lnk = { label: string; href: string };
   const legal: Lnk[] = [];
-  if (l.footer.privacyUrl) legal.push({ label: t.privacy, href: l.footer.privacyUrl });
+  // The app's own policy, always. `footer.privacyUrl` is whatever the operator
+  // configured — for Bogotá it is the transit agency's, which describes the agency
+  // and not this app, so it appears next to ours rather than instead of it.
+  legal.push({ label: t.privacy, href: `/${data.city.id}/privacy` });
+  if (l.footer.privacyUrl) legal.push({ label: t.agencyPrivacy, href: l.footer.privacyUrl });
   if (l.footer.termsUrl) legal.push({ label: t.terms, href: l.footer.termsUrl });
   const social: Lnk[] = [];
   if (l.contact.social.x) social.push({ label: "X", href: l.contact.social.x });

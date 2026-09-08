@@ -443,6 +443,53 @@ export const dict = {
       usingPoint: "Punto elegido en el mapa",
       useMyLocation: "Usar mi ubicación",
     },
+    privacyPage: {
+      title: "Privacidad",
+      intro: (city: string) =>
+        `Cómo trata tus datos la aplicación de ${city}. Esta página describe esta app, no la política de la entidad de transporte, que se enlaza aparte.`,
+      updated: "Última actualización",
+      noAccount: {
+        h: "No hay cuentas",
+        p: "No pedimos correo, teléfono ni registro. No sabemos quién eres y no tenemos forma de saberlo.",
+      },
+      location: {
+        h: "Tu ubicación",
+        p: "Se usa para centrar el mapa, buscar paradas cerca y planear un viaje desde donde estás. Solo se consulta con la app abierta y solo si le das permiso. Las coordenadas viajan a nuestro servidor para calcular la ruta y no se guardan asociadas a ti.",
+      },
+      analytics: {
+        h: "Analítica de uso",
+        on: (days: number, k: number) =>
+          `Registramos eventos anónimos para entender cómo se mueve la ciudad: qué se busca, qué modos se eligen, qué rutas se consultan. Antes de salir del dispositivo, las coordenadas se redondean a unos 110 metros. El identificador de sesión es aleatorio en cada apertura y el de cohorte cambia cada 30 días, así que no hay forma de seguirte en el tiempo. Los agregados solo se muestran cuando reúnen ${k} personas o más, y los eventos se borran a los ${days} días.`,
+        off: "Está desactivada en esta ciudad: no se registra ningún evento de uso.",
+        optOut: "Puedes desactivarla en Ajustes en cualquier momento, y deja de enviarse de inmediato.",
+      },
+      assistant: {
+        h: "El asistente",
+        on: (provider: string) =>
+          `Cuando preguntas al asistente, tu pregunta se envía a ${provider}, un proveedor externo que genera la respuesta. Le llega el texto que escribes y, si concediste ubicación, unas coordenadas redondeadas. El texto de las conversaciones nunca entra en la analítica.`,
+        off: "Está desactivado en esta ciudad.",
+      },
+      share: {
+        h: "Viajes compartidos",
+        p: "Si compartes un viaje, generamos un enlace con un código imposible de adivinar. Quien lo tenga ve el trayecto y su avance. El enlace caduca solo y puedes revocarlo antes; al caducar, los datos se borran.",
+      },
+      third: {
+        h: "Terceros",
+        p: "No usamos publicidad, ni rastreadores, ni herramientas de analítica de terceros. La app no incluye ningún SDK de ese tipo.",
+        tiles: (host: string) =>
+          `El mapa se dibuja con teselas de ${host}, que las descarga tu dispositivo directamente: ese proveedor ve tu dirección IP y la zona que miras. No controlamos ese servicio.`,
+      },
+      rights: {
+        h: "Tus derechos",
+        p: "Como no guardamos datos que te identifiquen, no hay un perfil tuyo que consultar o borrar. Si crees que algo aquí no se cumple, escríbenos.",
+      },
+      source: {
+        h: "Puedes comprobarlo",
+        p: "Todo el código es abierto. Lo que dice esta página se puede verificar leyéndolo.",
+      },
+      contact: "Contacto",
+      agencyPolicy: "Política de la entidad de transporte",
+    },
     alerts: {
       title: "Alertas del servicio",
       hint: "Desvíos, cierres y novedades publicadas por el operador.",
@@ -1474,6 +1521,53 @@ export const dict = {
       pickHint: "Tap the map to place your point.",
       usingPoint: "Point picked on the map",
       useMyLocation: "Use my location",
+    },
+    privacyPage: {
+      title: "Privacy",
+      intro: (city: string) =>
+        `How the ${city} app handles your data. This page describes this app, not the transit agency's own policy, which is linked separately.`,
+      updated: "Last updated",
+      noAccount: {
+        h: "There are no accounts",
+        p: "We ask for no email, no phone number, no sign-up. We do not know who you are and have no way to find out.",
+      },
+      location: {
+        h: "Your location",
+        p: "Used to centre the map, find stops near you and plan a trip from where you are. It is read only while the app is open, and only if you grant permission. Coordinates reach our server to compute a route and are not stored against you.",
+      },
+      analytics: {
+        h: "Usage analytics",
+        on: (days: number, k: number) =>
+          `We record anonymous events to understand how the city moves: what is searched, which modes are chosen, which routes are looked up. Coordinates are rounded to about 110 metres before they leave the device. The session id is random on every launch and the cohort id changes every 30 days, so there is no way to follow you over time. Aggregates are shown only where they cover ${k} people or more, and events are deleted after ${days} days.`,
+        off: "It is switched off in this city: no usage events are recorded at all.",
+        optOut: "You can turn it off in Settings at any time, and it stops sending immediately.",
+      },
+      assistant: {
+        h: "The assistant",
+        on: (provider: string) =>
+          `When you ask the assistant something, your question is sent to ${provider}, an external provider that generates the answer. They receive the text you type and, if you granted location, coarsened coordinates. Conversation text never enters analytics.`,
+        off: "It is switched off in this city.",
+      },
+      share: {
+        h: "Shared trips",
+        p: "Sharing a trip creates a link with an unguessable code. Anyone holding it sees the route and its progress. The link expires on its own and you can revoke it sooner; on expiry the data is deleted.",
+      },
+      third: {
+        h: "Third parties",
+        p: "No advertising, no trackers, no third-party analytics. The app ships no SDK of that kind.",
+        tiles: (host: string) =>
+          `The map is drawn from tiles served by ${host}, which your device downloads directly: that provider sees your IP address and the area you look at. We do not control that service.`,
+      },
+      rights: {
+        h: "Your rights",
+        p: "Because we keep nothing that identifies you, there is no profile of yours to access or erase. If you believe something here is not being honoured, write to us.",
+      },
+      source: {
+        h: "You can check this",
+        p: "All the code is open. Everything this page claims can be verified by reading it.",
+      },
+      contact: "Contact",
+      agencyPolicy: "Transit agency policy",
     },
     alerts: {
       title: "Service alerts",
