@@ -235,3 +235,30 @@ describe("shared trip link", () => {
     expect(page).toContain('title: { absolute: "opentransit" }');
   });
 });
+
+describe("deep-link verification files", () => {
+  const read = (...parts: string[]) => readFileSync(join(process.cwd(), ...parts), "utf8");
+  const routes = [
+    ["apple-app-site-association", "APPLE_TEAM_ID"],
+    ["assetlinks.json", "ANDROID_PACKAGE_NAME"],
+  ] as const;
+
+  it.each(routes)("%s is evaluated per request, not baked at build", (dir, envVar) => {
+    const src = read("src", "app", ".well-known", dir, "route.ts");
+    // Only NEXT_PUBLIC_* reach the Docker build as args. A statically evaluated route
+    // read these as empty at build time and then served 404 for the life of the image,
+    // with nothing to indicate the deep links were dead.
+    expect(src).toContain('export const dynamic = "force-dynamic"');
+    expect(src).not.toContain("force-static");
+    // ...and the value must be read inside the handler, not at module scope.
+    const handlerAt = src.indexOf("export function GET");
+    expect(src.indexOf(`process.env.${envVar}`)).toBeGreaterThan(handlerAt);
+  });
+
+  it.each(routes)("%s refuses to guess when it is unconfigured", (dir) => {
+    const src = read("src", "app", ".well-known", dir, "route.ts");
+    // A file naming an app that cannot be verified fails verification silently, which
+    // is worse than an honest absence.
+    expect(src).toContain("status: 404");
+  });
+});

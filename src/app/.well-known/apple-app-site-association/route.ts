@@ -9,12 +9,14 @@ import { NextResponse } from "next/server";
  * The team and bundle are deployment identity, not secrets, but they are read
  * from the environment so a fork does not ship ours.
  */
-export const dynamic = "force-static";
-
-const TEAM = process.env.APPLE_TEAM_ID ?? "";
-const BUNDLE = process.env.APPLE_BUNDLE_ID ?? "";
+// Read at request time, not build time. Only NEXT_PUBLIC_* reach the Docker build as
+// args, so a statically evaluated route baked these as empty and served 404 forever —
+// and changing deployment identity should never need a rebuild.
+export const dynamic = "force-dynamic";
 
 export function GET() {
+  const TEAM = process.env.APPLE_TEAM_ID ?? "";
+  const BUNDLE = process.env.APPLE_BUNDLE_ID ?? "";
   if (!TEAM || !BUNDLE) {
     // Better an honest 404 than a file that claims an app nobody can verify.
     return new NextResponse("not configured", { status: 404 });

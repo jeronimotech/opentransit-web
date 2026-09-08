@@ -10,15 +10,17 @@ import { NextResponse } from "next/server";
  * ANDROID_CERT_SHA256 accepts several colon-separated fingerprints, comma-separated
  * (upload key and Play App Signing key, say).
  */
-export const dynamic = "force-static";
-
-const PACKAGE = process.env.ANDROID_PACKAGE_NAME ?? "";
-const FINGERPRINTS = (process.env.ANDROID_CERT_SHA256 ?? "")
-  .split(",")
-  .map((f) => f.trim())
-  .filter(Boolean);
+// Read at request time, not build time: see the note in apple-app-site-association.
+// It matters more here — the Play App Signing fingerprint is appended after the first
+// upload, and that must not require rebuilding the site.
+export const dynamic = "force-dynamic";
 
 export function GET() {
+  const PACKAGE = process.env.ANDROID_PACKAGE_NAME ?? "";
+  const FINGERPRINTS = (process.env.ANDROID_CERT_SHA256 ?? "")
+    .split(",")
+    .map((f) => f.trim())
+    .filter(Boolean);
   if (!PACKAGE || FINGERPRINTS.length === 0) {
     return new NextResponse("not configured", { status: 404 });
   }
