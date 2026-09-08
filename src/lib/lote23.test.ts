@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { alertsOnItinerary, autoDirection, flipDirection, hourInTz, resolveCommute } from "./commute";
 import { GAP_THRESHOLD_SECONDS, gapAfter, noteAt, recommendedIndex, toRows } from "./forecast";
@@ -209,5 +211,27 @@ describe("shared ETA view state", () => {
   it("reports how stale the shared position is", () => {
     expect(progressAgeSeconds(shared(), T0)).toBe(30);
     expect(progressAgeSeconds(null, T0)).toBeNull();
+  });
+});
+
+/* ── the link a person actually receives ───────────────────────────────────── */
+
+describe("shared trip link", () => {
+  const read = (...parts: string[]) => readFileSync(join(process.cwd(), ...parts), "utf8");
+
+  it("the share page lives where the API sends people", () => {
+    // The API builds `<web>/{city}/eta/{token}`. If this route moves, every link
+    // already in someone's chat breaks, and the API has no way to know.
+    expect(existsSync(join(process.cwd(), "src", "app", "(share)", "[city]", "eta", "[token]", "page.tsx"))).toBe(true);
+    const mock = read("src", "mocks", "share.ts");
+    expect(mock).toContain("/${city}/eta/${t}");
+  });
+
+  it("the shared page is not indexed and does not repeat its own name", () => {
+    const page = read("src", "app", "(share)", "[city]", "eta", "[token]", "page.tsx");
+    // A shared trip is private: no destination in the title, no search engine.
+    expect(page).toContain("index: false");
+    // `absolute` escapes the root template, which produced "opentransit · opentransit".
+    expect(page).toContain('title: { absolute: "opentransit" }');
   });
 });

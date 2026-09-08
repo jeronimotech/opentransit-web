@@ -8,7 +8,9 @@ type Props = { params: Promise<{ city: string; token: string }> };
  * and it carries no title that would leak the destination into a search engine.
  */
 export const metadata: Metadata = {
-  title: "opentransit",
+  // `absolute` skips the root layout's "%s · opentransit" template, which turned this
+  // into "opentransit · opentransit" in the tab and in any link preview.
+  title: { absolute: "opentransit" },
   robots: { index: false, follow: false, nocache: true },
 };
 
