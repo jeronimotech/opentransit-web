@@ -83,15 +83,26 @@ function frame(): VehicleFrame {
   };
 }
 
+/**
+ * Photon rows, shaped like the ones the API actually returns (checked against
+ * `GET /v1/cities/bogota/geocode`, 2026-09-07): the label is
+ * `street, housenumber, district, city`, `component` is always null, and the id is
+ * `photon:<osm_type><osm_id>`. Streets and `place` rows belong here too — the planner
+ * has to tell them apart from stops, so the demo must be able to produce them.
+ */
 const POIS: GeocodeResult[] = [
-  { id: "photon:1", name: "Aeropuerto El Dorado", label: "Aeropuerto · Fontibón", lat: 4.7016, lon: -74.1469, type: "poi", stopId: null, component: null, source: "photon" },
-  { id: "photon:2", name: "Universidad Nacional", label: "Universidad · Teusaquillo", lat: 4.6363, lon: -74.0836, type: "poi", stopId: null, component: null, source: "photon" },
-  { id: "photon:3", name: "Plaza de Bolívar", label: "Plaza · La Candelaria", lat: 4.5981, lon: -74.0758, type: "poi", stopId: null, component: null, source: "photon" },
-  { id: "photon:4", name: "Calle 26 # 13-19", label: "Dirección · Santa Fe", lat: 4.6122, lon: -74.0712, type: "address", stopId: null, component: null, source: "photon" },
-  { id: "photon:5", name: "Parque Simón Bolívar", label: "Parque · Teusaquillo", lat: 4.6581, lon: -74.0936, type: "poi", stopId: null, component: null, source: "photon" },
-  { id: "photon:6", name: "Monserrate", label: "Cerro · La Candelaria", lat: 4.6056, lon: -74.0561, type: "poi", stopId: null, component: null, source: "photon" },
-  { id: "photon:7", name: "Centro Comercial Andino", label: "Centro comercial · Chapinero", lat: 4.6672, lon: -74.0533, type: "poi", stopId: null, component: null, source: "photon" },
-  { id: "photon:8", name: "Unicentro", label: "Centro comercial · Usaquén", lat: 4.7027, lon: -74.0413, type: "poi", stopId: null, component: null, source: "photon" },
+  { id: "photon:N1", name: "Aeropuerto El Dorado", label: "Localidad Fontibón, Bogotá", lat: 4.7016, lon: -74.1469, type: "poi", stopId: null, component: null, source: "photon" },
+  { id: "photon:N2", name: "Universidad Nacional", label: "Localidad Teusaquillo, Bogotá", lat: 4.6363, lon: -74.0836, type: "poi", stopId: null, component: null, source: "photon" },
+  { id: "photon:N3", name: "Plaza de Bolívar", label: "Localidad La Candelaria, Bogotá", lat: 4.5981, lon: -74.0758, type: "poi", stopId: null, component: null, source: "photon" },
+  { id: "photon:N4", name: "Calle 26 # 13-19", label: "Calle 26, 13-19, Localidad Santa Fe, Bogotá", lat: 4.6122, lon: -74.0712, type: "address", stopId: null, component: null, source: "photon" },
+  { id: "photon:N5", name: "Parque Simón Bolívar", label: "Localidad Teusaquillo, Bogotá", lat: 4.6581, lon: -74.0936, type: "poi", stopId: null, component: null, source: "photon" },
+  { id: "photon:N6", name: "Monserrate", label: "Localidad La Candelaria, Bogotá", lat: 4.6056, lon: -74.0561, type: "poi", stopId: null, component: null, source: "photon" },
+  { id: "photon:N7", name: "Centro Comercial Andino", label: "Localidad Chapinero, Bogotá", lat: 4.6672, lon: -74.0533, type: "poi", stopId: null, component: null, source: "photon" },
+  { id: "photon:N8", name: "Unicentro", label: "Localidad Usaquén, Bogotá", lat: 4.7027, lon: -74.0413, type: "poi", stopId: null, component: null, source: "photon" },
+  { id: "photon:W9", name: "Calle 26", label: "Localidad Teusaquillo, Bogotá", lat: 4.6286, lon: -74.0865, type: "street", stopId: null, component: null, source: "photon" },
+  { id: "photon:W10", name: "Carrera 7", label: "Localidad Chapinero, Bogotá", lat: 4.6488, lon: -74.0589, type: "street", stopId: null, component: null, source: "photon" },
+  { id: "photon:W11", name: "Calle 85", label: "Localidad Barrios Unidos, Bogotá", lat: 4.6719, lon: -74.0554, type: "street", stopId: null, component: null, source: "photon" },
+  { id: "photon:R12", name: "Chapinero", label: "Bogotá", lat: 4.6486, lon: -74.0628, type: "place", stopId: null, component: null, source: "photon" },
 ];
 
 function geocode(q: string, limit: number, near?: { lat: number; lon: number }): GeocodeResult[] {
@@ -109,11 +120,9 @@ function geocode(q: string, limit: number, near?: { lat: number; lon: number }):
     })
     .map((s) => ({
       id: `stop:${s.id}`,
+      // the API builds this as `Estación|Parada · <code> · <component>`, each part optional
       name: s.name,
-      label:
-        s.locationType === "station"
-          ? `Estación ${s.component === "cable" ? "TransMiCable" : "troncal"}`
-          : `Paradero SITP · ${s.code}`,
+      label: [s.locationType === "station" ? "Estación" : "Parada", s.code, s.component].filter(Boolean).join(" · "),
       lat: s.lat,
       lon: s.lon,
       type: s.locationType === "station" ? "station" : "stop",
@@ -122,7 +131,10 @@ function geocode(q: string, limit: number, near?: { lat: number; lon: number }):
       source: "gtfs",
     }));
   const fromPois = POIS.filter((p) => normalize(p.name).includes(n));
-  return [...fromStops, ...fromPois].slice(0, limit);
+  // `distanceMeters` only comes back when the caller passed a position, as in the API
+  return [...fromStops, ...fromPois]
+    .slice(0, limit)
+    .map((r) => (near ? { ...r, distanceMeters: Math.round(haversineMeters(near, r)) } : r));
 }
 
 function departures(stopId: string, limit: number): Departure[] {

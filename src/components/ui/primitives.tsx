@@ -294,6 +294,29 @@ export const Icon = {
       <rect x="3" y="11" width="6" height="6" rx="1.5" /><rect x="11" y="11" width="6" height="6" rx="1.5" />
     </svg>
   ),
+  /** v2.1 — a mode-neutral transit node, so a geocode result reads as a stop/station whatever the component. */
+  Station: (p: ComponentProps<"svg">) => (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}>
+      <path d="M3 10h3M14 10h3" />
+      <circle cx="10" cy="10" r="4" />
+      <circle cx="10" cy="10" r="1.2" fill="currentColor" />
+    </svg>
+  ),
+  /** v2.1 — a street/road, so an address never looks like a station. */
+  Street: (p: ComponentProps<"svg">) => (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" {...p}>
+      <path d="M6.5 3 4 17M13.5 3 16 17" />
+      <path d="M10 4v2.5M10 9v2.5M10 14v2.5" />
+    </svg>
+  ),
+  /** v2.1 — the crosshair the map picker fixes at the centre of the screen. */
+  Crosshair: (p: ComponentProps<"svg">) => (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}>
+      <circle cx="10" cy="10" r="6" />
+      <path d="M10 1v4M10 15v4M1 10h4M15 10h4" />
+      <circle cx="10" cy="10" r="1.2" fill="currentColor" />
+    </svg>
+  ),
   Route: (p: ComponentProps<"svg">) => (
     <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}>
       <circle cx="5" cy="5" r="2" /><circle cx="15" cy="15" r="2" />

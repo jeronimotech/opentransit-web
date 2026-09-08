@@ -57,12 +57,17 @@ export function MapView({ center, zoom, maxBounds, attribution, onClick, classNa
   const { resolved } = useTheme();
   const onClickRef = useRef(onClick);
   onClickRef.current = onClick;
+  // Which basemap is actually applied. We track it because the style JSON we load carries
+  // no `name`, so reading it back cannot tell dark from light.
+  const appliedDark = useRef(false);
 
   useEffect(() => {
     if (!el.current) return;
+    const startDark = document.documentElement.dataset.theme === "dark";
+    appliedDark.current = startDark;
     const m = new maplibregl.Map({
       container: el.current,
-      style: document.documentElement.dataset.theme === "dark" ? STYLE_DARK : STYLE_LIGHT,
+      style: startDark ? STYLE_DARK : STYLE_LIGHT,
       center,
       zoom,
       maxBounds,
@@ -93,10 +98,10 @@ export function MapView({ center, zoom, maxBounds, attribution, onClick, classNa
   // Theme switch → swap basemap style. Layers re-add on style.load via styleVersion.
   useEffect(() => {
     if (!map) return;
-    const want = resolved === "dark" ? STYLE_DARK : STYLE_LIGHT;
-    const current = (map.getStyle() as { name?: string } | undefined)?.name ?? "";
-    const isDark = /dark/i.test(current);
-    if ((resolved === "dark") !== isDark) map.setStyle(want);
+    const wantDark = resolved === "dark";
+    if (wantDark === appliedDark.current) return;
+    appliedDark.current = wantDark;
+    map.setStyle(wantDark ? STYLE_DARK : STYLE_LIGHT);
   }, [map, resolved]);
 
   return (

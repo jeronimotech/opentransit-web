@@ -4,6 +4,7 @@ import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMap, useMapZoom } from "./MapView";
+import { useTheme } from "@/lib/theme";
 import { componentColor } from "@/lib/colors";
 import { desaturate, routeChipColors } from "@/lib/route-color";
 import { LIVE_DETAIL_ZOOM, LIVE_MIN_ZOOM } from "@/lib/marker-style";
@@ -11,6 +12,18 @@ import { ETA_COLORS, etaBucket } from "@/lib/eta";
 import { bboxOf, decodeGeometry, fc, toLineString, toPoint, type BBox, type LngLat } from "@/lib/geo";
 import type { BikeShareNetwork, Component, Geometry, Itinerary, NetworkShape, PoiCollection, PoiType, RentalStation, Stop, Vehicle } from "@/lib/api/types";
 import type { FeatureCollection } from "geojson";
+
+/**
+ * MapLibre paint properties cannot read CSS variables, so resolve the token here.
+ * Layers are re-added on every style load, which is exactly when the theme changes,
+ * so the value read is the current theme's. The walking leg used to be painted with
+ * the light palette's ink and vanished into the dark basemap — the first and last
+ * legs of a multimodal trip are the ones a rider most needs to see.
+ */
+function themeColor(token: string, fallback: string): string {
+  if (typeof document === "undefined") return fallback;
+  return getComputedStyle(document.documentElement).getPropertyValue(token).trim() || fallback;
+}
 
 type DistributiveOmit<T, K extends keyof never> = T extends unknown ? Omit<T, K> : never;
 /** A layer spec without `source` — the hook wires the source id in. */
@@ -89,6 +102,12 @@ export function useGeoJsonLayer(
 
 // ── Itinerary ──────────────────────────────────────────────────────────────
 export function ItineraryLayer({ itinerary, dim = false }: { itinerary: Itinerary | null; dim?: boolean }) {
+  const { resolved } = useTheme();
+  // The fallback is per-theme too, so the first paint is right even before styles resolve.
+  const walkColor = useMemo(
+    () => themeColor("--ink", resolved === "dark" ? "#eef0ec" : "#1a1d21"),
+    [resolved],
+  );
   const data = useMemo(() => {
     if (!itinerary) return fc([]);
     const lines = itinerary.legs.map((leg, i) =>
@@ -145,7 +164,7 @@ export function ItineraryLayer({ itinerary, dim = false }: { itinerary: Itinerar
       type: "line",
       filter: ["==", ["get", "walk"], true],
       layout: { "line-cap": "round" },
-      paint: { "line-color": "#1a1d21", "line-width": 3, "line-dasharray": [0.2, 2], "line-opacity": dim ? 0.4 : 0.9 },
+      paint: { "line-color": walkColor, "line-width": 3, "line-dasharray": [0.2, 2], "line-opacity": dim ? 0.4 : 0.9 },
     },
     {
       id: "itinerary-rental-casing",
@@ -761,8 +780,29 @@ export function EtaLegend({ labels, className = "" }: { labels: { now: string; s
 }
 
 // ── Pins (origin/destination/user) as DOM markers ───────────────────────────
-export function PinMarker({ lat, lon, kind }: { lat: number; lon: number; kind: "from" | "to" | "user" }) {
+/**
+ * Origin / destination / device pins. v2.1: the trip's two ends are draggable —
+ * dropping one re-plans from the new point, so the caller re-labels it by reverse geocoding.
+ */
+export function PinMarker({
+  lat,
+  lon,
+  kind,
+  draggable = false,
+  onDragEnd,
+  label,
+}: {
+  lat: number;
+  lon: number;
+  kind: "from" | "to" | "user";
+  draggable?: boolean;
+  onDragEnd?: (p: { lat: number; lon: number }) => void;
+  label?: string;
+}) {
   const { map } = useMap();
+  // held in a ref so a new handler does not tear the marker down mid-drag
+  const dropRef = useRef(onDragEnd);
+  dropRef.current = onDragEnd;
   useEffect(() => {
     if (!map) return;
     const el = document.createElement("div");
@@ -770,14 +810,27 @@ export function PinMarker({ lat, lon, kind }: { lat: number; lon: number; kind: 
       el.className = "h-4 w-4 rounded-full border-[3px] border-white bg-signal shadow";
     } else {
       el.className = "pin";
-      el.style.background = kind === "from" ? "#1a1d21" : "#0b5cd5";
+      // Theme tokens, not the light palette's hex: the origin pin was hardcoded to the
+      // light-mode ink and vanished into a dark map, which a draggable pin cannot afford.
+      el.style.background = kind === "from" ? "var(--ink)" : "var(--signal)";
     }
-    const marker = new maplibregl.Marker({ element: el, anchor: kind === "user" ? "center" : "bottom-left", offset: kind === "user" ? [0, 0] : [0, 0] })
+    if (label) {
+      el.title = label;
+      el.setAttribute("aria-label", label);
+    }
+    if (draggable) el.style.cursor = "grab";
+    const marker = new maplibregl.Marker({ element: el, anchor: kind === "user" ? "center" : "bottom-left", offset: kind === "user" ? [0, 0] : [0, 0], draggable })
       .setLngLat([lon, lat])
       .addTo(map);
+    const onEnd = () => {
+      const ll = marker.getLngLat();
+      dropRef.current?.({ lat: ll.lat, lon: ll.lng });
+    };
+    if (draggable) marker.on("dragend", onEnd);
     return () => {
+      if (draggable) marker.off("dragend", onEnd);
       marker.remove();
     };
-  }, [map, lat, lon, kind]);
+  }, [map, lat, lon, kind, draggable, label]);
   return null;
 }

@@ -2,6 +2,30 @@
 
 All notable changes to opentransit-web. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.10.0] - 2026-09-07
+### Added
+- **Every geocode result can be either end of the trip** (contract addendum v2.1). A row fills the field it belongs to; the chip beside it fills the other one, and when both ends end up set the plan runs without a second tap. Nothing is overwritten silently: when the other field already holds a point, the chip's label names what it would replace ("Reemplazar el origen (Calle 85)").
+- **"Elegir en el mapa" is a screen of its own, for origin and destination alike**: a full-screen map with a fixed centre crosshair, the centre reverse geocoded (debounced, one request per pause) and shown in the confirm bar so the person sees what they are picking. When the geocoder fails or says nothing, the bar shows the coordinates and confirming still works — a nameless point is a valid endpoint and travels as `fromName`/`toName`.
+- **Draggable origin and destination pins** on the itinerary map. Dropping one re-plans from where it landed straight away, then re-labels it once the reverse geocode answers.
+- **Results tell a stop from a street**: a transit glyph on the component colour for stops and stations, and a distinct outlined glyph for addresses (house), streets (road), POIs and localities, each with the API's own `label`. `common.place` names the Photon `place` type ("Zona" / "Area").
+- es/en for every new string, and `src/lib/place-choice.ts` — the rules for filling, swapping and naming an endpoint, tested without a DOM.
+- **A long press on the main map starts or ends a trip there**, the contract's second entry point beside the field's own action. Right-click is the pointer equivalent. A press that turns into a pan never steals the gesture: it cancels past a 12 px slop and on any drag or zoom.
+
+### Fixed
+- **The origin pin was invisible on a dark map**, and so were the walking legs. Both were painted with the light palette's ink (`#1a1d21`) rather than a theme token, which is a dark shape on a dark basemap. They now follow `--ink`, so they invert with the theme. This mattered little while a pin was decoration and matters a lot now that you place one by pressing the map and move it by dragging — and the walk legs are the first and last mile of every multimodal trip.
+- **Switching to the light theme left the basemap dark.** The swap compared the wanted theme against the name of the loaded style, but the style JSON we load carries no `name` at all, so it always read as "light": going light never swapped anything and going dark re-fetched the dark style it already had. The applied basemap is now tracked directly.
+
+### Changed
+- **The swap control exchanges the two ends and re-plans**; it now works with one field empty (the filled end moves and the other becomes empty) and is disabled only when both are empty.
+- `view=plan` reopens the form even when the trip already has both ends. It used to fall through to the results summary, which left the fields, the swap and both map picks unreachable as soon as a plan existed.
+- `PlaceInput` gained `onPlace`/`other`; both are optional, so the favourites screen keeps using it as a plain place chooser.
+- Removed `planner.pickOnMapHint` ("Toca el mapa para fijar el punto"). Nothing taps the main map to set a point any more, so the string described behaviour that no longer exists.
+- `GeocodeResult.label` is `string | null` and `distanceMeters` is typed, matching `app/models.py`. The mock's geocode rows were rebuilt from a live response: real label shapes (`Parada · 212B00_TM · dual`, `Localidad Usaquén, Bogotá`), `component: null` on stations and Photon rows, `distanceMeters` only when a position was passed, and `street`/`place` rows the demo could not produce before.
+
+### Notes
+- Verified against the live API (Bogotá, `localhost:8001`, geocoder `photon`): "Calle 85" returns streets and stations side by side and both are usable as either end; a plan from the street *Calle 85* to *Portal Norte* returns walk legs at both ends; the picker's confirm bar tracked the pan ("TransMilenio" → "Carrera 20A") with exactly one `/reverse` call per pause; dragging each pin re-planned and re-labelled it ("Calle 173", "El Pollo Exitoso, Calle 172A"); with `/reverse` forced to fail the bar showed the coordinates and confirming still produced a valid endpoint.
+- The three fixes above were found by exercising the feature in a browser against the live API, not by reading the diff: placing an origin by long press produced a marker nobody could see.
+
 ## [1.9.2] - 2026-09-07
 ### Fixed
 - **The admin panel validated the override instead of the configuration it produces, and blocked the operator.** An override is a patch: Bogotá's is `{config: {assistant: {enabled: true}}}`, meaning "turn the assistant on and keep everything else from the YAML". The panel read it as if it were the whole section, so the Asistente tab showed a city with no provider and no key, refused to save with "Corrige los campos marcados antes de guardar", and would have written those blanks over the YAML on the next save. `effectiveSection` now merges the patch onto the YAML the way the server does (`deep_merge` in `admin_config.py`): nested objects merge key by key, lists and scalars replace, and a field the patch omits — or carries as null, which is what the admin endpoint writes for a masked secret — is inherited. The fix is in the shared draft layer, so every tab gets it; a test per tab pins a partial override that used to fail.

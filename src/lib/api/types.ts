@@ -477,14 +477,18 @@ export type PlanResponse = {
 export type GeocodeResult = {
   id: string;
   name: string;
-  label: string;
+  /** Optional in the API (`label: str | None`): "Estación", "Parada · 212B00_TM · dual", "Localidad Usaquén, Bogotá". */
+  label: string | null;
   lat: number;
   lon: number;
   /** `place` = neighbourhoods/localities from Photon (API deviation note). */
   type: "station" | "stop" | "address" | "poi" | "street" | "place";
   stopId: string | null;
+  /** Photon results carry none; so do GTFS stations, whose component the feed leaves unset. */
   component: Component | null;
   source: "gtfs" | "photon";
+  /** Present when the query passed `lat`/`lon`. */
+  distanceMeters?: number | null;
 };
 
 export type GeocodeResponse = { results: GeocodeResult[] };

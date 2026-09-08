@@ -11,6 +11,7 @@ import { onDemandEnabled } from "@/lib/ondemand";
 import { plannerToggles, TOGGLES_PER_ROW, type PlannerToggle } from "@/lib/planner-toggles";
 import type { City, Mode } from "@/lib/api/types";
 import type { PlannerPoint, PlannerState } from "@/lib/planner-params";
+import { canSwap, type Field } from "@/lib/place-choice";
 
 const TOGGLE_ICON: Partial<Record<Mode | "rental" | "taxi", React.ReactNode>> = {
   BUS: <Icon.Bus width={18} height={18} />,
@@ -29,6 +30,10 @@ type Props = {
   state: PlannerState;
   onChange: (s: PlannerState) => void;
   onSubmit: () => void;
+  /** v2.1 — a place chosen for either field; the page plans as soon as both ends are set. */
+  onPlace: (field: Field, p: PlannerPoint) => void;
+  /** v2.1 — exchange the two ends (and re-plan if both are set); works with one of them empty. */
+  onSwap: () => void;
   onUseLocation: (kind: "from" | "to") => void;
   onPickOnMap: (kind: "from" | "to") => void;
   picking: "from" | "to" | null;
@@ -45,7 +50,7 @@ type Props = {
  * (`Ahora ▾` popover with Salir a las / Llegar antes de + picker), one mode row that
  * fits on a phone, advanced toggles under "Más opciones", and the CTA pinned at the bottom.
  */
-export function PlannerForm({ city, state, onChange, onSubmit, onUseLocation, onPickOnMap, picking, locating, userPos, compact, bikeEnabled = true, onDemandEnabled: onDemandFlag = true }: Props) {
+export function PlannerForm({ city, state, onChange, onSubmit, onPlace, onSwap, onUseLocation, onPickOnMap, picking, locating, userPos, compact, bikeEnabled = true, onDemandEnabled: onDemandFlag = true }: Props) {
   const { t, lang } = useI18n();
   const canBike = bikeEnabled && city.modes.includes("BICYCLE");
   // shared bikes: one chip for the city's networks (N per city); colour of the first, names in the hint
@@ -103,9 +108,10 @@ export function PlannerForm({ city, state, onChange, onSubmit, onUseLocation, on
     >
       {/* origin / destination */}
       <div className="relative flex flex-col gap-2">
-        <PlaceInput city={city.id} kind="from" label={t.planner.from} placeholder={t.planner.fromPlaceholder} value={state.from} near={userPos ?? city.center} onChange={(p) => setPoint("from", p)} onUseLocation={() => onUseLocation("from")} onPickOnMap={() => onPickOnMap("from")} locating={locating === "from"} picking={picking === "from"} autoFocus={!compact && !state.from} />
-        <PlaceInput city={city.id} kind="to" label={t.planner.to} placeholder={t.planner.toPlaceholder} value={state.to} near={userPos ?? city.center} onChange={(p) => setPoint("to", p)} onUseLocation={() => onUseLocation("to")} onPickOnMap={() => onPickOnMap("to")} locating={locating === "to"} picking={picking === "to"} />
-        <button type="button" onClick={() => set({ from: state.to, to: state.from })} className="absolute -right-1 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-line bg-paper-2 text-ink-2 shadow-sm hover:text-ink md:h-8 md:w-8" aria-label={t.planner.swap} title={t.planner.swap}>
+        <PlaceInput city={city.id} kind="from" label={t.planner.from} placeholder={t.planner.fromPlaceholder} value={state.from} other={state.to} near={userPos ?? city.center} onChange={(p) => setPoint("from", p)} onPlace={onPlace} onUseLocation={() => onUseLocation("from")} onPickOnMap={() => onPickOnMap("from")} locating={locating === "from"} picking={picking === "from"} autoFocus={!compact && !state.from} />
+        <PlaceInput city={city.id} kind="to" label={t.planner.to} placeholder={t.planner.toPlaceholder} value={state.to} other={state.from} near={userPos ?? city.center} onChange={(p) => setPoint("to", p)} onPlace={onPlace} onUseLocation={() => onUseLocation("to")} onPickOnMap={() => onPickOnMap("to")} locating={locating === "to"} picking={picking === "to"} />
+        {/* one filled end is enough to swap: the other simply becomes empty */}
+        <button type="button" onClick={onSwap} disabled={!canSwap(state)} data-testid="swap-endpoints" className="absolute -right-1 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-line bg-paper-2 text-ink-2 shadow-sm hover:text-ink disabled:opacity-40 md:h-8 md:w-8" aria-label={t.planner.swap} title={t.planner.swap}>
           <Icon.Swap />
         </button>
       </div>

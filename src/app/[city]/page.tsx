@@ -1,13 +1,15 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCityCtx } from "@/components/shell/CityContext";
 import { SplitLayout, type Snap } from "@/components/shell/SplitLayout";
 import { MapView, useFitBounds, useMap, useMapZoom } from "@/components/map/MapView";
 import { ItineraryLayer, LayersControl, LocateButton, NetworkLayer, PinMarker, PoisLayer, RENTAL_MIN_ZOOM, RentalStationsLayer, StopsLayer, VehiclesLayer, ZoomGate, useMapBounds } from "@/components/map/layers";
 import { RentalStationCard } from "@/components/rental/RentalStationCard";
 import { PlannerForm } from "@/components/planner/PlannerForm";
+import { MapPicker } from "@/components/planner/MapPicker";
+import { LongPressPick } from "@/components/planner/LongPressPick";
 import { ResultsList } from "@/components/itinerary/ResultsList";
 import { DepartureForecast } from "@/components/planner/DepartureForecast";
 import { ItineraryDetail } from "@/components/itinerary/ItineraryDetail";
@@ -27,7 +29,8 @@ import { useFavorites } from "@/lib/favorites";
 import { resolveConfig, componentsOf } from "@/lib/city-config";
 import { LIVE_MIN_ZOOM, liveAutoOn } from "@/lib/marker-style";
 import { track, useScreenView } from "@/lib/analytics";
-import { readPlanner, toPlanParams, writePlanner, type PlannerState } from "@/lib/planner-params";
+import { readPlanner, toPlanParams, writePlanner, type PlannerPoint, type PlannerState } from "@/lib/planner-params";
+import { applyEndpoint, otherField, pointFrom, swapEndpoints, type Field } from "@/lib/place-choice";
 import type { Itinerary, RentalStation } from "@/lib/api/types";
 
 /** Keeps origin and destination in view while the person compares options. */
@@ -217,7 +220,9 @@ function Planner() {
   }, [selected?.id]);
 
   // Sheet position follows the task: hub peeks, the form needs room, results/detail share the map.
-  const stage = showHub ? "hub" : selected ? "detail" : planParams ? "results" : "form";
+  // `view=plan` on a trip that already has both ends means "let me edit it": without this the
+  // fields, the swap and the map picks became unreachable as soon as a plan existed.
+  const stage = showHub ? "hub" : selected ? "detail" : view === "plan" ? "form" : planParams ? "results" : "form";
   useEffect(() => {
     setSnap(stage === "hub" ? "peek" : stage === "form" ? "full" : "half");
   }, [stage]);
@@ -235,6 +240,29 @@ function Planner() {
     track("layer_toggle", { layer, on: v });
   };
 
+  /**
+   * v2.1 — one way in for every source (typing, the map, the device): fill a field and,
+   * once both ends are set, run the plan. Nothing else may write `from`/`to`.
+   */
+  const applyPlace = useCallback(
+    (field: Field, p: PlannerPoint) => {
+      const { next, ready } = applyEndpoint(draft, field, p);
+      setDraft(next);
+      if (ready) commit(next);
+    },
+    [draft, commit],
+  );
+  // async callers (reverse geocoding a dropped pin) must not write through a stale draft
+  const applyRef = useRef(applyPlace);
+  applyRef.current = applyPlace;
+
+  /** Exchanging the ends is valid with one of them empty; re-plan only when both survive. */
+  const swap = useCallback(() => {
+    const next = swapEndpoints(draft);
+    setDraft(next);
+    if (next.from && next.to) commit(next);
+  }, [draft, commit]);
+
   const locateFor = async (kind: "from" | "to" | "hub") => {
     setLocating(kind);
     const pos = await geo.locate();
@@ -246,26 +274,22 @@ function Planner() {
     } catch {
       /* keep generic name */
     }
-    const next = { ...draft, [kind]: { ...pos, name }, selected: null };
-    setDraft(next);
-    if (next.from && next.to) commit(next);
+    applyPlace(kind, { ...pos, name });
     return pos;
   };
 
-  const onMapClick = async (ll: { lng: number; lat: number }) => {
-    if (!picking) return;
-    const kind = picking;
-    setPicking(null);
-    let name = `${ll.lat.toFixed(4)}, ${ll.lng.toFixed(4)}`;
+  /**
+   * A pin dropped on the itinerary map re-plans from where it landed straight away
+   * (labelled with its coordinates), then re-labels itself once the name comes back.
+   */
+  const onDropPin = async (field: Field, p: { lat: number; lon: number }) => {
+    applyPlace(field, pointFrom(p.lat, p.lon));
     try {
-      name = (await api.reverse(city.id, ll.lat, ll.lng)).name;
+      const { name } = await api.reverse(city.id, p.lat, p.lon);
+      if (name?.trim()) applyRef.current(field, pointFrom(p.lat, p.lon, name));
     } catch {
-      /* fallback to coords */
+      /* the coordinates stand as the label */
     }
-    const next = { ...draft, [kind]: { lat: ll.lat, lon: ll.lng, name }, selected: null };
-    setDraft(next);
-    setSnap("full");
-    if (next.from && next.to) commit(next);
   };
 
   const openPlanner = () => commit(draft, { view: "plan" });
@@ -309,7 +333,7 @@ function Planner() {
     <Hub city={city} onPlan={openPlanner} onLocate={() => locateFor("hub")} pos={geo.pos} locating={locating === "hub"} onUsePlace={planWithPlace} onPlanTrip={planTrip} expanded={snap !== "peek"} onAsk={canAsk ? openChat : undefined} />
   ) : (
     <div className="flex flex-col">
-      {selected || stage === "results" ? (
+      {stage === "results" || stage === "detail" ? (
         /* Compact summary while reading results or an itinerary; tap to edit. */
         <button type="button" onClick={() => commit({ ...urlState, selected: null }, { view: "plan" })} className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left hover:bg-paper-3" aria-label={t.planner.editTrip}>
           <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-sm">
@@ -337,11 +361,10 @@ function Planner() {
             state={draft}
             onChange={setDraft}
             onSubmit={() => commit({ ...draft, selected: null })}
+            onPlace={applyPlace}
+            onSwap={swap}
             onUseLocation={locateFor}
-            onPickOnMap={(k) => {
-              setPicking(k);
-              setSnap("peek");
-            }}
+            onPickOnMap={setPicking}
             picking={picking}
             locating={locating === "from" || locating === "to" ? locating : null}
             userPos={geo.pos}
@@ -349,7 +372,6 @@ function Planner() {
             bikeEnabled={cfg.features.bike}
           />
           {geo.error ? <p className="mt-2 text-xs text-brick">{t.planner.locationDenied}</p> : null}
-          {picking ? <p className="mt-2 rounded-md bg-amber/30 px-2 py-1 text-xs font-semibold">{t.planner.pickOnMapHint}</p> : null}
           {fav.recents.length ? (
             <div className="mt-3">
               <p className="mb-1 text-xs font-semibold text-ink-2">{t.favorites.recents}</p>
@@ -440,13 +462,27 @@ function Planner() {
   return (
     <>
       {canAsk ? <ChatSheet city={city} open={chat} onClose={closeChat} pos={geo.pos} /> : null}
+      {picking ? (
+        <MapPicker
+          city={city}
+          field={picking}
+          initial={draft[picking] ?? draft[otherField(picking)] ?? geo.pos ?? city.center}
+          onCancel={() => setPicking(null)}
+          onConfirm={(p) => {
+            setPicking(null);
+            applyPlace(picking, p);
+          }}
+          onLocate={() => locateFor("hub")}
+          locating={locating === "hub"}
+        />
+      ) : null}
       <SplitLayout
       snap={snap}
       onSnapChange={setSnap}
       overlay={overlay}
       panel={panel}
       map={
-        <MapView center={[city.center.lon, city.center.lat]} zoom={city.defaultZoom} attribution={city.attribution} onClick={onMapClick} className={`h-full w-full ${picking ? "cursor-crosshair" : ""}`}>
+        <MapView center={[city.center.lon, city.center.lat]} zoom={city.defaultZoom} attribution={city.attribution} className="h-full w-full">
           <ZoomGate min={12} force={false}>
             <NetworkInView city={city.id} trunk={showNet && !selected} zonal={showZonal && !selected} />
           </ZoomGate>
@@ -458,9 +494,12 @@ function Planner() {
           {cfg.features.liveVehicles && !selected ? <FleetInView city={city.id} enabled={showLive} colors={compColors} onClick={(id) => router.push(`/${city.id}/live?vehicle=${encodeURIComponent(id)}`)} /> : null}
           {cfg.features.pois ? <PoisInView city={city.id} enabled={showPois} /> : null}
           {bikeShareEnabled(city) && !selected ? <RentalInView city={city.id} enabled={showBikes} selectedId={bikeStation?.id ?? null} onSelect={setBikeStation} /> : null}
-          {draft.from ? <PinMarker kind="from" lat={draft.from.lat} lon={draft.from.lon} /> : null}
-          {draft.to ? <PinMarker kind="to" lat={draft.to.lat} lon={draft.to.lon} /> : null}
+          {/* v2.1 — the two ends are draggable: dropping one re-plans from where it landed */}
+          {draft.from ? <PinMarker kind="from" lat={draft.from.lat} lon={draft.from.lon} label={t.planner.pinFrom} draggable onDragEnd={(p) => onDropPin("from", p)} /> : null}
+          {draft.to ? <PinMarker kind="to" lat={draft.to.lat} lon={draft.to.lon} label={t.planner.pinTo} draggable onDragEnd={(p) => onDropPin("to", p)} /> : null}
           {geo.pos ? <PinMarker kind="user" lat={geo.pos.lat} lon={geo.pos.lon} /> : null}
+          {/* v2.1 — pressing a spot on the map is the second way to start or end a trip there */}
+          <LongPressPick onPick={onDropPin} />
           <MapControls city={city.id} live={showLive} setLive={toggleTracked("live", setShowLive)} pois={showPois} setPois={toggleTracked("pois", setShowPois)} net={showNet} setNet={toggleTracked("network", setShowNet)} zonal={showZonal} setZonal={toggleTracked("zonal", setShowZonal)} bikes={showBikes} setBikes={toggleTracked("bikes", setShowBikes)} onLocate={() => locateFor("hub")} locating={locating === "hub"} />
           {bikeStation && !selected ? (
             <RentalStationCard

@@ -44,6 +44,20 @@ export function useGeocode(city: string, q: string, near?: { lat: number; lon: n
   });
 }
 
+/**
+ * v2.1 — names the point under the map picker's crosshair. The caller debounces the
+ * position; a failure is not an error here, the picker falls back to coordinates.
+ */
+export function useReverse(city: string, pos: { lat: number; lon: number } | null) {
+  return useQuery({
+    queryKey: ["reverse", city, pos?.lat, pos?.lon],
+    queryFn: () => api.reverse(city, pos!.lat, pos!.lon),
+    enabled: !!pos,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
 export function useNearbyStops(
   city: string,
   pos: { lat: number; lon: number } | null,

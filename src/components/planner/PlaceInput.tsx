@@ -8,20 +8,38 @@ import { componentColor } from "@/lib/colors";
 import type { GeocodeResult } from "@/lib/api/types";
 import { track } from "@/lib/analytics";
 import type { PlannerPoint } from "@/lib/planner-params";
+import { isTransitResult, otherField, placeGlyph, resultSubtitle, toPoint, type Field, type PlaceGlyph } from "@/lib/place-choice";
 
 type Props = {
   city: string;
   label: string;
   placeholder: string;
   value: PlannerPoint | null;
+  /** The other end of the trip, so a result can offer to fill it (and say what it would replace). */
+  other?: PlannerPoint | null;
   near?: { lat: number; lon: number };
   onChange: (p: PlannerPoint | null) => void;
+  /**
+   * A deliberate choice for either field: the caller plans as soon as both ends are set.
+   * Left out where there is no trip to fill (picking a favourite place), and then a
+   * result only fills this field.
+   */
+  onPlace?: (field: Field, p: PlannerPoint) => void;
   onUseLocation?: () => void;
   onPickOnMap?: () => void;
   locating?: boolean;
   picking?: boolean;
-  kind: "from" | "to";
+  kind: Field;
   autoFocus?: boolean;
+};
+
+const GLYPH: Record<PlaceGlyph, (p: { width: number; height: number }) => React.ReactNode> = {
+  station: (p) => <Icon.Station {...p} />,
+  stop: (p) => <Icon.Station {...p} />,
+  address: (p) => <Icon.Home {...p} />,
+  street: (p) => <Icon.Street {...p} />,
+  poi: (p) => <Icon.Services {...p} />,
+  place: (p) => <Icon.Pin {...p} />,
 };
 
 export function PlaceInput({
@@ -29,8 +47,10 @@ export function PlaceInput({
   label,
   placeholder,
   value,
+  other,
   near,
   onChange,
+  onPlace,
   onUseLocation,
   onPickOnMap,
   locating,
@@ -66,17 +86,34 @@ export function PlaceInput({
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
-  const pick = (r: GeocodeResult, position = 0) => {
+  /** v2.1 — any result can fill either field, not only this one. */
+  const pick = (r: GeocodeResult, field: Field, position = 0) => {
     // only what was CHOSEN, never the typed text; labels only for stops/POIs (addresses are personal)
     const labelled = r.type === "station" || r.type === "stop" || r.type === "poi";
-    track("search_select", { resultType: r.type, resultId: r.stopId ?? undefined, label: labelled ? r.name : undefined, lat: r.lat, lon: r.lon, field: kind, position });
-    onChange({ lat: r.lat, lon: r.lon, name: r.name });
-    setText(r.name);
+    track("search_select", { resultType: r.type, resultId: r.stopId ?? undefined, label: labelled ? r.name : undefined, lat: r.lat, lon: r.lon, field, position });
+    const p = toPoint(r);
+    if (onPlace) onPlace(field, p);
+    else onChange(p);
+    if (field === kind) setText(r.name);
     setOpen(false);
   };
 
-  const typeLabel = (r: GeocodeResult) =>
-    r.type === "station" ? t.common.station : r.type === "stop" ? t.common.stop : r.type === "address" ? t.common.address : r.type === "street" ? t.common.street : t.common.poi;
+  const typeLabels: Record<PlaceGlyph, string> = {
+    station: t.common.station,
+    stop: t.common.stop,
+    address: t.common.address,
+    street: t.common.street,
+    poi: t.common.poi,
+    place: t.common.place,
+  };
+  const away = otherField(kind);
+  const awayLabel = other
+    ? away === "from"
+      ? t.planner.replaceOrigin(other.name ?? "")
+      : t.planner.replaceDestination(other.name ?? "")
+    : away === "from"
+      ? t.planner.setAsOrigin
+      : t.planner.setAsDestination;
 
   return (
     <div ref={wrap} className="relative">
@@ -119,7 +156,7 @@ export function PlaceInput({
                 setActive((a) => Math.max(a - 1, 0));
               } else if (e.key === "Enter") {
                 e.preventDefault();
-                pick(results[active]);
+                pick(results[active], kind, active);
               } else if (e.key === "Escape") setOpen(false);
             }}
           />
@@ -162,31 +199,56 @@ export function PlaceInput({
                 }}
                 className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold hover:bg-paper-3 ${picking ? "text-amber-ink bg-amber/40" : "text-signal"}`}
               >
-                <Icon.Pin />
-                {picking ? t.planner.pickOnMapHint : t.planner.pickOnMap}
+                <Icon.Crosshair />
+                {picking ? t.planner.pickDragHint : t.planner.pickOnMap}
               </button>
             </li>
           ) : null}
-          {results.map((r, i) => (
-            <li key={r.id} role="option" aria-selected={i === active}>
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => pick(r, i)}
-                onMouseEnter={() => setActive(i)}
-                className={`flex w-full items-start gap-3 px-3 py-2 text-left ${i === active ? "bg-paper-3" : ""}`}
-              >
-                <span
-                  className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ background: r.stopId ? componentColor(r.component) : "var(--ink-3)" }}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-ink">{r.name}</span>
-                  <span className="block truncate text-xs text-ink-3">{r.label || typeLabel(r)}</span>
-                </span>
-              </button>
-            </li>
-          ))}
+          {results.map((r, i) => {
+            const glyph = placeGlyph(r);
+            const transit = isTransitResult(r);
+            return (
+              <li key={r.id} role="option" aria-selected={i === active} className={`flex items-stretch ${i === active ? "bg-paper-3" : ""}`}>
+                <button
+                  type="button"
+                  data-testid={`geocode-result-${glyph}`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => pick(r, kind, i)}
+                  onMouseEnter={() => setActive(i)}
+                  className="flex min-w-0 flex-1 items-center gap-3 py-2 pl-3 pr-1 text-left"
+                >
+                  {/* A stop keeps its component colour; a street or address must never look like one. */}
+                  <span
+                    aria-hidden
+                    className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${transit ? "text-white" : "border border-line bg-paper-3 text-ink-2"}`}
+                    style={transit ? { background: componentColor(r.component) } : undefined}
+                  >
+                    {GLYPH[glyph]({ width: 16, height: 16 })}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-ink">{r.name}</span>
+                    <span className="block truncate text-xs text-ink-3">{resultSubtitle(r, typeLabels)}</span>
+                  </span>
+                </button>
+                {/* the same result as the other end of the trip; the label says what it would replace */}
+                {onPlace ? (
+                <button
+                  type="button"
+                  data-testid={`geocode-use-as-${away}`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => pick(r, away, i)}
+                  title={awayLabel}
+                  aria-label={`${r.name} — ${awayLabel}`}
+                  className="my-1 mr-1.5 grid w-9 shrink-0 place-items-center rounded-lg border border-line bg-paper-2 text-[11px] font-extrabold text-ink-2 hover:border-ink hover:text-ink"
+                >
+                  <span aria-hidden className={`grid h-5 w-5 place-items-center rounded-full ${away === "from" ? "bg-ink text-paper" : "bg-signal text-signal-ink"}`}>
+                    {away === "from" ? "A" : "B"}
+                  </span>
+                </button>
+                ) : null}
+              </li>
+            );
+          })}
           {text.trim().length >= 2 && !isFetching && results.length === 0 ? (
             <li className="px-3 py-2 text-sm text-ink-3">{t.common.noMatches}</li>
           ) : null}
