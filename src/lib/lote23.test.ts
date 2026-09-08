@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { alertsOnItinerary, autoDirection, flipDirection, hourInTz, resolveCommute } from "./commute";
@@ -260,5 +260,39 @@ describe("deep-link verification files", () => {
     // A file naming an app that cannot be verified fails verification silently, which
     // is worse than an honest absence.
     expect(src).toContain("status: 404");
+  });
+});
+
+describe("links handed to another person", () => {
+  it("no component builds a shareable URL from the host this tab is on", () => {
+    // window.location.origin is a Railway subdomain, a preview deploy or localhost
+    // depending on where the page was opened, so a link, a QR or a shared trip built
+    // from it can outlive the host it names. shareOrigin() is the deployment's public
+    // address, falling back to the current origin only when it is not configured.
+    const roots = ["src/components", "src/app"];
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of readdirSync(join(process.cwd(), dir), { withFileTypes: true })) {
+        const rel = `${dir}/${e.name}`;
+        if (e.isDirectory()) walk(rel);
+        else if (/\.tsx?$/.test(e.name)) {
+          const src = readFileSync(join(process.cwd(), rel), "utf8");
+          // `window.location.href = …` is a navigation, not a link someone is handed.
+          // The `=` follows the match, so look after it, not before.
+          for (const m of src.matchAll(/window\.location\.(origin|href)\s*(=[^=]|)/g)) {
+            if (m[2].startsWith("=")) continue;
+            offenders.push(`${rel}: window.location.${m[1]}`);
+          }
+        }
+      }
+    };
+    roots.forEach(walk);
+    expect(offenders, "use shareOrigin() from @/lib/landing instead").toEqual([]);
+  });
+
+  it("a shared trip uses the URL the API built", () => {
+    const src = readFileSync(join(process.cwd(), "src/components/itinerary/ItineraryDetail.tsx"), "utf8");
+    // The API knows the deployment's public address per city; this tab does not.
+    expect(src).toContain("res.url ||");
   });
 });

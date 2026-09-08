@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useT } from "@/lib/i18n/provider";
 import { QrCode } from "./QrCode";
 import { Button, Icon } from "./primitives";
+import { shareOrigin } from "@/lib/landing";
 
 /**
  * Station/route QR (TransMi App's `?estacion=` links, done with canonical HTTPS URLs).
@@ -15,7 +16,9 @@ export function QrPanel({ path, title }: { path: string; title: string }) {
   const [url, setUrl] = useState("");
   const [copied, setCopied] = useState(false);
   useEffect(() => {
-    setUrl(`${window.location.origin}${path}`);
+    // A printed QR outlives the tab that made it, so it must not carry whatever host
+    // this one is on.
+    setUrl(`${shareOrigin()}${path}`);
   }, [path]);
 
   const copy = async () => {

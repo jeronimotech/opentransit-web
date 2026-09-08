@@ -26,6 +26,7 @@ import { resolveConfig, componentOf, componentsOf } from "@/lib/city-config";
 import { serviceStatus } from "@/lib/service-window";
 import { goQuickLinks, placeVehicles } from "@/lib/line-timeline";
 import type { Vehicle } from "@/lib/api/types";
+import { shareOrigin } from "@/lib/landing";
 
 export default function RoutePage({ params }: { params: Promise<{ routeId: string }> }) {
   const { routeId: rawId } = use(params);
@@ -172,7 +173,9 @@ function RouteVehicles({ vehicles, colors, onClick }: { vehicles: Vehicle[]; col
  * the app is not installed — the browser stays put if the scheme does nothing.
  */
 function GoQuick({ city, stopId, routeId, label, hint }: { city: string; stopId: string; routeId: string; label: string; hint: string }) {
-  const links = goQuickLinks(city, stopId, routeId, typeof window !== "undefined" ? window.location.origin : "");
+  // These become printed links and QR codes, so they carry the deployment's public
+  // address rather than the host this tab happens to be on.
+  const links = goQuickLinks(city, stopId, routeId, shareOrigin());
   return (
     <a
       href={links.web}

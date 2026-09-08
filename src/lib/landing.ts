@@ -164,6 +164,20 @@ export function siteUrl(): string {
   return (process.env.NEXT_PUBLIC_SITE_URL ?? "").replace(/\/$/, "");
 }
 
+/**
+ * The origin a link handed to another person should carry.
+ *
+ * `window.location.origin` is whatever host this tab happens to be on — a Railway
+ * subdomain, a preview deploy, localhost — so a link built from it can outlive the
+ * host it names. `NEXT_PUBLIC_SITE_URL` is the deployment's public address; fall back
+ * to the current origin only when it is not configured.
+ */
+export function shareOrigin(): string {
+  const configured = siteUrl();
+  if (configured) return configured;
+  return typeof window !== "undefined" ? window.location.origin : "";
+}
+
 /** Single-city deployments: `/` serves the landing (app at `/{city}`). */
 export function rootLandingCity(): string | null {
   const on = ["1", "true", "yes"].includes((process.env.NEXT_PUBLIC_ROOT_LANDING ?? "").trim().toLowerCase());

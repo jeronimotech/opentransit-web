@@ -27,6 +27,7 @@ import { retimeItinerary, type Retimed } from "@/lib/retime";
 import { track } from "@/lib/analytics";
 import type { City, Itinerary, Leg, NextBus } from "@/lib/api/types";
 import type { Dict } from "@/lib/i18n/dict";
+import { shareOrigin } from "@/lib/landing";
 
 const GENERIC_NAMES = new Set(["origin", "destination", "origen", "destino"]);
 
@@ -81,8 +82,11 @@ export function ItineraryDetail({
     setSharing("busy");
     try {
       const res = await api.shareCreate(city.id, { itinerary: itinerary as unknown, startedAt: new Date().toISOString(), label: `${itinerary.legs[0].from.name} → ${itinerary.legs[itinerary.legs.length - 1].to.name}` });
-      // the API returns its own absolute URL; the page that renders a shared trip is ours
-      const url = `${window.location.origin}/${city.id}/eta/${res.token}`;
+      // Use the URL the API built. It knows the deployment's public address (per city),
+      // whereas this tab only knows the host it happens to be open on — a Railway
+      // subdomain or a preview deploy would be baked into a link sent to someone else.
+      // This rebuilt the URL from the origin back when the API returned its own host.
+      const url = res.url || `${shareOrigin()}/${city.id}/eta/${res.token}`;
       try {
         sessionStorage.setItem(`opentransit.share.${res.token}`, res.writeKey ?? "");
       } catch {
@@ -99,7 +103,9 @@ export function ItineraryDetail({
   };
 
   const share = async () => {
-    const url = window.location.href;
+    // Same reason: the path is right, the host this tab is on may not be the one to
+    // hand to someone else.
+    const url = `${shareOrigin()}${window.location.pathname}${window.location.search}`;
     try {
       if (navigator.share) await navigator.share({ title: "opentransit", url });
       else {
