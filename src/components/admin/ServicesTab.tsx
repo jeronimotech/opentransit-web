@@ -8,10 +8,10 @@ import { validateServices, type Errors } from "@/lib/admin/validate";
 import { Control, SaveBar, SectionCard, TextInput, saveErrorsFrom, useSectionDraft, type SaveState } from "./form";
 import { useSaveConfig } from "./useAdmin";
 
-export function ServicesTab({ token, city, data }: { token: string; city: string; data: AdminConfigResponse }) {
+export function ServicesTab({ city, data }: { city: string; data: AdminConfigResponse }) {
   const { t } = useI18n();
   const { draft, setDraft, dirty, overridden, reset } = useSectionDraft(data, "services");
-  const save = useSaveConfig(token, city);
+  const save = useSaveConfig(city);
   const [state, setState] = useState<SaveState>({ status: "idle" });
   const [serverErrors, setServerErrors] = useState<Errors>({});
   const rows: CityService[] = draft ?? [];
@@ -29,10 +29,10 @@ export function ServicesTab({ token, city, data }: { token: string; city: string
     set(next);
   };
 
-  const onSave = async (meta: { note: string; updatedBy: string }) => {
+  const onSave = async (meta: { note: string }) => {
     setState({ status: "saving" });
     try {
-      const r = await save.mutateAsync({ services: rows, note: meta.note || undefined, updatedBy: meta.updatedBy || undefined });
+      const r = await save.mutateAsync({ services: rows, note: meta.note || undefined });
       setState({ status: "saved", revision: r.revision });
     } catch (err) {
       const { errors: e, message } = saveErrorsFrom(err);

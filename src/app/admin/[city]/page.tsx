@@ -7,7 +7,8 @@ import { useI18n } from "@/lib/i18n/provider";
 import { fmtDateTime } from "@/lib/format";
 import { Badge, Button, Icon, Spinner } from "@/components/ui/primitives";
 import { AdminShell } from "@/components/admin/AdminShell";
-import { TokenGate } from "@/components/admin/TokenGate";
+import { AuthGate } from "@/components/admin/AuthGate";
+import { canEdit, cityAllowed, type AdminUser } from "@/lib/admin/session";
 import { ConfirmInline } from "@/components/admin/form";
 import { useAdminConfig, useResetAll } from "@/components/admin/useAdmin";
 import { FaresTab } from "@/components/admin/FaresTab";
@@ -27,13 +28,15 @@ type Tab = (typeof TABS)[number];
 export default function AdminCityPage() {
   const params = useParams<{ city: string }>();
   const city = decodeURIComponent(params.city);
-  return <TokenGate>{({ token, cities, logout }) => <AdminCity token={token} city={city} allowed={cities.includes(city)} logout={logout} />}</TokenGate>;
+  return <AuthGate>{({ user, signOut }) => <AdminCity user={user} city={city} signOut={signOut} />}</AuthGate>;
 }
 
-function AdminCity({ token, city, allowed, logout }: { token: string; city: string; allowed: boolean; logout: () => void }) {
+function AdminCity({ user, city, signOut }: { user: AdminUser; city: string; signOut: () => void }) {
   const { t, lang } = useI18n();
-  const q = useAdminConfig(allowed ? token : null, city);
-  const resetAll = useResetAll(token, city);
+  const allowed = cityAllowed(user, city);
+  const editable = canEdit(user);
+  const q = useAdminConfig(city, allowed);
+  const resetAll = useResetAll(city);
   const [tab, setTab] = useState<Tab>("fares");
   const [confirmReset, setConfirmReset] = useState(false);
   // deep-linkable tabs without a Suspense boundary: /admin/bogota#config
@@ -56,7 +59,7 @@ function AdminCity({ token, city, allowed, logout }: { token: string; city: stri
   );
 
   return (
-    <AdminShell onLogout={logout} crumbs={crumbs}>
+    <AdminShell user={user} onSignOut={signOut} crumbs={crumbs}>
       {!allowed ? (
         <p className="text-sm font-semibold text-brick">{t.admin.login.unauthorized}</p>
       ) : q.isLoading || !data ? (
@@ -87,7 +90,7 @@ function AdminCity({ token, city, allowed, logout }: { token: string; city: stri
               <Link href={`/${city}`} target="_blank" className="inline-flex h-9 items-center gap-1 rounded-lg px-3 text-sm font-semibold text-signal hover:bg-paper-3">
                 {t.admin.viewApp} <Icon.External width={14} height={14} />
               </Link>
-              {data.override ? (
+              {data.override && editable ? (
                 confirmReset ? (
                   <ConfirmInline message={t.admin.resetAllConfirm} onConfirm={() => { setConfirmReset(false); resetAll.mutate(); }} onCancel={() => setConfirmReset(false)} />
                 ) : (
@@ -112,16 +115,16 @@ function AdminCity({ token, city, allowed, logout }: { token: string; city: stri
             })}
           </div>
           <div id={`panel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`} className="mt-5">
-            {tab === "fares" ? <FaresTab token={token} city={city} data={data} /> : null}
-            {tab === "config" ? <ConfigTab token={token} city={city} data={data} /> : null}
-            {tab === "links" ? <LinksTab token={token} city={city} data={data} /> : null}
-            {tab === "services" ? <ServicesTab token={token} city={city} data={data} /> : null}
-            {tab === "mobility" ? <MobilityTab token={token} city={city} data={data} /> : null}
-            {tab === "brand" ? <BrandTab token={token} city={city} data={data} /> : null}
-            {tab === "landing" ? <LandingTab token={token} city={city} data={data} /> : null}
-            {tab === "assistant" ? <AssistantTab token={token} city={city} data={data} /> : null}
-            {tab === "analytics" ? <AnalyticsTab token={token} city={city} data={data} /> : null}
-            {tab === "history" ? <HistoryTab token={token} city={city} data={data} /> : null}
+            {tab === "fares" ? <FaresTab city={city} data={data} /> : null}
+            {tab === "config" ? <ConfigTab city={city} data={data} /> : null}
+            {tab === "links" ? <LinksTab city={city} data={data} /> : null}
+            {tab === "services" ? <ServicesTab city={city} data={data} /> : null}
+            {tab === "mobility" ? <MobilityTab city={city} data={data} /> : null}
+            {tab === "brand" ? <BrandTab city={city} data={data} /> : null}
+            {tab === "landing" ? <LandingTab city={city} data={data} /> : null}
+            {tab === "assistant" ? <AssistantTab city={city} data={data} /> : null}
+            {tab === "analytics" ? <AnalyticsTab city={city} data={data} /> : null}
+            {tab === "history" ? <HistoryTab city={city} data={data} /> : null}
           </div>
         </>
       )}

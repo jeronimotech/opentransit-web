@@ -8,10 +8,10 @@ import { RouteChip } from "@/components/ui/RouteChip";
 import { Control, SaveBar, SectionCard, TextInput, saveErrorsFrom, useSectionDraft, type SaveState } from "./form";
 import { useSaveConfig } from "./useAdmin";
 
-export function BrandTab({ token, city, data }: { token: string; city: string; data: AdminConfigResponse }) {
+export function BrandTab({ city, data }: { city: string; data: AdminConfigResponse }) {
   const { t } = useI18n();
   const { draft, setDraft, dirty, overridden, reset } = useSectionDraft(data, "branding");
-  const save = useSaveConfig(token, city);
+  const save = useSaveConfig(city);
   const [state, setState] = useState<SaveState>({ status: "idle" });
   const [serverErrors, setServerErrors] = useState<Errors>({});
   const b = draft ?? { primaryColor: "#000000" };
@@ -22,10 +22,10 @@ export function BrandTab({ token, city, data }: { token: string; city: string; d
   };
   const valid = !errors["branding.primaryColor"];
 
-  const onSave = async (meta: { note: string; updatedBy: string }) => {
+  const onSave = async (meta: { note: string }) => {
     setState({ status: "saving" });
     try {
-      const r = await save.mutateAsync({ branding: { primaryColor: b.primaryColor.toUpperCase() }, note: meta.note || undefined, updatedBy: meta.updatedBy || undefined });
+      const r = await save.mutateAsync({ branding: { primaryColor: b.primaryColor.toUpperCase() }, note: meta.note || undefined });
       setState({ status: "saved", revision: r.revision });
     } catch (err) {
       const { errors: e, message } = saveErrorsFrom(err);

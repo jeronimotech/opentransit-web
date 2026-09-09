@@ -25,10 +25,10 @@ type Probe =
   | { status: "done"; text: string; cost: number | null; health: AssistantHealth | null }
   | { status: "fail"; message: string };
 
-export function AssistantTab({ token, city, data }: { token: string; city: string; data: AdminConfigResponse }) {
+export function AssistantTab({ city, data }: { city: string; data: AdminConfigResponse }) {
   const { t } = useI18n();
   const { draft, setDraft, dirty, overridden, reset } = useSectionDraft(data, "config");
-  const save = useSaveConfig(token, city);
+  const save = useSaveConfig(city);
   const [state, setState] = useState<SaveState>({ status: "idle" });
   const [serverErrors, setServerErrors] = useState<Errors>({});
   const [probe, setProbe] = useState<Probe>({ status: "idle" });
@@ -43,11 +43,11 @@ export function AssistantTab({ token, city, data }: { token: string; city: strin
     setDraft({ ...(draft as CityConfig), assistant: { ...a, ...patch } } as CityConfig);
   };
 
-  const onSave = async (meta: { note: string; updatedBy: string }) => {
+  const onSave = async (meta: { note: string }) => {
     setState({ status: "saving" });
     try {
       const cfg = { ...(draft as CityConfig), assistant: assistantPayload(a) } as CityConfig;
-      const r = await save.mutateAsync({ config: cfg, note: meta.note || undefined, updatedBy: meta.updatedBy || undefined });
+      const r = await save.mutateAsync({ config: cfg, note: meta.note || undefined });
       setState({ status: "saved", revision: r.revision });
     } catch (err) {
       const { errors: e, message } = saveErrorsFrom(err);
@@ -78,7 +78,7 @@ export function AssistantTab({ token, city, data }: { token: string; city: strin
     if (failed) return setProbe({ status: "fail", message: failed });
     let health: AssistantHealth | null = null;
     try {
-      health = await assistantHealth(city, token);
+      health = await assistantHealth(city);
     } catch {
       /* health is a nicety, not the point of the test */
     }

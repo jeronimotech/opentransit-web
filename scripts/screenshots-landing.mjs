@@ -3,18 +3,18 @@
  *
  *   pnpm dev:mock -p 3100
  *   BASE_URL=http://localhost:3100 pnpm screenshots:landing
- *   SUFFIX=live-api TOKEN=<ADMIN_TOKEN> ...           # against the real API
+ *   SUFFIX=live-api EMAIL=… PASSWORD=… ...           # against the real API
  *
  * Shots: landing (top, desktop + mobile), landing-full (full page, desktop), admin-landing (tab),
  * landing-preview (draft with a changed title, via sessionStorage handshake).
  */
 import { chromium } from "@playwright/test";
+import { adminLogin } from "./admin-login.mjs";
 import { mkdirSync } from "node:fs";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3100";
 const OUT = "docs/screenshots";
 const SUFFIX = process.env.SUFFIX ? `-${process.env.SUFFIX}` : "";
-const TOKEN = process.env.TOKEN ?? "demo";
 const CITY = process.env.CITY ?? "bogota";
 const ADMIN = process.env.ADMIN !== "0";
 const file = (n) => `${OUT}/landing-${n}${SUFFIX}.png`;
@@ -43,7 +43,7 @@ try {
 
   if (ADMIN) {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: "es-CO" });
-    await ctx.addInitScript((t) => sessionStorage.setItem("opentransit.admin.token", t), TOKEN);
+    await adminLogin(page, BASE);
     const page = await ctx.newPage();
     await page.goto(`${BASE}/admin/${CITY}#landing`);
     await page.locator("#lp-title").waitFor({ timeout: 60_000 });

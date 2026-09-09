@@ -122,6 +122,7 @@ pnpm dev          # against NEXT_PUBLIC_API_URL (default http://localhost:8001)
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8001` | Base URL of opentransit-api, no trailing slash |
 | `NEXT_PUBLIC_MOCK` | `0` | `1` serves fixtures from `src/mocks/` instead of calling the API |
 | `NEXT_PUBLIC_ADMIN_ENABLED` | `1` | `0` removes the `/admin` operator section (404) from a deployment |
+| `API_URL` | `NEXT_PUBLIC_API_URL` | server-side only: where `/api/admin/*` forwards. Set it to an internal hostname when the browser-facing URL is not reachable from the server |
 
 Both are inlined at build time (they are `NEXT_PUBLIC_*`), so the Docker image bakes them in.
 
@@ -277,8 +278,15 @@ made the Asistente tab refuse to save a city whose key lives in an environment v
 remote config (polling cadence, visible modules, minimum app version, maintenance mode), agency links, the service
 tiles on the home screen and the primary colour. It is not linked from the public navigation.
 
-- **Auth**: paste the API's `ADMIN_TOKEN`. The token is validated with `GET /v1/admin/me` and kept in
-  `sessionStorage` only (never in the URL, never in `localStorage`), so closing the tab forgets it. "Salir" clears it.
+- **Auth**: a named account — email and password, checked by `POST /v1/admin/auth/login`. The session token
+  never reaches the browser: `/api/admin/*` (a route handler in this app) keeps it in an **httpOnly cookie**
+  on this origin and replays it to the API as a bearer token, which also sidesteps third-party-cookie rules
+  when the API lives on another domain. Every admin call goes through that proxy, which only forwards the
+  handful of paths in `src/lib/admin/proxy.ts`. A session that expires or is revoked sends the operator to
+  `/admin/login?next=…` carrying the city *and the tab*, so signing in again lands exactly where they were.
+- **Roles**: `viewer` reads, `admin` edits the city config, `owner` also manages accounts at `/admin/users`
+  (create, rename, change role and city scope, reset password, disable). A user is scoped to some cities or
+  to all of them. The UI hides what you cannot do; the API refuses it either way.
 - **Tabs**: Tarifas (landing) · Configuración · Enlaces · Servicios · Movilidad · Marca · Página · Asistente · Analítica · Historial. Each tab edits one section of
   `GET/PUT /v1/admin/cities/{city}/config`; a section can be reset to the YAML values ("Restablecer a YAML" sends
   `null`), and "Restablecer todo" is `DELETE`. Badges mark what is overridden versus what comes from `cities/*.yaml`.
@@ -287,11 +295,13 @@ tiles on the home screen and the primary colour. It is not linked from the publi
   and `src/lib/admin/fare-preview.ts`). Fares are always published as *estimated*.
 - **Maintenance** needs a confirmation step; **Servicios** rows can be added, removed and reordered;
   **Historial** lists every revision with who/when/note and the keys that changed (diffed on effective values).
-- Mock mode has a full in-memory admin (token `demo`), used by `pnpm screenshots:admin`.
+- Mock mode has a full in-memory admin — accounts included — signed in with `demo@opentransit.dev` /
+  `demo-password`, used by `pnpm screenshots:admin`.
 
-Security notes: serve the admin over **HTTPS only** (the token travels in a header), rotate `ADMIN_TOKEN` when someone
-leaves, and set `NEXT_PUBLIC_ADMIN_ENABLED=0` on public deployments that don't need it (the API still enforces the
-token either way). Screenshots: `docs/screenshots/admin-*.png`.
+Security notes: serve the admin over **HTTPS only** (the session cookie is `Secure` in production, so plain
+HTTP simply will not carry it); disable the account of anyone who leaves rather than rotating a shared secret;
+and set `NEXT_PUBLIC_ADMIN_ENABLED=0` on public deployments that don't need it (the API enforces the roles
+either way). Screenshots: `docs/screenshots/admin-*.png`.
 
 ## How it talks to the API
 
@@ -325,8 +335,8 @@ re-add their sources when the basemap style reloads (theme switch).
 | `pnpm dev` / `pnpm dev:mock` | dev server (real API / fixtures) |
 | `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm build` | what CI runs (`test` = vitest unit tests for colour blending, headsign cleanup, marker zoom rules, admin fare preview/validation/diff) |
 | `pnpm screenshots` | regenerate `docs/screenshots/` from a running `dev:mock` (needs `npx playwright install chromium`) |
-| `pnpm screenshots:admin` | admin flow screenshots (login → validation error → save → history); `TOKEN=… SUFFIX=live-api RESET=1` for the real API |
-| `pnpm screenshots:bike` | shared-bike screenshots (planner chip, rental results/detail, station layer + card, admin Movilidad); `SUFFIX=live-api TOKEN=…` for the real API |
+| `pnpm screenshots:admin` | admin flow screenshots (login → wrong password → save → history → accounts); `EMAIL=… PASSWORD=… SUFFIX=live-api RESET=1` for the real API |
+| `pnpm screenshots:bike` | shared-bike screenshots (planner chip, rental results/detail, station layer + card, admin Movilidad); `SUFFIX=live-api EMAIL=… PASSWORD=…` for the real API |
 | `pnpm screenshots:assistant` | assistant screenshots (sheet, a planned trip, an arrival board, bike stations, the new-conversation confirmation, an error state, the admin tab); `SUFFIX=live-api TOKEN=…` for the real API. An answer that renders no card is reported as a failure, not a style choice |
 
 > Run the mock and live dev servers **one at a time**. Both share the `.next` directory, and

@@ -21,7 +21,7 @@ function presetRange(p: Preset, custom: { from: string; to: string }): { from: s
 }
 
 /** The "Analítica" tab: KPI row, O-D map, hours heatmap, modes, tables, funnel, platforms, CSV export. */
-export function AnalyticsTab({ token, city, data }: { token: string; city: string; data: AdminConfigResponse }) {
+export function AnalyticsTab({ city, data }: { city: string; data: AdminConfigResponse }) {
   const { t, lang } = useI18n();
   const A = t.admin.analytics;
   const [preset, setPreset] = useState<Preset>("d30");
@@ -32,17 +32,17 @@ export function AnalyticsTab({ token, city, data }: { token: string; city: strin
   const [busy, setBusy] = useState<AnalyticsDataset | null>(null);
 
   const q = (key: string, fn: () => Promise<unknown>) => ({ queryKey: ["admin", "analytics", city, key, range], queryFn: fn, staleTime: 60_000 });
-  const summary = useQuery({ ...q("summary", () => analyticsApi.summary(token, city, range)), queryFn: () => analyticsApi.summary(token, city, range) });
-  const od = useQuery({ ...q("od", () => analyticsApi.od(token, city, range)), queryFn: () => analyticsApi.od(token, city, range) });
-  const hours = useQuery({ ...q("hours", () => analyticsApi.hours(token, city, range)), queryFn: () => analyticsApi.hours(token, city, range) });
-  const searches = useQuery({ ...q("searches", () => analyticsApi.searches(token, city, range)), queryFn: () => analyticsApi.searches(token, city, range) });
-  const providers = useQuery({ ...q("providers", () => analyticsApi.providers(token, city, range)), queryFn: () => analyticsApi.providers(token, city, range) });
-  const funnel = useQuery({ ...q("funnel", () => analyticsApi.funnel(token, city, range)), queryFn: () => analyticsApi.funnel(token, city, range) });
+  const summary = useQuery({ ...q("summary", () => analyticsApi.summary(city, range)), queryFn: () => analyticsApi.summary(city, range) });
+  const od = useQuery({ ...q("od", () => analyticsApi.od(city, range)), queryFn: () => analyticsApi.od(city, range) });
+  const hours = useQuery({ ...q("hours", () => analyticsApi.hours(city, range)), queryFn: () => analyticsApi.hours(city, range) });
+  const searches = useQuery({ ...q("searches", () => analyticsApi.searches(city, range)), queryFn: () => analyticsApi.searches(city, range) });
+  const providers = useQuery({ ...q("providers", () => analyticsApi.providers(city, range)), queryFn: () => analyticsApi.providers(city, range) });
+  const funnel = useQuery({ ...q("funnel", () => analyticsApi.funnel(city, range)), queryFn: () => analyticsApi.funnel(city, range) });
 
   const exportCsv = async (dataset: AnalyticsDataset) => {
     setBusy(dataset);
     try {
-      const csv = await analyticsApi.exportCsv(token, city, dataset, range);
+      const csv = await analyticsApi.exportCsv(city, dataset, range);
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

@@ -8,7 +8,6 @@ import type { AdminConfigResponse, AdminEditable, AdminSection } from "@/lib/api
 import { deepEqual, effectiveSection, sectionOverridden } from "@/lib/admin/diff";
 import { ApiRequestError } from "@/lib/api/client";
 import { errorsFromDetails, type Errors } from "@/lib/admin/validate";
-import { getEditor, setEditor as persistEditor } from "@/lib/admin/auth";
 
 const clone = <T,>(v: T): T => (v === undefined ? v : (JSON.parse(JSON.stringify(v)) as T));
 
@@ -143,14 +142,13 @@ export function Toggle({ id, checked, onChange, label, hint, disabled }: { id: s
 export type SaveState = { status: "idle" } | { status: "saving" } | { status: "saved"; revision: number } | { status: "error"; message: string };
 
 /**
- * Sticky footer of every tab: note + editor name + Save. Shows the revision after a
- * save with a link to the public page so the operator can see the result at once.
+ * Sticky footer of every tab: note + Save. Shows the revision after a save with a link to the public
+ * page so the operator can see the result at once. There is no "edited by" field any more — the
+ * signed-in account is who made the change, and the API records that rather than a typed name.
  */
-export function SaveBar({ dirty, errors, state, onSave, onDiscard, viewAppHref }: { dirty: boolean; errors: Errors; state: SaveState; onSave: (meta: { note: string; updatedBy: string }) => void; onDiscard: () => void; viewAppHref: string }) {
+export function SaveBar({ dirty, errors, state, onSave, onDiscard, viewAppHref }: { dirty: boolean; errors: Errors; state: SaveState; onSave: (meta: { note: string }) => void; onDiscard: () => void; viewAppHref: string }) {
   const { t } = useI18n();
   const [note, setNote] = useState("");
-  const [editor, setEditor] = useState("");
-  useEffect(() => setEditor(getEditor()), []);
   const n = Object.keys(errors).length;
   return (
     <div className="sticky bottom-0 z-10 -mx-1 mt-4 rounded-card border border-line bg-paper-2/95 p-3 shadow-card backdrop-blur">
@@ -159,26 +157,13 @@ export function SaveBar({ dirty, errors, state, onSave, onDiscard, viewAppHref }
           <span className="mb-1 block text-xs font-semibold text-ink-2">{t.admin.note}</span>
           <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t.admin.notePlaceholder} maxLength={200} />
         </label>
-        <label className="w-44">
-          <span className="mb-1 block text-xs font-semibold text-ink-2">{t.admin.editor}</span>
-          <input
-            className={inputCls}
-            value={editor}
-            onChange={(e) => {
-              setEditor(e.target.value);
-              persistEditor(e.target.value);
-            }}
-            placeholder={t.admin.editorPlaceholder}
-            maxLength={60}
-          />
-        </label>
         <div className="flex items-center gap-2">
           {dirty ? (
             <Button variant="ghost" onClick={onDiscard}>
               {t.admin.discard}
             </Button>
           ) : null}
-          <Button variant="primary" disabled={!dirty || n > 0 || state.status === "saving"} onClick={() => { onSave({ note, updatedBy: editor }); setNote(""); }}>
+          <Button variant="primary" disabled={!dirty || n > 0 || state.status === "saving"} onClick={() => { onSave({ note }); setNote(""); }}>
             {state.status === "saving" ? <Spinner className="border-t-signal-ink" /> : <Icon.Check width={16} height={16} />}
             {state.status === "saving" ? t.admin.saving : t.admin.save}
           </Button>

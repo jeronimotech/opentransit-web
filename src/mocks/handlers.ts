@@ -194,7 +194,7 @@ export async function mockRequest<T>(path: string, q: Q, init: Init = { method: 
     const { analyticsMock } = await import("./analytics");
     if (path.startsWith("/v1/admin/")) {
       const { requireAdmin } = await import("./admin");
-      requireAdmin(init.headers);
+      requireAdmin();
     }
     return analyticsMock<T>(path, q, init);
   }

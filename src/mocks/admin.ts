@@ -1,6 +1,7 @@
 /**
- * In-memory admin store for NEXT_PUBLIC_MOCK=1: overrides + history, reset on reload.
- * Demo token: "demo" (also "change-me", the API's default).
+ * In-memory admin store for NEXT_PUBLIC_MOCK=1: accounts, overrides and history, reset on reload.
+ * Demo account: demo@opentransit.dev / demo-password. There is no server here to hold an httpOnly
+ * cookie, so the "session" is a module variable — enough to walk through the screens.
  */
 import { ApiRequestError } from "@/lib/api/client";
 import { EN_MESSAGES, validateSection } from "@/lib/admin/validate";
@@ -19,7 +20,17 @@ import type {
 import { city as yamlCity, landing as yamlLanding } from "./data";
 import type { CityLanding } from "@/lib/api/types";
 
-const TOKENS = new Set(["demo", "change-me"]);
+const DEMO_PASSWORD = "demo-password";
+type MockUser = { id: number; email: string; name: string; role: "viewer" | "admin" | "owner"; cities: string[]; disabled: boolean; createdAt: string; lastLoginAt: string | null; password: string };
+const users: MockUser[] = [
+  { id: 1, email: "demo@opentransit.dev", name: "Demo", role: "owner", cities: [], disabled: false, createdAt: new Date().toISOString(), lastLoginAt: null, password: DEMO_PASSWORD },
+];
+let session: MockUser | null = null;
+let nextUserId = 2;
+
+const publicUser = (u: MockUser) => ({ id: u.id, email: u.email, name: u.name, role: u.role, cities: u.cities, disabled: u.disabled, createdAt: u.createdAt, lastLoginAt: u.lastLoginAt });
+const principal = (u: MockUser) => ({ id: u.id, email: u.email, name: u.name, role: u.role, cities: u.cities, kind: "user" as const });
+const RANK = { viewer: 1, admin: 2, owner: 3 };
 const SECTIONS: AdminSection[] = ["fares", "config", "links", "services", "branding", "mobility", "landing"];
 
 const state = {
@@ -114,13 +125,84 @@ function response(): AdminConfigResponse {
   };
 }
 
-export function requireAdmin(headers: Record<string, string>) {
-  requireToken(headers);
+export function requireAdmin() {
+  requireSession();
 }
 
-function requireToken(headers: Record<string, string>) {
-  const tok = headers["X-Admin-Token"] ?? headers["x-admin-token"];
-  if (!tok || !TOKENS.has(tok)) throw new ApiRequestError(401, "UNAUTHORIZED", "missing or invalid X-Admin-Token");
+/** Demo sign-in for tests and screenshots; the app itself goes through `/v1/admin/auth/login`. */
+export function signInDemo(role: MockUser["role"] = "owner"): void {
+  users[0].role = role;
+  session = users[0];
+}
+
+function requireSession(minimum: "viewer" | "admin" | "owner" = "viewer"): MockUser {
+  if (!session) throw new ApiRequestError(401, "UNAUTHORIZED", "not signed in");
+  if (RANK[session.role] < RANK[minimum]) throw new ApiRequestError(403, "FORBIDDEN", `this action needs the ${minimum} role`);
+  return session;
+}
+
+function requireCity(user: MockUser, city: string) {
+  if (user.cities.length && !user.cities.includes(city)) {
+    throw new ApiRequestError(403, "FORBIDDEN", `your account is not scoped to ${city}`);
+  }
+}
+
+/** The auth endpoints, and the account list behind them. Returns null when `path` is something else. */
+function authMock<T>(path: string, init: { method: string; body: string | null }): T | null {
+  const body = () => JSON.parse(init.body ?? "{}") as Record<string, unknown>;
+  if (path === "/v1/admin/auth/login") {
+    const { email, password } = body() as { email?: string; password?: string };
+    const u = users.find((x) => x.email.toLowerCase() === (email ?? "").trim().toLowerCase());
+    if (!u || u.disabled || u.password !== password) throw new ApiRequestError(401, "UNAUTHORIZED", "wrong email or password");
+    u.lastLoginAt = new Date().toISOString();
+    session = u;
+    return { expiresAt: new Date(Date.now() + 12 * 3600_000).toISOString(), user: publicUser(u), cities: ["bogota"] } as T;
+  }
+  if (path === "/v1/admin/auth/logout") {
+    session = null;
+    return { ok: true } as T;
+  }
+  if (path === "/v1/admin/auth/me" || path === "/v1/admin/me") {
+    const u = requireSession();
+    return { ok: true, user: principal(u), cities: ["bogota"], canManageUsers: u.role === "owner" } as T;
+  }
+  if (path === "/v1/admin/users") {
+    requireSession("owner");
+    if (init.method === "GET") return { users: users.map(publicUser) } as T;
+    const b = body() as { email?: string; password?: string; name?: string; role?: MockUser["role"]; cities?: string[] };
+    const email = (b.email ?? "").trim();
+    if (users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
+      throw new ApiRequestError(409, "CONFLICT", "email: an account with that email already exists");
+    }
+    if ((b.password ?? "").length < 12) throw new ApiRequestError(422, "BAD_REQUEST", "password: must be at least 12 characters");
+    const u: MockUser = { id: nextUserId++, email, name: b.name ?? "", role: b.role ?? "viewer", cities: b.cities ?? [], disabled: false, createdAt: new Date().toISOString(), lastLoginAt: null, password: b.password! };
+    users.push(u);
+    return publicUser(u) as T;
+  }
+  const m = path.match(/^\/v1\/admin\/users\/(\d+)(\/disable)?$/);
+  if (m) {
+    requireSession("owner");
+    const u = users.find((x) => x.id === Number(m[1]));
+    if (!u) throw new ApiRequestError(404, "NOT_FOUND", `no account with id ${m[1]}`);
+    const others = users.filter((x) => x.role === "owner" && !x.disabled && x.id !== u.id);
+    if (m[2]) {
+      if (u.role === "owner" && !others.length) throw new ApiRequestError(409, "CONFLICT", "this is the last enabled owner");
+      u.disabled = true;
+      if (session?.id === u.id) session = null;
+      return publicUser(u) as T;
+    }
+    const b = body() as { name?: string; role?: MockUser["role"]; cities?: string[]; disabled?: boolean; password?: string };
+    if (u.role === "owner" && !others.length && (b.disabled || (b.role && b.role !== "owner"))) {
+      throw new ApiRequestError(409, "CONFLICT", "this is the last enabled owner");
+    }
+    if (b.name !== undefined) u.name = b.name;
+    if (b.role !== undefined) u.role = b.role;
+    if (b.cities !== undefined) u.cities = b.cities;
+    if (b.disabled !== undefined) u.disabled = b.disabled;
+    if (b.password) u.password = b.password;
+    return publicUser(u) as T;
+  }
+  return null;
 }
 
 function commit(next: AdminOverride | null, by: string | null, note: string | null) {
@@ -133,10 +215,12 @@ function commit(next: AdminOverride | null, by: string | null, note: string | nu
 }
 
 export function adminMock<T>(path: string, q: Record<string, unknown>, init: { method: string; body: string | null; headers: Record<string, string> }): T {
-  requireToken(init.headers);
-  if (path === "/v1/admin/me") return { ok: true, cities: ["bogota"] } as T;
+  const auth = authMock<T>(path, init);
+  if (auth !== null) return auth;
   const m = path.match(/^\/v1\/admin\/cities\/([^/]+)\/config(\/history)?$/);
   if (!m) throw new ApiRequestError(404, "NOT_FOUND", `No mock for ${path}`);
+  const me = requireSession(init.method === "GET" ? "viewer" : "admin");
+  requireCity(me, m[1]);
   if (m[1] !== "bogota") throw new ApiRequestError(404, "CITY_NOT_FOUND", `No city with id ${m[1]}`);
 
   if (m[2]) {
@@ -145,7 +229,7 @@ export function adminMock<T>(path: string, q: Record<string, unknown>, init: { m
   }
   if (init.method === "GET") return response() as T;
   if (init.method === "DELETE") {
-    commit(null, null, "reset");
+    commit(null, me.email, "reset");
     return response() as T;
   }
   if (init.method === "PUT") {
@@ -184,7 +268,7 @@ export function adminMock<T>(path: string, q: Record<string, unknown>, init: { m
       }
     }
     if (details.length) throw new ApiRequestError(400, "BAD_REQUEST", "validation failed", details);
-    commit(next, patch.updatedBy?.trim() || null, patch.note?.trim() || null);
+    commit(next, me.email, patch.note?.trim() || null);
     return response() as T;
   }
   throw new ApiRequestError(405, "METHOD_NOT_ALLOWED", init.method);

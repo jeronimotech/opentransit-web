@@ -3,7 +3,7 @@
  *
  *   pnpm dev:mock -p 3100
  *   BASE_URL=http://localhost:3100 pnpm screenshots:assistant
- *   SUFFIX=live-api BASE_URL=http://localhost:3101 TOKEN=<ADMIN_TOKEN> pnpm screenshots:assistant
+ *   SUFFIX=live-api BASE_URL=http://localhost:3101 EMAIL=… PASSWORD=… pnpm screenshots:assistant
  *
  * Shots (desktop + phone): the sheet on first open with its suggestions and the
  * provider notice, a planned trip with the itinerary card above the prose, a bike-station
@@ -14,13 +14,13 @@
  * the chat shots rather than staging an answer that no model produced.
  */
 import { chromium } from "@playwright/test";
+import { adminLogin } from "./admin-login.mjs";
 import { mkdirSync } from "node:fs";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3100";
 const OUT = "docs/screenshots";
 const SUFFIX = process.env.SUFFIX ? `-${process.env.SUFFIX}` : "";
 const CITY = process.env.CITY ?? "bogota";
-const TOKEN = process.env.TOKEN ?? "demo";
 const HERE = { latitude: 4.6841, longitude: -74.0517 }; // Calle 100
 const viewports = { desktop: { width: 1280, height: 800 }, mobile: { width: 390, height: 844 } };
 const file = (n, vp) => `${OUT}/assistant-${n}${vp ? `-${vp}` : ""}${SUFFIX}.png`;
@@ -132,11 +132,7 @@ try {
   // 7 · the admin tab
   const admin = await browser.newContext({ viewport: viewports.desktop, locale: "es-CO" });
   const ap = await admin.newPage();
-  await ap.goto(`${BASE}/admin`);
-  await ap.getByLabel("Token").waitFor({ timeout: 15_000 });
-  await ap.getByLabel("Token").fill(TOKEN);
-  await ap.getByRole("button", { name: /Entrar/ }).click();
-  await ap.getByRole("link", { name: /Configurar/ }).first().waitFor({ timeout: 15_000 });
+  await adminLogin(ap, BASE);
   await ap.goto(`${BASE}/admin/${CITY}#assistant`);
   await ap.waitForSelector('[id="config.assistant.provider"]', { timeout: 20_000 }).catch(() => console.warn("assistant tab did not render"));
   await ap.waitForTimeout(500);

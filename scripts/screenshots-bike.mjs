@@ -3,19 +3,19 @@
  *
  *   pnpm dev:mock -p 3100
  *   BASE_URL=http://localhost:3100 pnpm screenshots:bike
- *   SUFFIX=live-api TOKEN=<ADMIN_TOKEN> ...    # against the real API
+ *   SUFFIX=live-api EMAIL=… PASSWORD=… ...    # against the real API
  *
  * Shots (desktop + mobile): planner with "Bici pública" on, results with a rental itinerary,
  * itinerary detail with pick-up / drop-off cards, the station layer with a popup, admin Movilidad.
  * Trips: Parque de la 93 → Calle 100 (bike only) and Chapinero → Portal Norte (bike + bus).
  */
 import { chromium } from "@playwright/test";
+import { adminLogin } from "./admin-login.mjs";
 import { mkdirSync } from "node:fs";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3100";
 const OUT = "docs/screenshots";
 const SUFFIX = process.env.SUFFIX ? `-${process.env.SUFFIX}` : "";
-const TOKEN = process.env.TOKEN ?? "demo";
 const file = (n, vp) => `${OUT}/bike-${n}-${vp}${SUFFIX}.png`;
 // Trips: bike only (Parque de la 93 → Calle 100) and bike + bus (Chicó Norte → Portal Sur, rental access leg)
 const direct = process.env.DIRECT ?? "from=4.67660,-74.04830&fromName=Parque%20de%20la%2093&to=4.68410,-74.05170&toName=Calle%20100&modes=WALK&rental=1";
@@ -110,7 +110,7 @@ try {
 
   // 5 · admin Movilidad
   const ctx = await browser.newContext({ viewport: viewports.desktop, locale: "es-CO" });
-  await ctx.addInitScript((t) => sessionStorage.setItem("opentransit.admin.token", t), TOKEN);
+  await adminLogin(page, BASE);
   const page = await ctx.newPage();
   await page.goto(`${BASE}/admin/bogota#mobility`);
   await page.locator("#mob-0-gbfs").waitFor({ timeout: 30_000 });

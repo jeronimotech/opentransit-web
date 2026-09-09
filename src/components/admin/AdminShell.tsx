@@ -6,9 +6,11 @@ import { useI18n } from "@/lib/i18n/provider";
 import { useTheme } from "@/lib/theme";
 import { MOCK } from "@/lib/api/client";
 import { Wordmark } from "@/components/shell/CityHeader";
-import { Button, Icon } from "@/components/ui/primitives";
+import { Badge, Button, Icon } from "@/components/ui/primitives";
+import { canManageUsers, displayName, scopeLabel, type AdminUser } from "@/lib/admin/session";
 
-export function AdminShell({ children, onLogout, crumbs }: { children: ReactNode; onLogout?: () => void; crumbs?: ReactNode }) {
+/** `user` is absent only on the login screen; everywhere else the header says who you are. */
+export function AdminShell({ children, user, onSignOut, crumbs }: { children: ReactNode; user?: AdminUser | null; onSignOut?: () => void; crumbs?: ReactNode }) {
   const { t, lang, setLang } = useI18n();
   const { pref, setPref, resolved } = useTheme();
   const toggleTheme = () => setPref(pref === "system" ? (resolved === "dark" ? "light" : "dark") : pref === "dark" ? "light" : "dark");
@@ -31,8 +33,22 @@ export function AdminShell({ children, onLogout, crumbs }: { children: ReactNode
             <button type="button" onClick={toggleTheme} className="grid h-9 w-9 place-items-center rounded-lg text-ink-2 hover:bg-paper-3 hover:text-ink" aria-label={t.common.theme}>
               {resolved === "dark" ? <Icon.Sun /> : <Icon.Moon />}
             </button>
-            {onLogout ? (
-              <Button size="sm" variant="ghost" onClick={onLogout}>
+            {user ? (
+              <>
+                {canManageUsers(user) ? (
+                  <Link href="/admin/users" className="hidden rounded-lg px-2 py-1.5 text-xs font-bold text-ink-2 hover:bg-paper-3 hover:text-ink sm:block">
+                    {t.admin.users.title}
+                  </Link>
+                ) : null}
+                <span className="hidden items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-ink-2 sm:flex" title={`${user.email} · ${scopeLabel(user, t.admin.users.allCities)}`}>
+                  <Icon.User width={16} height={16} />
+                  <span className="max-w-40 truncate font-semibold text-ink">{displayName(user)}</span>
+                  <Badge tone="neutral">{t.admin.users.roles[user.role]}</Badge>
+                </span>
+              </>
+            ) : null}
+            {onSignOut ? (
+              <Button size="sm" variant="ghost" onClick={onSignOut}>
                 {t.admin.login.logout}
               </Button>
             ) : null}

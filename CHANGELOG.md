@@ -2,6 +2,27 @@
 
 All notable changes to opentransit-web. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+### Added
+- **Operators sign in with their own account.** `/admin/login` asks for an email and a password instead of a
+  pasted token, the header says who you are and what your role is, and `/admin/users` lets an owner create,
+  edit, scope, re-password and disable accounts.
+- **The session lives in an httpOnly cookie, not in the browser.** A new route handler at `/api/admin/*`
+  holds it on this origin and replays it to the API as a bearer token, so no page script can read a
+  credential — and the API may sit on another domain without third-party-cookie trouble. It forwards only
+  the paths listed in `src/lib/admin/proxy.ts`; anything else is a 404 before the request leaves the server.
+- **Expiry keeps your place.** A revoked or expired session sends the operator to
+  `/admin/login?next=/admin/bogota#links`; signing in again returns to that city *and* that tab. `next` is
+  refused unless it is a path inside `/admin`, so it can never become an open redirect.
+- `src/lib/admin/session.ts` (roles, city scope, `safeNext`) and `src/lib/admin/proxy.ts` (path rules, cookie
+  lifetime) are pure and unit-tested in `src/lib/admin/session.test.ts`.
+
+### Changed
+- The "Editado por" box is gone from the save bar: the signed-in account is who made the change, and the API
+  records that rather than a typed name.
+- Mock mode has accounts too — sign in with `demo@opentransit.dev` / `demo-password`.
+- The screenshot scripts sign in through the form (`EMAIL` / `PASSWORD`) instead of seeding a token.
+
 ## [1.10.0] - 2026-09-07
 ### Added
 - **Every geocode result can be either end of the trip** (contract addendum v2.1). A row fills the field it belongs to; the chip beside it fills the other one, and when both ends end up set the plan runs without a second tap. Nothing is overwritten silently: when the other field already holds a point, the chip's label names what it would replace ("Reemplazar el origen (Calle 85)").

@@ -309,11 +309,12 @@ describe("the key never reaches a client", () => {
 
   it("the admin store hands back a mask, never the stored key", async () => {
     const { mockRequest } = await import("@/mocks/handlers");
+    (await import("@/mocks/admin")).signInDemo();
     type MaskedConfig = { config: { assistant: { apiKey: string } } };
     const res = await mockRequest<{ effective: MaskedConfig; yaml: MaskedConfig }>("/v1/admin/cities/bogota/config", {}, {
       method: "GET",
       body: null,
-      headers: { "X-Admin-Token": "demo" },
+      headers: {},
     });
     for (const key of [res.effective.config.assistant.apiKey, res.yaml.config.assistant.apiKey]) {
       expect(isMaskedKey(key)).toBe(true);
@@ -325,10 +326,11 @@ describe("the key never reaches a client", () => {
 describe("the mock server keeps or replaces the key the way the API does", () => {
   it("walks a new key, an echoed mask and a clear", async () => {
     const { mockRequest } = await import("@/mocks/handlers");
-    const init = (body: unknown) => ({ method: "PUT", body: JSON.stringify(body), headers: { "X-Admin-Token": "demo" } });
+    (await import("@/mocks/admin")).signInDemo();
+    const init = (body: unknown) => ({ method: "PUT", body: JSON.stringify(body), headers: {} });
     type Res = { yaml: { config: CityConfigLike }; override: { config: CityConfigLike } | null };
     const read = async (): Promise<Res> =>
-      mockRequest<Res>("/v1/admin/cities/bogota/config", {}, { method: "GET", body: null, headers: { "X-Admin-Token": "demo" } });
+      mockRequest<Res>("/v1/admin/cities/bogota/config", {}, { method: "GET", body: null, headers: {} });
 
     const base = (await read()).yaml.config;
     const put = async (apiKey: string | null) =>

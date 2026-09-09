@@ -5,17 +5,17 @@ import { useI18n } from "@/lib/i18n/provider";
 import { useCities } from "@/lib/api/hooks";
 import { Icon } from "@/components/ui/primitives";
 import { AdminShell } from "@/components/admin/AdminShell";
-import { TokenGate } from "@/components/admin/TokenGate";
+import { AuthGate } from "@/components/admin/AuthGate";
 
 export default function AdminHome() {
   const { t } = useI18n();
   const cities = useCities();
   return (
-    <TokenGate>
-      {({ cities: allowed, logout }) => {
+    <AuthGate>
+      {({ user, cities: allowed, signOut }) => {
         const names = new Map((cities.data?.cities ?? []).map((c) => [c.id, c]));
         return (
-          <AdminShell onLogout={logout}>
+          <AdminShell user={user} onSignOut={signOut}>
             <h1 className="text-2xl font-extrabold tracking-tight">{t.admin.title}</h1>
             <p className="mt-1 max-w-prose text-sm text-ink-2">{t.admin.subtitle}</p>
             <h2 className="mt-8 text-base font-bold">{t.admin.cities}</h2>
@@ -44,6 +44,6 @@ export default function AdminHome() {
           </AdminShell>
         );
       }}
-    </TokenGate>
+    </AuthGate>
   );
 }

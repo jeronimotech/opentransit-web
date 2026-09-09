@@ -3,18 +3,18 @@
  *
  *   pnpm dev:mock -p 3100
  *   BASE_URL=http://localhost:3100 pnpm screenshots:lote1
- *   SUFFIX=live-api TOKEN=<ADMIN_TOKEN> STOP=bogota:2000 TRIP="from=…&to=…" pnpm screenshots:lote1
+ *   SUFFIX=live-api EMAIL=… PASSWORD=… STOP=bogota:2000 TRIP="from=…&to=…" pnpm screenshots:lote1
  *
  * Shots (desktop + mobile): results with scenario sections and countdowns, itinerary detail
  * with departure chips, stop board rows, the offline bar; desktop: admin Analítica (map + charts).
  */
 import { chromium } from "@playwright/test";
+import { adminLogin } from "./admin-login.mjs";
 import { mkdirSync } from "node:fs";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3100";
 const OUT = "docs/screenshots";
 const SUFFIX = process.env.SUFFIX ? `-${process.env.SUFFIX}` : "";
-const TOKEN = process.env.TOKEN ?? "demo";
 const STOP = process.env.STOP ?? "bogota:7012";
 const trip = process.env.TRIP ?? "from=4.68450,-74.05300&fromName=Chic%C3%B3%20Norte&to=4.59780,-74.16160&toName=Portal%20Sur&rental=1&taxi=1";
 const viewports = { desktop: { width: 1280, height: 800 }, mobile: { width: 390, height: 844 } };
@@ -78,8 +78,7 @@ try {
 
     if (vpName === "desktop") {
       // 5 · admin analytics
-      await page.goto(`${BASE}/admin`);
-      await page.fill("input[type=password], input[name=token]", TOKEN).catch(() => {});
+      await adminLogin(page, BASE);
       await page.click("button[type=submit]").catch(() => {});
       await page.goto(`${BASE}/admin/bogota#analytics`);
       await page.waitForSelector("[data-testid=analytics-tab]", { timeout: 45_000 }).catch(() => console.warn("analytics tab missing"));

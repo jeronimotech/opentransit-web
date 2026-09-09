@@ -3,7 +3,7 @@
  *
  *   pnpm dev:mock -p 3100
  *   BASE_URL=http://localhost:3100 pnpm screenshots:ondemand
- *   SUFFIX=live-api TOKEN=<ADMIN_TOKEN> ...    # against the real API
+ *   SUFFIX=live-api EMAIL=… PASSWORD=… ...    # against the real API
  *
  * Shots (desktop + mobile): planner with "Taxi / app" on, results with an on-demand itinerary,
  * itinerary detail with the provider picker, the stop page action; desktop only: the admin
@@ -11,12 +11,12 @@
  * Trip: Chicó Norte → Portal Sur (direct taxi + Taxi → Bus combo).
  */
 import { chromium } from "@playwright/test";
+import { adminLogin } from "./admin-login.mjs";
 import { mkdirSync } from "node:fs";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3100";
 const OUT = "docs/screenshots";
 const SUFFIX = process.env.SUFFIX ? `-${process.env.SUFFIX}` : "";
-const TOKEN = process.env.TOKEN ?? "demo";
 // mock fixture station by default; pass STOP=bogota:2000 (Portal Norte) against the real API
 const STOP = process.env.STOP ?? "bogota:7012";
 const file = (n, vp) => `${OUT}/ondemand-${n}-${vp}${SUFFIX}.png`;
@@ -106,7 +106,7 @@ try {
 
   // 5 · admin: tariff editor and providers editor
   const ctx = await browser.newContext({ viewport: viewports.desktop, locale: "es-CO" });
-  await ctx.addInitScript((t) => sessionStorage.setItem("opentransit.admin.token", t), TOKEN);
+  await adminLogin(page, BASE);
   const page = await ctx.newPage();
   await page.goto(`${BASE}/admin/bogota#mobility`);
   await page.locator("[data-testid=tariff-preview]").first().waitFor({ timeout: 30_000 });

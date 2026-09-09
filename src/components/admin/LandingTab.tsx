@@ -21,10 +21,10 @@ const nul = (v: string) => (v.trim() ? v : null);
  * draft / validation / override / history mechanics as the other tabs. "Vista previa" hands
  * the unsaved draft to /{city}/landing?preview=1 through localStorage (short TTL).
  */
-export function LandingTab({ token, city, data }: { token: string; city: string; data: AdminConfigResponse }) {
+export function LandingTab({ city, data }: { city: string; data: AdminConfigResponse }) {
   const { t } = useI18n();
   const { draft, setDraft, dirty, overridden, reset } = useSectionDraft(data, "landing");
-  const save = useSaveConfig(token, city);
+  const save = useSaveConfig(city);
   const [state, setState] = useState<SaveState>({ status: "idle" });
   const [serverErrors, setServerErrors] = useState<Errors>({});
   const [open, setOpen] = useState<Section>("hero");
@@ -36,10 +36,10 @@ export function LandingTab({ token, city, data }: { token: string; city: string;
   };
   const L = t.admin.landing;
 
-  const onSave = async (meta: { note: string; updatedBy: string }) => {
+  const onSave = async (meta: { note: string }) => {
     setState({ status: "saving" });
     try {
-      const r = await save.mutateAsync({ landing: l, note: meta.note || undefined, updatedBy: meta.updatedBy || undefined });
+      const r = await save.mutateAsync({ landing: l, note: meta.note || undefined });
       setState({ status: "saved", revision: r.revision });
     } catch (err) {
       const { errors: e, message } = saveErrorsFrom(err);

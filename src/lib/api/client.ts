@@ -3,6 +3,10 @@ import type {
   AdminConfigResponse,
   AdminHistoryResponse,
   AdminMe,
+  AdminSession,
+  AdminUserCreate,
+  AdminUserPatch,
+  AdminUserRow,
   AlertsResponse,
   AnalyticsAccepted,
   AnalyticsBatch,
@@ -57,6 +61,9 @@ export const API_URL = (
 
 export const MOCK = process.env.NEXT_PUBLIC_MOCK === "1";
 
+/** Same-origin route handler that holds the admin session cookie (src/app/api/admin). */
+const ADMIN_PROXY = "/api/admin";
+
 export class ApiRequestError extends Error {
   status: number;
   code: string;
@@ -82,16 +89,8 @@ function qs(q?: Query): string {
   return s ? `?${s}` : "";
 }
 
-async function request<T>(path: string, q?: Query, init?: RequestInit): Promise<T> {
-  if (MOCK) {
-    const { mockRequest } = await import("@/mocks/handlers");
-    return mockRequest<T>(path, q ?? {}, {
-      method: init?.method ?? "GET",
-      body: typeof init?.body === "string" ? init.body : null,
-      headers: (init?.headers ?? {}) as Record<string, string>,
-    });
-  }
-  const res = await fetch(`${API_URL}${path}${qs(q)}`, {
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
     ...init,
     headers: { Accept: "application/json", ...(init?.headers ?? {}) },
   });
@@ -111,6 +110,30 @@ async function request<T>(path: string, q?: Query, init?: RequestInit): Promise<
   }
   const text = await res.text();
   return (text ? JSON.parse(text) : null) as T;
+}
+
+function mock<T>(path: string, q?: Query, init?: RequestInit): Promise<T> {
+  return import("@/mocks/handlers").then(({ mockRequest }) =>
+    mockRequest<T>(path, q ?? {}, {
+      method: init?.method ?? "GET",
+      body: typeof init?.body === "string" ? init.body : null,
+      headers: (init?.headers ?? {}) as Record<string, string>,
+    }),
+  );
+}
+
+async function request<T>(path: string, q?: Query, init?: RequestInit): Promise<T> {
+  if (MOCK) return mock<T>(path, q, init);
+  return fetchJson<T>(`${API_URL}${path}${qs(q)}`, init);
+}
+
+/**
+ * Admin calls go to this app's own `/api/admin` proxy, never straight to the API: the session lives in
+ * an httpOnly cookie on this origin, so nothing here has to hold — or could leak — a credential.
+ */
+async function adminRequest<T>(path: string, q?: Query, init?: RequestInit): Promise<T> {
+  if (MOCK) return mock<T>(path, q, init);
+  return fetchJson<T>(`${ADMIN_PROXY}${path.replace(/^\/v1\/admin/, "")}${qs(q)}`, init);
 }
 
 const c = (city: string) => `/v1/cities/${encodeURIComponent(city)}`;
@@ -258,27 +281,33 @@ export const api = {
     }),
 };
 
-/* ── Admin: token-authenticated operator endpoints ───────────────────────── */
+/* ── Admin: operator endpoints, authenticated by the session cookie ───────── */
 
 const a = (city: string) => `/v1/admin/cities/${encodeURIComponent(city)}/config`;
-const adminInit = (token: string, method = "GET", body?: unknown): RequestInit => ({
+const adminInit = (method = "GET", body?: unknown): RequestInit => ({
   method,
-  headers: {
-    "X-Admin-Token": token,
-    ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-  },
+  headers: body !== undefined ? { "Content-Type": "application/json" } : {},
   body: body !== undefined ? JSON.stringify(body) : undefined,
 });
 
 export const adminApi = {
-  me: (token: string) => request<AdminMe>("/v1/admin/me", undefined, adminInit(token)),
-  config: (token: string, city: string) => request<AdminConfigResponse>(a(city), undefined, adminInit(token)),
-  update: (token: string, city: string, patch: AdminConfigPatch) =>
-    request<AdminConfigResponse>(a(city), undefined, adminInit(token, "PUT", patch)),
-  reset: (token: string, city: string) =>
-    request<AdminConfigResponse | null>(a(city), undefined, adminInit(token, "DELETE")),
-  history: (token: string, city: string, limit = 20) =>
-    request<AdminHistoryResponse>(`${a(city)}/history`, { limit }, adminInit(token)),
+  login: (email: string, password: string) =>
+    adminRequest<AdminSession>("/v1/admin/auth/login", undefined, adminInit("POST", { email, password })),
+  logout: () => adminRequest<{ ok: true }>("/v1/admin/auth/logout", undefined, adminInit("POST")),
+  me: () => adminRequest<AdminMe>("/v1/admin/auth/me"),
+  users: () => adminRequest<{ users: AdminUserRow[] }>("/v1/admin/users"),
+  createUser: (body: AdminUserCreate) => adminRequest<AdminUserRow>("/v1/admin/users", undefined, adminInit("POST", body)),
+  updateUser: (id: number, body: AdminUserPatch) =>
+    adminRequest<AdminUserRow>(`/v1/admin/users/${id}`, undefined, adminInit("PATCH", body)),
+  disableUser: (id: number) =>
+    adminRequest<AdminUserRow>(`/v1/admin/users/${id}/disable`, undefined, adminInit("POST")),
+
+  config: (city: string) => adminRequest<AdminConfigResponse>(a(city), undefined, adminInit()),
+  update: (city: string, patch: AdminConfigPatch) =>
+    adminRequest<AdminConfigResponse>(a(city), undefined, adminInit("PUT", patch)),
+  reset: (city: string) => adminRequest<AdminConfigResponse | null>(a(city), undefined, adminInit("DELETE")),
+  history: (city: string, limit = 20) =>
+    adminRequest<AdminHistoryResponse>(`${a(city)}/history`, { limit }, adminInit()),
 };
 
 /* ── Admin analytics (v1.5): aggregated, k-anonymous reads ───────────────── */
@@ -290,25 +319,23 @@ type Range = { from: string; to: string };
 
 export const analyticsApi = {
   // every read goes through a normalizer: the server's dialect (camel/snake, kpis/totals) never reaches the UI
-  summary: (token: string, city: string, r: Range): Promise<AnalyticsSummary> => request<unknown>(`${an(city)}/summary`, r, adminInit(token)).then(normalizeSummary),
-  od: (token: string, city: string, r: Range, limit = 500): Promise<AnalyticsOdResponse> => request<unknown>(`${an(city)}/od`, { ...r, limit }, adminInit(token)).then(normalizeOd),
-  places: (token: string, city: string, r: Range, kind: "origin" | "destination" | "search"): Promise<AnalyticsPlacesResponse> =>
-    request<unknown>(`${an(city)}/places`, { ...r, kind }, adminInit(token)).then(normalizePlaces),
-  routes: (token: string, city: string, r: Range): Promise<AnalyticsRoutesResponse> => request<unknown>(`${an(city)}/routes`, r, adminInit(token)).then((x) => ({ routes: normalizeRoutes(x) })),
-  stops: (token: string, city: string, r: Range): Promise<AnalyticsStopsResponse> => request<unknown>(`${an(city)}/stops`, r, adminInit(token)).then((x) => ({ stops: normalizeStops(x) })),
-  modes: (token: string, city: string, r: Range): Promise<AnalyticsModesResponse> => request<unknown>(`${an(city)}/modes`, r, adminInit(token)).then((x) => ({ modes: normalizeModes(x) })),
-  searches: (token: string, city: string, r: Range): Promise<AnalyticsSearchesResponse> => request<unknown>(`${an(city)}/searches`, r, adminInit(token)).then(normalizeSearches),
-  providers: (token: string, city: string, r: Range): Promise<AnalyticsProvidersResponse> => request<unknown>(`${an(city)}/providers`, r, adminInit(token)).then(normalizeProviders),
-  funnel: (token: string, city: string, r: Range): Promise<AnalyticsFunnelResponse> => request<unknown>(`${an(city)}/funnel`, r, adminInit(token)).then(normalizeFunnel),
-  hours: (token: string, city: string, r: Range): Promise<AnalyticsHoursResponse> => request<unknown>(`${an(city)}/hours`, r, adminInit(token)).then(normalizeHours),
-  /** CSV download: a URL the browser fetches with the token header via `fetch` + blob (see the tab). */
+  summary: (city: string, r: Range): Promise<AnalyticsSummary> => adminRequest<unknown>(`${an(city)}/summary`, r, adminInit()).then(normalizeSummary),
+  od: (city: string, r: Range, limit = 500): Promise<AnalyticsOdResponse> => adminRequest<unknown>(`${an(city)}/od`, { ...r, limit }, adminInit()).then(normalizeOd),
+  places: (city: string, r: Range, kind: "origin" | "destination" | "search"): Promise<AnalyticsPlacesResponse> =>
+    adminRequest<unknown>(`${an(city)}/places`, { ...r, kind }, adminInit()).then(normalizePlaces),
+  routes: (city: string, r: Range): Promise<AnalyticsRoutesResponse> => adminRequest<unknown>(`${an(city)}/routes`, r, adminInit()).then((x) => ({ routes: normalizeRoutes(x) })),
+  stops: (city: string, r: Range): Promise<AnalyticsStopsResponse> => adminRequest<unknown>(`${an(city)}/stops`, r, adminInit()).then((x) => ({ stops: normalizeStops(x) })),
+  modes: (city: string, r: Range): Promise<AnalyticsModesResponse> => adminRequest<unknown>(`${an(city)}/modes`, r, adminInit()).then((x) => ({ modes: normalizeModes(x) })),
+  searches: (city: string, r: Range): Promise<AnalyticsSearchesResponse> => adminRequest<unknown>(`${an(city)}/searches`, r, adminInit()).then(normalizeSearches),
+  providers: (city: string, r: Range): Promise<AnalyticsProvidersResponse> => adminRequest<unknown>(`${an(city)}/providers`, r, adminInit()).then(normalizeProviders),
+  funnel: (city: string, r: Range): Promise<AnalyticsFunnelResponse> => adminRequest<unknown>(`${an(city)}/funnel`, r, adminInit()).then(normalizeFunnel),
+  hours: (city: string, r: Range): Promise<AnalyticsHoursResponse> => adminRequest<unknown>(`${an(city)}/hours`, r, adminInit()).then(normalizeHours),
+  /** CSV download: the path the tab fetches through the proxy, then turns into a blob. */
   exportPath: (city: string, dataset: AnalyticsDataset, r: Range) => `${an(city)}/export.csv${qs({ dataset, ...r })}`,
-  exportCsv: async (token: string, city: string, dataset: AnalyticsDataset, r: Range): Promise<string> => {
-    if (MOCK) {
-      const { mockRequest } = await import("@/mocks/handlers");
-      return mockRequest<string>(`${an(city)}/export.csv`, { dataset, ...r }, { method: "GET", body: null, headers: { "X-Admin-Token": token } });
-    }
-    const res = await fetch(`${API_URL}${analyticsApi.exportPath(city, dataset, r)}`, { headers: { "X-Admin-Token": token } });
+  exportCsv: async (city: string, dataset: AnalyticsDataset, r: Range): Promise<string> => {
+    if (MOCK) return mock<string>(`${an(city)}/export.csv`, { dataset, ...r });
+    // Not JSON, so it bypasses adminRequest — but it goes through the same proxy, with the same cookie.
+    const res = await fetch(`${ADMIN_PROXY}${analyticsApi.exportPath(city, dataset, r).replace(/^\/v1\/admin/, "")}`);
     if (!res.ok) throw new ApiRequestError(res.status, "HTTP_ERROR", `${res.status} ${res.statusText}`);
     return res.text();
   },

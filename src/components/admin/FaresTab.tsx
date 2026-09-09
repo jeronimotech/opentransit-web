@@ -12,10 +12,10 @@ import { useSaveConfig } from "./useAdmin";
 
 const DEFAULT_FARES: CityFares = { currency: "COP", base: 0, transfer: 0, transferWindowMinutes: 0, maxTransfers: 0, note: null, estimated: true };
 
-export function FaresTab({ token, city, data }: { token: string; city: string; data: AdminConfigResponse }) {
+export function FaresTab({ city, data }: { city: string; data: AdminConfigResponse }) {
   const { t, lang } = useI18n();
   const { draft, setDraft, dirty, overridden, reset } = useSectionDraft(data, "fares");
-  const save = useSaveConfig(token, city);
+  const save = useSaveConfig(city);
   const [state, setState] = useState<SaveState>({ status: "idle" });
   const [serverErrors, setServerErrors] = useState<Errors>({});
   const errors: Errors = { ...validateFares(draft, t.admin.errors), ...serverErrors };
@@ -26,10 +26,10 @@ export function FaresTab({ token, city, data }: { token: string; city: string; d
     setDraft({ ...(f ?? DEFAULT_FARES), ...p, estimated: true });
   };
 
-  const onSave = async (meta: { note: string; updatedBy: string }) => {
+  const onSave = async (meta: { note: string }) => {
     setState({ status: "saving" });
     try {
-      const r = await save.mutateAsync({ fares: f, note: meta.note || undefined, updatedBy: meta.updatedBy || undefined });
+      const r = await save.mutateAsync({ fares: f, note: meta.note || undefined });
       setState({ status: "saved", revision: r.revision });
     } catch (err) {
       const { errors: e, message } = saveErrorsFrom(err);

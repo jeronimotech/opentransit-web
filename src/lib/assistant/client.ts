@@ -72,13 +72,14 @@ export function streamChat(
 }
 
 /** Admin-only health: which provider is configured and what it has spent today. */
-export async function assistantHealth(city: string, token: string): Promise<AssistantHealth> {
+/** Admin-only, so it goes through the web's own session proxy like every other admin read. */
+export async function assistantHealth(city: string): Promise<AssistantHealth> {
   if (MOCK) {
     const { mockAssistantHealth } = await import("@/mocks/assistant");
     return mockAssistantHealth();
   }
-  const res = await fetch(`${API_URL}/v1/cities/${encodeURIComponent(city)}/chat/health`, {
-    headers: { "X-Admin-Token": token, Accept: "application/json" },
+  const res = await fetch(`/api/admin/chat-health/${encodeURIComponent(city)}`, {
+    headers: { Accept: "application/json" },
   });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return (await res.json()) as AssistantHealth;

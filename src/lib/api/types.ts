@@ -765,9 +765,31 @@ export type LandingResponse = {
   apps?: CityLanding["apps"];
 };
 
-/* ── Admin (operators): per-city overrides on top of cities/*.yaml ─────────── */
+/* ── Admin (operators): named accounts, and per-city overrides on cities/*.yaml ─── */
 
-export type AdminMe = { ok: true; cities: string[] };
+import type { AdminRole, AdminUser } from "@/lib/admin/session";
+export type { AdminRole, AdminUser };
+
+/** v1.11 — the signed-in operator (or the machine credential), as `/v1/admin/auth/me` reports it. */
+export type AdminMe = { ok: true; user: AdminUser; cities: string[]; canManageUsers: boolean };
+
+/** What sign-in returns to the browser. The session token itself stops at the `/api/admin` proxy. */
+export type AdminSession = { expiresAt: string; user: AdminUser; cities: string[] };
+
+export type AdminUserRow = {
+  id: number;
+  email: string;
+  name: string;
+  role: Exclude<AdminRole, "machine">;
+  /** Empty means every city. */
+  cities: string[];
+  disabled: boolean;
+  createdAt: string | null;
+  lastLoginAt: string | null;
+};
+
+export type AdminUserCreate = { email: string; password: string; name?: string; role?: string; cities?: string[] };
+export type AdminUserPatch = { name?: string; role?: string; cities?: string[]; disabled?: boolean; password?: string };
 
 /** The editable slice of a city. `null` in `override` means "not overridden". */
 export type AdminEditable = {

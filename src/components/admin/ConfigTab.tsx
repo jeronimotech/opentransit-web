@@ -11,10 +11,10 @@ import { useSaveConfig } from "./useAdmin";
 const FEATURES = ["liveVehicles", "board", "pois", "followAlong", "bike", "next", "favorites", "alerts"] as const;
 const DEFAULT_CONFIG: CityConfig = { vehiclePollSeconds: 15, departuresRefreshSeconds: 20, features: {}, minAppVersion: { ios: "1.0.0", android: "1.0.0" }, maintenance: { active: false, message: null } };
 
-export function ConfigTab({ token, city, data }: { token: string; city: string; data: AdminConfigResponse }) {
+export function ConfigTab({ city, data }: { city: string; data: AdminConfigResponse }) {
   const { t } = useI18n();
   const { draft, setDraft, dirty, overridden, reset } = useSectionDraft(data, "config");
-  const save = useSaveConfig(token, city);
+  const save = useSaveConfig(city);
   const [state, setState] = useState<SaveState>({ status: "idle" });
   const [serverErrors, setServerErrors] = useState<Errors>({});
   const [confirmMaint, setConfirmMaint] = useState(false);
@@ -26,10 +26,10 @@ export function ConfigTab({ token, city, data }: { token: string; city: string; 
     setDraft({ ...c, ...p });
   };
 
-  const onSave = async (meta: { note: string; updatedBy: string }) => {
+  const onSave = async (meta: { note: string }) => {
     setState({ status: "saving" });
     try {
-      const r = await save.mutateAsync({ config: c, note: meta.note || undefined, updatedBy: meta.updatedBy || undefined });
+      const r = await save.mutateAsync({ config: c, note: meta.note || undefined });
       setState({ status: "saved", revision: r.revision });
     } catch (err) {
       const { errors: e, message } = saveErrorsFrom(err);

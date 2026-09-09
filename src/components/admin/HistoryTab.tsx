@@ -7,9 +7,9 @@ import type { AdminConfigResponse } from "@/lib/api/types";
 import { effectiveChanges } from "@/lib/admin/diff";
 import { useAdminHistory } from "./useAdmin";
 
-export function HistoryTab({ token, city, data }: { token: string; city: string; data: AdminConfigResponse }) {
+export function HistoryTab({ city, data }: { city: string; data: AdminConfigResponse }) {
   const { t, lang } = useI18n();
-  const h = useAdminHistory(token, city);
+  const h = useAdminHistory(city);
   const items = h.data?.items ?? [];
   const tz = data.effective.timezone;
   return (

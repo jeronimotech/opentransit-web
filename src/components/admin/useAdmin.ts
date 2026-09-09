@@ -1,53 +1,79 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
-import { adminApi } from "@/lib/api/client";
-import type { AdminConfigPatch, AdminConfigResponse } from "@/lib/api/types";
-import { getToken, setToken } from "@/lib/admin/auth";
+import { useRouter } from "next/navigation";
+import { useCallback } from "react";
+import { ApiRequestError, adminApi } from "@/lib/api/client";
+import type { AdminConfigPatch, AdminConfigResponse, AdminMe, AdminUserPatch } from "@/lib/api/types";
+import { hereAsNext } from "@/lib/admin/session";
 
-/** Token in sessionStorage + `/v1/admin/me` as the validity check. */
+const ME_KEY = ["admin", "me"] as const;
+
+/**
+ * Who is signed in. There is nothing to read locally — the session is an httpOnly cookie — so the
+ * question is always asked of the server, and a 401 simply means "not signed in".
+ */
 export function useAdminSession() {
   const qc = useQueryClient();
-  const [token, setTok] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    setTok(getToken());
-    setReady(true);
-  }, []);
-  const me = useQuery({
-    queryKey: ["admin", "me", token],
-    queryFn: () => adminApi.me(token!),
-    enabled: !!token,
+  const me = useQuery<AdminMe>({
+    queryKey: ME_KEY,
+    queryFn: () => adminApi.me(),
     retry: false,
     staleTime: 5 * 60_000,
   });
-  const login = useCallback((t: string) => {
-    setToken(t);
-    setTok(t);
-  }, []);
-  const logout = useCallback(() => {
-    setToken(null);
-    setTok(null);
-    qc.removeQueries({ queryKey: ["admin"] });
-  }, [qc]);
-  return { token, ready, me, login, logout, authed: !!token && me.isSuccess };
+  const signOut = useMutation({
+    mutationFn: () => adminApi.logout(),
+    onSettled: () => qc.removeQueries({ queryKey: ["admin"] }),
+  });
+  return {
+    me,
+    user: me.data?.user ?? null,
+    cities: me.data?.cities ?? [],
+    canManageUsers: !!me.data?.canManageUsers,
+    signOut,
+  };
 }
 
-export function useAdminConfig(token: string | null, city: string) {
+export function useLogin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ email, password }: { email: string; password: string }) => adminApi.login(email, password),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin"] }),
+  });
+}
+
+/**
+ * A session dies on its own schedule, usually mid-edit. Sending the operator to /admin/login with
+ * where they were attached means one sign-in puts them back on the same city and the same tab.
+ */
+export function useSignInRedirect() {
+  const router = useRouter();
+  return useCallback(() => {
+    const next = typeof window === "undefined" ? "/admin" : hereAsNext(window.location);
+    router.replace(`/admin/login?next=${encodeURIComponent(next)}`);
+  }, [router]);
+}
+
+export function isUnauthorized(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.status === 401;
+}
+
+export function useAdminConfig(city: string, enabled = true) {
   return useQuery({
     queryKey: ["admin", "config", city],
-    queryFn: () => adminApi.config(token!, city),
-    enabled: !!token && !!city,
+    queryFn: () => adminApi.config(city),
+    enabled: enabled && !!city,
+    retry: false,
     staleTime: 60_000,
   });
 }
 
-export function useAdminHistory(token: string | null, city: string, enabled = true) {
+export function useAdminHistory(city: string, enabled = true) {
   return useQuery({
     queryKey: ["admin", "history", city],
-    queryFn: () => adminApi.history(token!, city, 30),
-    enabled: !!token && !!city && enabled,
+    queryFn: () => adminApi.history(city, 30),
+    enabled: !!city && enabled,
+    retry: false,
     staleTime: 30_000,
   });
 }
@@ -68,18 +94,45 @@ function useAfterChange(city: string) {
   );
 }
 
-export function useSaveConfig(token: string | null, city: string) {
+export function useSaveConfig(city: string) {
   const after = useAfterChange(city);
   return useMutation({
-    mutationFn: (patch: AdminConfigPatch) => adminApi.update(token!, city, patch),
+    mutationFn: (patch: AdminConfigPatch) => adminApi.update(city, patch),
     onSuccess: after,
   });
 }
 
-export function useResetAll(token: string | null, city: string) {
+export function useResetAll(city: string) {
   const after = useAfterChange(city);
   return useMutation({
-    mutationFn: () => adminApi.reset(token!, city),
+    mutationFn: () => adminApi.reset(city),
     onSuccess: after,
   });
+}
+
+/* ── Accounts (owner only) ────────────────────────────────────────────────── */
+
+export function useAdminUsers(enabled = true) {
+  return useQuery({
+    queryKey: ["admin", "users"],
+    queryFn: () => adminApi.users(),
+    enabled,
+    retry: false,
+    staleTime: 30_000,
+  });
+}
+
+export function useUserMutations() {
+  const qc = useQueryClient();
+  // Changing a role, a scope or a password revokes that person's sessions server-side, so the list is
+  // the only thing that can still be stale here.
+  const after = () => qc.invalidateQueries({ queryKey: ["admin", "users"] });
+  return {
+    create: useMutation({ mutationFn: adminApi.createUser, onSuccess: after }),
+    update: useMutation({
+      mutationFn: ({ id, patch }: { id: number; patch: AdminUserPatch }) => adminApi.updateUser(id, patch),
+      onSuccess: after,
+    }),
+    disable: useMutation({ mutationFn: (id: number) => adminApi.disableUser(id), onSuccess: after }),
+  };
 }

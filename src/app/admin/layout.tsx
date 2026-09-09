@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { ADMIN_ENABLED } from "@/lib/admin/auth";
+import { ADMIN_ENABLED } from "@/lib/admin/session";
 
 export const metadata: Metadata = {
   title: "Admin",

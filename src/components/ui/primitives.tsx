@@ -240,6 +240,12 @@ export const Icon = {
       <path d="M10 2.5l2.4 4.9 5.4.8-3.9 3.8.9 5.4L10 14.9l-4.8 2.5.9-5.4L2.2 8.2l5.4-.8L10 2.5Z" />
     </svg>
   ),
+  User: (p: ComponentProps<"svg">) => (
+    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" {...p}>
+      <circle cx="10" cy="6.5" r="3" />
+      <path d="M3.5 17a6.5 6.5 0 0 1 13 0" />
+    </svg>
+  ),
   Fare: (p: ComponentProps<"svg">) => (
     <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}>
       <rect x="2" y="5" width="16" height="10" rx="2" />

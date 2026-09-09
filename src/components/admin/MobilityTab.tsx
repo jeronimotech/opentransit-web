@@ -20,10 +20,10 @@ const EMPTY: BikeShareNetwork = { id: "", name: "", network: "", gbfsUrl: "", co
  * reorder, each with its gbfs.json, OTP network id, colour, links and vehicle types.
  * "Probar feed" asks the public API what it currently sees for each network.
  */
-export function MobilityTab({ token, city, data }: { token: string; city: string; data: AdminConfigResponse }) {
+export function MobilityTab({ city, data }: { city: string; data: AdminConfigResponse }) {
   const { t, lang } = useI18n();
   const { draft, setDraft, dirty, overridden, reset } = useSectionDraft(data, "mobility");
-  const save = useSaveConfig(token, city);
+  const save = useSaveConfig(city);
   const [state, setState] = useState<SaveState>({ status: "idle" });
   const [serverErrors, setServerErrors] = useState<Errors>({});
   const [probe, setProbe] = useState<{ status: "idle" } | { status: "loading" } | { status: "done"; networks: RentalNetworkInfo[] } | { status: "fail" }>({ status: "idle" });
@@ -64,10 +64,10 @@ export function MobilityTab({ token, city, data }: { token: string; city: string
     update(i, { formFactors: cur.includes(f) ? cur.filter((x) => x !== f) : [...cur, f] });
   };
 
-  const onSave = async (meta: { note: string; updatedBy: string }) => {
+  const onSave = async (meta: { note: string }) => {
     setState({ status: "saving" });
     try {
-      const r = await save.mutateAsync({ mobility: payload(), note: meta.note || undefined, updatedBy: meta.updatedBy || undefined });
+      const r = await save.mutateAsync({ mobility: payload(), note: meta.note || undefined });
       setState({ status: "saved", revision: r.revision });
     } catch (err) {
       const { errors: e, message } = saveErrorsFrom(err);

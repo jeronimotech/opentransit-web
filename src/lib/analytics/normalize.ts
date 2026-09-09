@@ -51,15 +51,25 @@ export function normalizeSummary(raw: unknown): AnalyticsSummary {
   const prev = obj(pick(o, "previousTotals", "previous_totals"));
   const kpis = Object.fromEntries(
     KPI_KEYS.map((k) => {
-      const c = obj(kpisIn[k]);
-      const value = kpisIn[k] !== undefined ? num(c.value) : num(pick(totals, k, snake(k)));
-      const previous = kpisIn[k] !== undefined ? (c.previous == null ? null : num(c.previous)) : prev[k] !== undefined || prev[snake(k)] !== undefined ? num(pick(prev, k, snake(k))) : null;
+      const raw = pick(kpisIn, k, snake(k));
+      // The server sends `kpis` as plain numbers and the deltas in `previousTotals`.
+      // Reading `kpis[k].value` on a number yields 0, which made a city with 22
+      // sessions render the "no data yet" empty state.
+      const value = typeof raw === "number" || typeof raw === "string"
+        ? num(raw)
+        : raw !== undefined
+          ? num(obj(raw).value)
+          : num(pick(totals, k, snake(k)));
+      const fromObject = raw !== undefined && typeof raw === "object" ? obj(raw).previous : undefined;
+      const fromPrev = pick(prev, k, snake(k));
+      const previous = fromObject != null ? num(fromObject) : fromPrev !== undefined ? num(fromPrev) : null;
       return [k, { value, previous }];
     }),
   ) as AnalyticsSummary["kpis"];
   const range = obj(pick(o, "range", "period"));
-  const platforms = arr(pick(o, "platforms")).map((p) => ({ platform: (str(p.platform) ?? "web") as AnalyticsSummary["platforms"][number]["platform"], sessions: num(p.sessions) }));
-  const versions = arr(pick(o, "versions")).map((v) => ({ appVersion: str(pick(v, "appVersion", "app_version")) ?? "?", sessions: num(v.sessions) }));
+  // `n` is what the server calls the session count here; without it every bar was 0.
+  const platforms = arr(pick(o, "platforms")).map((p) => ({ platform: (str(p.platform) ?? "web") as AnalyticsSummary["platforms"][number]["platform"], sessions: num(pick(p, "sessions", "n")) }));
+  const versions = arr(pick(o, "versions")).map((v) => ({ appVersion: str(pick(v, "appVersion", "app_version")) ?? "?", sessions: num(pick(v, "sessions", "n")) }));
   return {
     range: { from: str(range.from) ?? "", to: str(range.to) ?? "" },
     kThreshold: num(pick(o, "kThreshold", "k_threshold"), 5),
