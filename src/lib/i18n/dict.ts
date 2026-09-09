@@ -1097,6 +1097,8 @@ export const dict = {
       zonal: "Zonal",
       cable: "Cable",
       rail: "Tren",
+      tram: "Tranvía",
+      bus: "Bus",
       other: "Otro",
     },
     direction: {
@@ -2207,6 +2209,8 @@ export const dict = {
       zonal: "Zonal",
       cable: "Cable",
       rail: "Rail",
+      tram: "Streetcar",
+      bus: "Bus",
       other: "Other",
     },
     direction: {

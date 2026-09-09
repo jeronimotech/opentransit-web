@@ -316,7 +316,7 @@ const R = (
   color,
   textColor: color === "#F2B41B" ? "#14161A" : "#FFFFFF",
   mode,
-  agencyId: { trunk: "1", feeder: "2", dual: "3", zonal: "4", cable: "7", rail: "1", other: "1" }[component],
+  agencyId: { trunk: "1", feeder: "2", dual: "3", zonal: "4", cable: "7", rail: "1", tram: "1", bus: "1", other: "1" }[component],
   component,
   serviceWindow: windowFor(component),
 });

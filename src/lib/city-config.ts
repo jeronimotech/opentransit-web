@@ -48,6 +48,8 @@ const DEFAULT_LABEL: Record<Component, string> = {
   zonal: "Zonal",
   cable: "Cable",
   rail: "Tren",
+  tram: "Tranvía",
+  bus: "Bus",
   other: "Otro",
 };
 const DEFAULT_ICON: Record<Component, CityComponent["icon"]> = {
@@ -57,6 +59,8 @@ const DEFAULT_ICON: Record<Component, CityComponent["icon"]> = {
   zonal: "bus",
   cable: "cable",
   rail: "rail",
+  tram: "tram",
+  bus: "bus",
   other: "bus",
 };
 

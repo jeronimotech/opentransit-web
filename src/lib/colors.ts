@@ -7,6 +7,10 @@ export const COMPONENT_COLORS: Record<Component, string> = {
   zonal: "#1565C0",
   cable: "#6A1B9A",
   rail: "#455A64",
+  // An operator that runs several modes itself needs these: components then come from
+  // the GTFS mode, not the agency.
+  tram: "#0054A6",
+  bus: "#D32F2F",
   other: "#667085",
 };
 

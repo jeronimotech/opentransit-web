@@ -13,6 +13,8 @@ export type Component =
   | "zonal"
   | "cable"
   | "rail"
+  | "tram"
+  | "bus"
   | "other";
 
 export type Mode =
