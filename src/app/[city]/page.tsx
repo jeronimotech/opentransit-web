@@ -5,7 +5,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useCityCtx } from "@/components/shell/CityContext";
 import { SplitLayout, type Snap } from "@/components/shell/SplitLayout";
 import { MapView, useFitBounds, useMap, useMapZoom } from "@/components/map/MapView";
-import { ItineraryLayer, LayersControl, LocateButton, NetworkLayer, PinMarker, PoisLayer, RENTAL_MIN_ZOOM, RentalStationsLayer, StopsLayer, VehiclesLayer, ZoomGate, useMapBounds } from "@/components/map/layers";
+import { ItineraryLayer, LayersControl, LocateButton, NETWORK_GROUPS, NetworkLayer, PinMarker, PoisLayer, RENTAL_MIN_ZOOM, RentalStationsLayer, StopsLayer, VehiclesLayer, ZoomGate, useMapBounds } from "@/components/map/layers";
 import { RentalStationCard } from "@/components/rental/RentalStationCard";
 import { PlannerForm } from "@/components/planner/PlannerForm";
 import { MapPicker } from "@/components/planner/MapPicker";
@@ -26,7 +26,7 @@ import { useGeolocation } from "@/lib/use-geolocation";
 import { useOnline } from "@/lib/use-online";
 import { assistantEnabled } from "@/lib/assistant";
 import { useFavorites } from "@/lib/favorites";
-import { resolveConfig, componentsOf } from "@/lib/city-config";
+import { resolveConfig, componentsOf, networkLayerLabel } from "@/lib/city-config";
 import { LIVE_MIN_ZOOM, liveAutoOn } from "@/lib/marker-style";
 import { track, useScreenView } from "@/lib/analytics";
 import { readPlanner, toPlanParams, writePlanner, type PlannerPoint, type PlannerState } from "@/lib/planner-params";
@@ -114,11 +114,15 @@ function MapControls({ city, live, setLive, pois, setPois, net, setNet, zonal, s
   const cityCfg = resolveConfig(cityObj);
   const zoom = useMapZoom();
   const networks = bikeShareNetworks(cityObj);
+  const trunkLabel = cityObj ? networkLayerLabel(cityObj, NETWORK_GROUPS.trunk.components) : null;
+  const zonalLabel = cityObj ? networkLayerLabel(cityObj, NETWORK_GROUPS.zonal.components) : null;
   const items = [
     ...(cityCfg.features.liveVehicles ? [{ key: "live", label: t.layers.live, on: live, onChange: setLive, hint: liveAutoOn(zoom) ? t.layers.liveHint : t.layers.liveZoomHint }] : []),
     ...(bikeShareEnabled(cityObj) ? [{ key: "bikes", label: t.rental.layer, on: bikes, onChange: setBikes, hint: zoom >= RENTAL_MIN_ZOOM ? t.rental.layerHint(networks.map((n) => n.name).join(" · ")) : t.rental.layerZoomHint }] : []),
-    { key: "network", label: t.layers.networkTrunk, on: net, onChange: setNet, hint: t.layers.networkTrunkHint },
-    { key: "zonal", label: t.layers.networkZonal, on: zonal, onChange: setZonal, hint: t.layers.networkZonalHint },
+    // Named by the city's own components ("Troncal · TransMiCable", "Subway · Streetcar"), and dropped
+    // when the city has nothing in that group, so no toggle draws an empty layer.
+    ...(trunkLabel ? [{ key: "network", label: trunkLabel, on: net, onChange: setNet, hint: t.layers.networkTrunkHint }] : []),
+    ...(zonalLabel ? [{ key: "zonal", label: zonalLabel, on: zonal, onChange: setZonal, hint: t.layers.networkZonalHint }] : []),
     ...(cityCfg.features.pois ? [{ key: "pois", label: t.layers.pois, on: pois, onChange: setPois, hint: t.layers.poisHint }] : []),
   ];
   return (

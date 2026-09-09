@@ -81,6 +81,23 @@ export function componentsOf(city: City): CityComponent[] {
   return [...seen.values()];
 }
 
+/**
+ * Which of the city's own components fall in a network layer group, in the order the city declares them.
+ * The layer names come from this: hardcoding them left Toronto reading "Trunk network / BRT trunk lines
+ * and cable", vocabulary that only exists in Bogotá. An empty result means the group has nothing to draw
+ * for this city, so the toggle should not be offered at all.
+ */
+export function componentsInGroup(city: City, group: readonly Component[]): CityComponent[] {
+  return componentsOf(city).filter((c) => group.includes(c.id));
+}
+
+/** Layer label for a group: the city's own component labels, e.g. "Troncal · TransMiCable", "Subway · Streetcar". */
+export function networkLayerLabel(city: City, group: readonly Component[]): string | null {
+  const names = componentsInGroup(city, group).map((c) => c.label);
+  return names.length ? names.join(" · ") : null;
+}
+
+
 export function componentOf(city: City, id: Component | null | undefined): CityComponent {
   const c = id ? componentsOf(city).find((x) => x.id === id) : undefined;
   return (

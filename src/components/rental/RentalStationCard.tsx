@@ -43,6 +43,11 @@ function RentalStationCardInner({
   const tone = availabilityTone(s.vehiclesAvailable);
   const color = network?.color ?? "#00A859";
   const ebikes = detail.data ? detail.data.vehicleTypesAvailable.filter((v) => v.propulsion === "electric_assist").reduce((a, v) => a + v.count, 0) : s.ebikesAvailable;
+  const facts = [
+    { key: "bikes", text: tone === "none" ? t.rental.none : t.rental.bikesAvailable(s.vehiclesAvailable), cls: `font-bold ${tone === "none" ? "text-brick" : tone === "low" ? "text-amber-ink" : "text-ink"}` },
+    ...(ebikes > 0 ? [{ key: "ebikes", text: t.rental.ebikes(ebikes), cls: "text-ink-2" }] : []),
+    { key: "docks", text: s.docksAvailable <= 0 ? t.rental.full : t.rental.docksFree(s.docksAvailable), cls: `text-ink-2 ${s.docksAvailable <= 0 ? "text-brick" : ""}` },
+  ];
 
   return (
     <div
@@ -58,10 +63,15 @@ function RentalStationCardInner({
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-3">{network?.name ?? t.rental.station}</p>
           <h2 className="truncate text-[15px] font-extrabold leading-tight">{s.name}</h2>
-          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
-            <span className={`font-bold ${tone === "none" ? "text-brick" : tone === "low" ? "text-amber-ink" : "text-ink"}`}>{tone === "none" ? t.rental.none : t.rental.bikesAvailable(s.vehiclesAvailable)}</span>
-            {ebikes > 0 ? <span className="text-ink-2">· {t.rental.ebikes(ebikes)}</span> : null}
-            <span className={`text-ink-2 ${s.docksAvailable <= 0 ? "text-brick" : ""}`}>· {s.docksAvailable <= 0 ? t.rental.full : t.rental.docksFree(s.docksAvailable)}</span>
+          <p className="mt-1 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-sm">
+            {facts.map((f, i) => (
+              <span key={f.key} className={f.cls}>
+                {f.text}
+                {/* the separator belongs to the item *before* it, tied on with a non-breaking space: as its
+                    own word it ended up starting the next line ("· 12 free docks") whenever the line wrapped */}
+                {i < facts.length - 1 ? <span className="text-ink-3">{"\u00A0·"}</span> : null}
+              </span>
+            ))}
           </p>
           <div className="mt-1 flex items-center gap-2 text-[11px] text-ink-3">
             {age != null ? <StatusText tone={age > 180 ? "stale" : "live"} label={t.rental.updatedAgo(age)} live={false} /> : <StatusText tone="scheduled" label={t.rental.noData(network?.name ?? t.rental.station)} live={false} />}
