@@ -4,6 +4,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { ApiRequestError, api } from "./client";
 import type { Departure, Mode, NearbyRentalStation, PlanParams } from "./types";
 import { useI18n } from "@/lib/i18n/provider";
+import { departureTime } from "@/lib/departure-time";
 
 const HOUR = 60 * 60 * 1000;
 
@@ -150,7 +151,7 @@ export function useDeparturesMulti(city: string, stopIds: string[], refreshMs = 
     generatedAt = generatedAt ?? r.data.generatedAt;
     for (const d of r.data.departures) rows.push({ ...d, platform: r.data.stop.name });
   }
-  rows.sort((a, b) => new Date(a.realtimeTime ?? a.scheduledTime).getTime() - new Date(b.realtimeTime ?? b.scheduledTime).getTime());
+  rows.sort((a, b) => new Date(departureTime(a)).getTime() - new Date(departureTime(b)).getTime());
   return {
     departures: rows.slice(0, 30),
     generatedAt,

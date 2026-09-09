@@ -530,14 +530,19 @@ export type StopDetail = Stop & {
 export type Departure = {
   route: RouteRef;
   headsign: string;
-  tripId: string;
-  scheduledTime: string;
+  tripId: string | null;
+  /** Null when a predicted arrival was never paired with a scheduled one; `realtimeTime`
+   *  is set in that case, so `realtimeTime ?? scheduledTime` always has a time. */
+  scheduledTime: string | null;
   realtimeTime: string | null;
   realtime: boolean;
   delaySeconds: number | null;
   canceled: boolean;
   vehicleId: string | null;
   stopSequence: number | null;
+  /** "trip" when the feed's trip matched the schedule, "stop" when it was paired by
+   *  stop and route instead. The two are not equally certain. */
+  realtimeSource?: "trip" | "stop" | null;
 };
 
 export type DeparturesResponse = {

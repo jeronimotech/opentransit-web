@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ctaHref, inkOn, normalizeLanding, resolveTheme, rotateHue, visibleStats } from "./landing";
+import { ctaHref, inkOn, normalizeLanding, resolveTheme, rotateHue, visibleStats, cityFromHost } from "./landing";
 import { EN_MESSAGES, validateLanding } from "./admin/validate";
 import type { CityLanding } from "./api/types";
 
@@ -99,5 +99,28 @@ describe("validateLanding", () => {
   it("allows anchors and paths for CTA links", () => {
     const l = normalizeLanding({ hero: { title: null, subtitle: null, ctaPrimary: { label: "Abrir", url: "/bogota" }, ctaSecondary: { label: "Cómo", url: "#features" } } });
     expect(validateLanding(l, EN_MESSAGES)).toEqual({});
+  });
+});
+
+/* ── one service, many city subdomains ──────────────────────────────────────── */
+
+describe("the city a request is for", () => {
+  const known = ["bogota", "toronto"];
+
+  it("takes the city from the host, which the build's default cannot know", () => {
+    // toronto.opentransit.tech served Bogotá's landing until this existed.
+    expect(cityFromHost("toronto.opentransit.tech", known)).toBe("toronto");
+    expect(cityFromHost("bogota.opentransit.tech", known)).toBe("bogota");
+    expect(cityFromHost("toronto.opentransit.tech:3000", known)).toBe("toronto");
+    expect(cityFromHost("TORONTO.OpenTransit.tech", known)).toBe("toronto");
+  });
+
+  it("falls through for anything that does not name a city we have", () => {
+    // A Railway domain, the apex, a preview build, localhost — none of these are cities,
+    // and guessing one would serve the wrong city rather than the configured default.
+    for (const host of ["web-production-1bd04.up.railway.app", "opentransit.tech",
+                        "localhost:3000", "medellin.opentransit.tech", "", null, undefined]) {
+      expect(cityFromHost(host, known)).toBeNull();
+    }
   });
 });

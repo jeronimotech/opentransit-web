@@ -179,6 +179,20 @@ export function shareOrigin(): string {
 }
 
 /** Single-city deployments: `/` serves the landing (app at `/{city}`). */
+/**
+ * The city a request is for, taken from its own hostname.
+ *
+ * One web service answers every city subdomain, and `NEXT_PUBLIC_DEFAULT_CITY` is
+ * baked in at build time — so without this, toronto.opentransit.tech served Bogotá's
+ * landing page. The first label of the host wins when it names a city this deployment
+ * actually has; anything else (a Railway domain, localhost, a preview) falls through
+ * to the configured default.
+ */
+export function cityFromHost(host: string | null | undefined, knownIds: readonly string[]): string | null {
+  const label = (host ?? "").split(":")[0].split(".")[0].trim().toLowerCase();
+  return label && knownIds.includes(label) ? label : null;
+}
+
 export function rootLandingCity(): string | null {
   const on = ["1", "true", "yes"].includes((process.env.NEXT_PUBLIC_ROOT_LANDING ?? "").trim().toLowerCase());
   const city = (process.env.NEXT_PUBLIC_DEFAULT_CITY ?? "").trim();

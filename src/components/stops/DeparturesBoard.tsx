@@ -8,6 +8,7 @@ import { fmtDelay, fmtTime, minutesUntil } from "@/lib/format";
 import { Badge, EmptyState, Spinner } from "@/components/ui/primitives";
 import { RouteChip } from "@/components/ui/RouteChip";
 import type { Departure } from "@/lib/api/types";
+import { departureKey, departureTime } from "@/lib/departure-time";
 
 export function DeparturesBoard({
   departures,
@@ -38,11 +39,11 @@ export function DeparturesBoard({
       </div>
       <ul className="divide-y divide-line rounded-card border border-line bg-paper-2">
         {departures.map((d) => {
-          const when = d.realtimeTime ?? d.scheduledTime;
+          const when = departureTime(d);
           const mins = minutesUntil(when);
           const delay = fmtDelay(d.delaySeconds, lang);
           return (
-            <li key={`${d.tripId}-${d.scheduledTime}`} className={`flex items-center gap-3 px-3 py-2.5 ${d.canceled ? "opacity-60" : ""}`}>
+            <li key={departureKey(d)} className={`flex items-center gap-3 px-3 py-2.5 ${d.canceled ? "opacity-60" : ""}`}>
               <Link href={`/${city}/routes/${encodeURIComponent(d.route.id)}`} className="shrink-0">
                 <RouteChip route={d.route} />
               </Link>

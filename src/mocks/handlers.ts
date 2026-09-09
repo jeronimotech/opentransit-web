@@ -24,6 +24,7 @@ import type {
   VehicleEvent,
   VehicleFrame,
 } from "@/lib/api/types";
+import { departureTime } from "@/lib/departure-time";
 import {
   TZ,
   alerts,
@@ -470,7 +471,7 @@ export async function mockRequest<T>(path: string, q: Q, init: Init = { method: 
       if (d.canceled) continue;
       const row = rows.get(d.route.id) ?? { route: d.route, headsign: d.headsign, next: [] };
       if (row.next.length < per) {
-        const time = d.realtimeTime ?? d.scheduledTime;
+        const time = departureTime(d);
         row.next.push({ time, minutes: Math.max(0, Math.round((new Date(time).getTime() - Date.now()) / 60000)), realtime: d.realtime, delaySeconds: d.delaySeconds, tripId: d.tripId, vehicleId: d.vehicleId });
       }
       rows.set(d.route.id, row);
@@ -510,9 +511,11 @@ export async function mockRequest<T>(path: string, q: Q, init: Init = { method: 
       });
     const sched = departures(s.id, 30)
       .filter((d) => d.route.id === r.id && !d.canceled)
+      // `realtimeTime ?? scheduledTime`: a predicted arrival that was never paired with
+      // a scheduled one has no scheduled time to show.
       .map((d) => ({
-        minutes: Math.max(0, Math.round((new Date(d.scheduledTime).getTime() - Date.now()) / 60000)),
-        time: d.scheduledTime,
+        minutes: Math.max(0, Math.round((new Date(d.realtimeTime ?? d.scheduledTime ?? 0).getTime() - Date.now()) / 60000)),
+        time: (d.realtimeTime ?? d.scheduledTime)!,
         source: "scheduled" as const,
         vehicle: null,
         stopsAway: null,
