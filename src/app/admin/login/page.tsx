@@ -1,13 +1,19 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useI18n } from "@/lib/i18n/provider";
-import { ApiRequestError, MOCK } from "@/lib/api/client";
+import { ApiRequestError, MOCK, adminApi } from "@/lib/api/client";
 import { Button, Icon, Spinner, inputCls } from "@/components/ui/primitives";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { useAdminSession, useLogin } from "@/components/admin/useAdmin";
 import { safeNext } from "@/lib/admin/session";
+import { type OidcError, isOidcError } from "@/lib/admin/oidc";
+
+/** Same shape as the secondary Button, but a real link: this navigation has to leave the app. */
+const providerBtn =
+  "inline-flex h-12 w-full items-center justify-center gap-2 select-none rounded-lg px-5 text-base font-semibold transition-colors bg-paper-3 text-ink hover:bg-line active:bg-line-2";
 
 export default function AdminLogin() {
   const { t } = useI18n();
@@ -18,22 +24,49 @@ export default function AdminLogin() {
   const [password, setPassword] = useState("");
   // Read `?next=` from the URL rather than useSearchParams: no Suspense boundary, same as the tab hash.
   const [next, setNext] = useState("/admin");
-  useEffect(() => setNext(safeNext(new URLSearchParams(window.location.search).get("next"))), []);
+  // A provider sign-in that failed comes back as a short code, never as text somebody else wrote.
+  const [providerError, setProviderError] = useState<OidcError | null>(null);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    setNext(safeNext(q.get("next")));
+    const err = q.get("error");
+    setProviderError(isOidcError(err) ? err : null);
+  }, []);
   // Already signed in (a bookmarked /admin/login, or a second tab): don't ask again.
   useEffect(() => {
     if (me.isSuccess) router.replace(next);
   }, [me.isSuccess, next, router]);
 
+  // Which ways in this deployment offers. A provider without credentials is not in this list, so there
+  // is no button for it — and its endpoints refuse anyway, which is the half that actually matters.
+  const providers = useQuery({
+    queryKey: ["admin", "providers"],
+    queryFn: () => adminApi.providers(),
+    retry: false,
+    staleTime: 5 * 60_000,
+    enabled: !MOCK,
+  });
+
   const err = login.error;
-  const message = !err
-    ? null
-    : err instanceof ApiRequestError && err.status === 401
-      ? t.admin.login.wrong
-      : err instanceof ApiRequestError && err.status === 429
-        ? t.admin.login.throttled
-        : err instanceof ApiRequestError && err.status < 500
-          ? err.message
-          : t.admin.login.unreachable;
+  const message = providerError
+    ? {
+        no_account: t.admin.login.providerNoAccount,
+        cancelled: t.admin.login.providerCancelled,
+        expired: t.admin.login.providerExpired,
+        unavailable: t.admin.login.providerUnavailable,
+        failed: t.admin.login.providerFailed,
+      }[providerError]
+    : !err
+      ? null
+      : err instanceof ApiRequestError && err.status === 401
+        ? t.admin.login.wrong
+        : err instanceof ApiRequestError && err.status === 429
+          ? t.admin.login.throttled
+          : err instanceof ApiRequestError && err.status < 500
+            ? err.message
+            : t.admin.login.unreachable;
+
+  const offered = providers.data?.providers ?? [];
 
   return (
     <AdminShell>
@@ -43,6 +76,7 @@ export default function AdminLogin() {
           onSubmit={(e) => {
             e.preventDefault();
             if (!email.trim() || !password) return;
+            setProviderError(null);
             login.mutate(
               { email: email.trim(), password },
               {
@@ -100,6 +134,30 @@ export default function AdminLogin() {
           </Button>
           <p className="mt-4 text-xs text-ink-3">{t.admin.login.forgot}</p>
         </form>
+
+        {offered.length > 0 ? (
+          <div className="mt-5">
+            <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-ink-3">
+              <span className="h-px flex-1 bg-line" />
+              {t.admin.login.or}
+              <span className="h-px flex-1 bg-line" />
+            </div>
+            <div className="mt-4 grid gap-2">
+              {offered.map((p) => (
+                // A plain anchor, not a Link: the route handler answers with a redirect off-site, which
+                // a client-side navigation cannot follow.
+                <a
+                  key={p.id}
+                  className={providerBtn}
+                  href={`/api/admin/oidc/${encodeURIComponent(p.id)}/start?next=${encodeURIComponent(next)}`}
+                  rel="nofollow"
+                >
+                  {t.admin.login.withProvider.replace("{provider}", p.label)}
+                </a>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
     </AdminShell>
   );

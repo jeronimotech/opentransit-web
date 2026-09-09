@@ -9,7 +9,7 @@
  * `NEXT_PUBLIC_API_URL` the browser uses (an internal hostname on Railway, for instance).
  */
 import { type NextRequest, NextResponse } from "next/server";
-import { SESSION_COOKIE, cookieMaxAge, targetPath } from "@/lib/admin/proxy";
+import { SESSION_COOKIE, cookieOptions, sessionCookie, targetPath } from "@/lib/admin/proxy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,9 +28,12 @@ async function forward(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
   const target = targetPath(path ?? []);
   if (!target) return fail(404, "NOT_FOUND", "no such admin endpoint");
 
+  // Sign-in and the provider list are the two things a stranger is allowed to ask for: one is how you
+  // get a session, the other is which buttons the login screen should draw.
   const isLogin = target === "/v1/admin/auth/login";
+  const open = isLogin || target === "/v1/admin/auth/providers";
   const session = req.cookies.get(SESSION_COOKIE)?.value;
-  if (!session && !isLogin) return fail(401, "UNAUTHORIZED", "not signed in");
+  if (!session && !open) return fail(401, "UNAUTHORIZED", "not signed in");
 
   const headers: Record<string, string> = { Accept: "application/json" };
   if (session) headers.Authorization = `Bearer ${session}`;
@@ -79,24 +82,13 @@ function signIn(text: string): NextResponse {
   const { token, ...rest } = body;
   if (!token) return fail(502, "API_UNREACHABLE", "sign-in response carried no session");
   const res = NextResponse.json(rest, { headers: { "Cache-Control": "no-store" } });
-  res.cookies.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: cookieMaxAge(body.expiresAt as string | undefined),
-  });
+  const cookie = sessionCookie(token, body.expiresAt as string | undefined);
+  res.cookies.set(cookie.name, cookie.value, cookie.options);
   return res;
 }
 
 function clear(res: NextResponse) {
-  res.cookies.set(SESSION_COOKIE, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 0,
-  });
+  res.cookies.set(SESSION_COOKIE, "", cookieOptions(0));
 }
 
 export const GET = forward;

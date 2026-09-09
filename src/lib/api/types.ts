@@ -776,6 +776,13 @@ export type AdminMe = { ok: true; user: AdminUser; cities: string[]; canManageUs
 /** What sign-in returns to the browser. The session token itself stops at the `/api/admin` proxy. */
 export type AdminSession = { expiresAt: string; user: AdminUser; cities: string[] };
 
+/**
+ * Which ways in this deployment actually offers. The API answers from its own environment, so a
+ * provider whose credentials are not configured is simply not in the list — and the login screen has
+ * no button for it.
+ */
+export type AdminProvidersResponse = { password: boolean; providers: { id: string; label: string }[] };
+
 export type AdminUserRow = {
   id: number;
   email: string;

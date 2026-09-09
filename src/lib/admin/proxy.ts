@@ -16,9 +16,15 @@ export function targetPath(segments: string[]): string | null {
   const enc = (s: string) => encodeURIComponent(s);
 
   if (head === "me" && rest.length === 0) return "/v1/admin/me";
-  if (head === "auth" && rest.length === 1 && ["login", "logout", "me"].includes(rest[0])) {
+  // `providers` is readable without a session on purpose: the login screen has to know which buttons to
+  // draw before anybody has signed in. It answers with names, never with credentials.
+  if (head === "auth" && rest.length === 1 && ["login", "logout", "me", "providers"].includes(rest[0])) {
     return `/v1/admin/auth/${rest[0]}`;
   }
+  // The provider sign-in endpoints are deliberately *not* reachable here. They are driven by this app's
+  // own route handlers (src/app/api/admin/oidc, src/app/admin/auth/callback), which hold the browser
+  // token in an httpOnly cookie; relaying them through the generic proxy would put that token on the page.
+  if (head === "auth" && rest[0] === "oidc") return null;
   if (head === "users") {
     if (rest.length === 0) return "/v1/admin/users";
     if (rest.length === 1) return `/v1/admin/users/${enc(rest[0])}`;
@@ -40,4 +46,34 @@ export function cookieMaxAge(expiresAt: string | undefined, now = Date.now()): n
   const ms = expiresAt ? Date.parse(expiresAt) - now : NaN;
   if (!Number.isFinite(ms)) return 60 * 60 * 8;
   return Math.max(60, Math.min(Math.floor(ms / 1000), 60 * 60 * 24 * 30));
+}
+
+export type CookieOptions = {
+  httpOnly: true;
+  sameSite: "lax";
+  secure: boolean;
+  path: "/";
+  maxAge: number;
+};
+
+/**
+ * How every cookie this app sets on behalf of the admin session is written. One definition, because a
+ * flow that forgets `httpOnly` on one of its three branches is a flow that leaks a session.
+ *
+ * `sameSite: "lax"` rather than `strict` is required, not lazy: the browser comes back from Google or
+ * Microsoft as a top-level navigation from another site, and a strict cookie would not be sent.
+ */
+export function cookieOptions(maxAge: number): CookieOptions {
+  return {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge,
+  };
+}
+
+/** The session cookie itself, from whatever the API said about expiry. `maxAge: 0` clears it. */
+export function sessionCookie(token: string, expiresAt?: string, now = Date.now()) {
+  return { name: SESSION_COOKIE, value: token, options: cookieOptions(cookieMaxAge(expiresAt, now)) };
 }

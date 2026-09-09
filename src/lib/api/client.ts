@@ -3,6 +3,7 @@ import type {
   AdminConfigResponse,
   AdminHistoryResponse,
   AdminMe,
+  AdminProvidersResponse,
   AdminSession,
   AdminUserCreate,
   AdminUserPatch,
@@ -291,6 +292,8 @@ const adminInit = (method = "GET", body?: unknown): RequestInit => ({
 });
 
 export const adminApi = {
+  /** Readable before signing in — it is what decides which buttons the login screen draws. */
+  providers: () => adminRequest<AdminProvidersResponse>("/v1/admin/auth/providers"),
   login: (email: string, password: string) =>
     adminRequest<AdminSession>("/v1/admin/auth/login", undefined, adminInit("POST", { email, password })),
   logout: () => adminRequest<{ ok: true }>("/v1/admin/auth/logout", undefined, adminInit("POST")),

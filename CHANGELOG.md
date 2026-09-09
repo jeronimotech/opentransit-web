@@ -4,6 +4,24 @@ All notable changes to opentransit-web. Format: [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 ### Added
+- **Sign in with Google or Microsoft, beside the email and password.** `/admin/login` grows a button per
+  provider — and only for a provider the API actually has credentials for, because the screen draws what
+  `GET /v1/admin/auth/providers` reports and nothing else. Signing in this way **does not create an
+  account**: it signs in an existing, enabled one, and anybody else is told to ask an owner for an
+  invitation.
+  - The flow never touches page JavaScript. Two route handlers do it server-side —
+    `/api/admin/oidc/[provider]/start` and `/admin/auth/callback/[provider]` — so the authorization code,
+    the `state` and the token that binds a sign-in to one browser live in httpOnly cookies, and the session
+    lands in the same cookie the password flow uses. Roles, city scope, expiry and revocation are unchanged.
+  - Two open-redirect guards, both unit-tested: we only follow an authorization URL that is `https` on that
+    provider's own host, and we only return the operator to a path inside `/admin` (`safeNext`), resolved
+    against this origin.
+  - A failed sign-in comes back as one of five short codes (`cancelled`, `expired`, `no_account`,
+    `unavailable`, `failed`), translated on the login screen — upstream text never reaches the page.
+  - **Redirect URIs to register** for production: `https://bogota.opentransit.tech/admin/auth/callback/google`
+    and `…/microsoft`. Setup is in `opentransit-api` → `docs/DEPLOY-RAILWAY.md` §4c.
+  - `src/lib/admin/oidc.ts` is pure and unit-tested in `src/lib/admin/oidc.test.ts`; cookie options are now
+    defined once in `src/lib/admin/proxy.ts` and shared by every handler that sets one.
 - **Operators sign in with their own account.** `/admin/login` asks for an email and a password instead of a
   pasted token, the header says who you are and what your role is, and `/admin/users` lets an owner create,
   edit, scope, re-password and disable accounts.
