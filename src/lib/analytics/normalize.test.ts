@@ -61,3 +61,46 @@ describe("analytics normalizers", () => {
     expect(normalizeHours({ cells: [{ weekday: 0, hour: 1, planRequests: 2 }] }).cells[0].planRequests).toBe(2);
   });
 });
+
+/* ── the shape the server actually sends ──────────────────────────────────── */
+
+describe("the live payload, not the one we imagined", () => {
+  // Captured verbatim from https://api.opentransit.tech on 2026-09-08. The existing
+  // tests passed while the tab showed "no data yet" for a city with 22 sessions,
+  // because they described a dialect the server does not speak.
+  const live = {
+    period: { from: "2026-09-01", to: "2026-09-08", days: 8 },
+    previous: { from: "2026-08-24", to: "2026-08-31" },
+    kpis: { sessions: 22, appOpens: 23, planRequests: 21, itinerarySelects: 19, goStarts: 4, goCompletions: 0, handoffs: 0, activeDays: 2 },
+    totals: { sessions: 22, planRequests: 21, itinerarySelects: 19, goStarts: 4, goCompletions: 0, handoffs: 0, activeDays: 2 },
+    previousTotals: { sessions: 3, planRequests: 2, itinerarySelects: 1, goStarts: 0, goCompletions: 0, handoffs: 0, activeDays: 1 },
+    platforms: [{ platform: "ios", n: 98 }, { platform: "android", n: 41 }],
+    versions: [{ platform: "ios", appVersion: "1.8.0", n: 98 }],
+    topModes: [], topRoutes: [], topStops: [],
+    kThreshold: 5,
+  };
+
+  it("reads the KPI numbers the server sends, instead of turning them into zeroes", () => {
+    const s = normalizeSummary(live);
+    expect(s.kpis.sessions.value).toBe(22);
+    expect(s.kpis.planRequests.value).toBe(21);
+    // A zero here is what made the tab claim there was no data at all.
+    expect(s.kpis.sessions.value).not.toBe(0);
+  });
+
+  it("takes the deltas from previousTotals", () => {
+    expect(normalizeSummary(live).kpis.sessions.previous).toBe(3);
+  });
+
+  it("counts platforms and versions, which the server calls n", () => {
+    const s = normalizeSummary(live);
+    expect(s.platforms.map((p) => p.sessions)).toEqual([98, 41]);
+    expect(s.versions[0].sessions).toBe(98);
+  });
+
+  it("still understands the documented dialect", () => {
+    const s = normalizeSummary({ kpis: { sessions: { value: 7, previous: 4 } }, platforms: [{ platform: "web", sessions: 7 }] });
+    expect(s.kpis.sessions).toEqual({ value: 7, previous: 4 });
+    expect(s.platforms[0].sessions).toBe(7);
+  });
+});
