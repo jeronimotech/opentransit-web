@@ -30,6 +30,17 @@ export function RouteStrip({ itinerary, height = 30 }: { itinerary: Itinerary; h
             </span>
           );
         }
+        if (leg.parkRide) {
+          // your own car to the parking zone: blue with a P
+          return (
+            <span key={i} className="flex items-center justify-center overflow-hidden rounded-md px-1 text-[11px] font-extrabold text-white" style={{ flex: `${share} 1 0`, minWidth: "3ch", background: "#1d4ed8" }} title="Park & ride">
+              <svg viewBox="0 0 20 20" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                <rect x="3" y="3" width="14" height="14" rx="3" />
+                <path d="M8 14V6h3a2.5 2.5 0 010 5H8" />
+              </svg>
+            </span>
+          );
+        }
         if (leg.onDemand) {
           // taxi / ride-hailing leg: the lead provider's colour with a car glyph
           const lead = leg.onDemand.providers.find((p) => p.providerId === leg.onDemand!.recommendedProviderId) ?? leg.onDemand.providers[0];

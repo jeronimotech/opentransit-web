@@ -73,6 +73,8 @@ export type City = {
   components?: CityComponent[];
   fares?: CityFares | null;
   config?: CityConfig;
+  /** v1.6 — CDS curbs (paid parking) and park & ride, when the city publishes them. */
+  openMobility?: CityOpenMobility | null;
   links?: CityLinks;
   services?: CityService[];
   /** v1.2 — shared mobility networks (bike-share via GBFS). */
@@ -421,6 +423,8 @@ export type Leg = {
   rental?: RentalLegInfo | null;
   /** v1.4 — present on taxi / ride-hailing legs (mode CAR, transit=false). */
   onDemand?: LegOnDemand | null;
+  /** v1.6 — your own car, driven to the itinerary's parking zone. */
+  parkRide?: boolean;
 };
 
 export type Itinerary = {
@@ -439,10 +443,12 @@ export type Itinerary = {
   rentalLegs?: number;
   modesUsed?: string[];
   /** v1.4 — diagnostic: which planner query produced it. */
-  source?: "primary" | "rental" | "ondemand" | string;
+  source?: "primary" | "rental" | "ondemand" | "parkride" | string;
+  /** v1.6 — park & ride: where the car is left. */
+  parking?: ParkingInfo | null;
 };
 
-export type FareLine = { label: string; amount: number; kind?: "transit" | "rental" | "ondemand" | string };
+export type FareLine = { label: string; amount: number; kind?: "transit" | "rental" | "ondemand" | "parking" | string };
 export type Fare = {
   amount: number;
   currency: string;
@@ -466,6 +472,8 @@ export type PlanParams = {
   toName?: string;
   /** v1.4 — add taxi / ride-hailing itineraries (direct + first/last mile). */
   onDemand?: boolean;
+  /** v1.6 — add park & ride itineraries (own car to a paid parking zone by a station, then transit). */
+  parkAndRide?: boolean;
 };
 
 export type PlanResponse = {
@@ -1102,4 +1110,53 @@ export type AssistantHealth = {
   errors: number;
   hasKey?: boolean;
   startedAt?: string | null;
+};
+
+/* ── v1.6 open mobility: CDS curb zones (Bogotá's paid on-street parking) and park & ride ── */
+export type CityOpenMobility = {
+  cds: { enabled: boolean; publish?: boolean; curbs?: { source: string; url?: string | null; providerId?: string | null } };
+  mds?: { enabled: boolean };
+  parkRide?: { enabled: boolean; maxDriveKm: number; maxWalkMeters: number; defaultDwellHours: number };
+};
+
+/** A curb zone as `/curbs` and `/curbs/nearby` describe it, evaluated against the city clock. */
+export type CurbZone = {
+  id: string;
+  name: string | null;
+  streetName: string | null;
+  geometry: { type: "LineString" | "Polygon" | "MultiPolygon" | "Point"; coordinates: unknown } | null;
+  center: LatLon | null;
+  availableSpaces: number | null;
+  totalSpaces: number | null;
+  occupied: number | null;
+  occupancyRate: number | null;
+  available: boolean | null;
+  availabilityTime: string | null;
+  priceLabel: string | null;
+  /** Whether the requested user class may stop here right now; null when no policy speaks of it. */
+  allowed: boolean | null;
+  whyLegal: string | null;
+  nextChange: string | null;
+  activePolicyIds: string[];
+  distanceMeters?: number | null;
+};
+export type CurbsResponse = { generatedAt: string; count: number; total: number; curbs: CurbZone[] };
+export type CurbsNearbyResponse = { generatedAt: string; userClass: string | null; radiusMeters: number; count: number; curbs: CurbZone[] };
+
+/** Where a park & ride itinerary leaves the car (`itinerary.parking`). */
+export type ParkingInfo = {
+  curbZoneId: string;
+  name: string | null;
+  streetName: string | null;
+  lat: number;
+  lon: number;
+  availableSpaces: number | null;
+  totalSpaces: number | null;
+  availabilityTime: string | null;
+  priceLabel: string | null;
+  whyLegal: string | null;
+  allowedUntil: string | null;
+  fee: { amount: number; currency: string; dwellHours: number; estimated: boolean } | null;
+  walkMeters: number;
+  walkSeconds: number;
 };

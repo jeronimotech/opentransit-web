@@ -45,6 +45,8 @@ import type {
   RentalNetworksResponse,
   RentalStationDetail,
   RentalStationsResponse,
+  CurbsResponse,
+  CurbsNearbyResponse,
   ReverseResponse,
   ShareCreated,
   SharedEta,
@@ -160,6 +162,7 @@ export const api = {
       fromName: p.fromName,
       toName: p.toName,
       onDemand: p.onDemand || undefined,
+      parkAndRide: p.parkAndRide || undefined,
     }),
 
   /** v1.7 — "Cuándo salir": the same trip planned across a window, one row per departure. */
@@ -221,6 +224,11 @@ export const api = {
   rentalStations: (city: string, bbox?: string, networkId?: string, limit = 500) =>
     request<RentalStationsResponse>(`${c(city)}/rental/stations`, { bbox, networkId, limit }),
   rentalStation: (city: string, id: string) => request<RentalStationDetail>(`${c(city)}/rental/stations/${encodeURIComponent(id)}`),
+
+  /** v1.6 — CDS curb zones (paid parking): in a viewport, or the nearest ones a vehicle may use right now. */
+  curbs: (city: string, bbox?: string, userClass?: string, limit = 500) => request<CurbsResponse>(`${c(city)}/curbs`, { bbox, userClass, limit }),
+  curbsNearby: (city: string, p: { lat: number; lon: number; radius?: number; userClass?: string; limit?: number }) =>
+    request<CurbsNearbyResponse>(`${c(city)}/curbs/nearby`, p),
 
   /** v1.4 — on-demand (taxi / ride-hailing): public providers, a price/time estimate, and the hand-off URL builder. */
   onDemandProviders: (city: string) => request<OnDemandProvidersResponse>(`${c(city)}/ondemand/providers`),

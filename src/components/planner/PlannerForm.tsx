@@ -8,12 +8,13 @@ import { PlaceInput } from "./PlaceInput";
 import { fmtDateTime, fromLocalInput, toLocalInput } from "@/lib/format";
 import { bikeShareEnabled } from "@/lib/rental";
 import { onDemandEnabled } from "@/lib/ondemand";
+import { parkRideEnabled } from "@/lib/parking";
 import { plannerToggles, TOGGLES_PER_ROW, type PlannerToggle } from "@/lib/planner-toggles";
 import type { City, Mode } from "@/lib/api/types";
 import type { PlannerPoint, PlannerState } from "@/lib/planner-params";
 import { canSwap, type Field } from "@/lib/place-choice";
 
-const TOGGLE_ICON: Partial<Record<Mode | "rental" | "taxi", React.ReactNode>> = {
+const TOGGLE_ICON: Partial<Record<Mode | "rental" | "taxi" | "park", React.ReactNode>> = {
   BUS: <Icon.Bus width={18} height={18} />,
   CABLE_CAR: <Icon.Cable width={18} height={18} />,
   RAIL: <Icon.Route width={18} height={18} />,
@@ -23,6 +24,7 @@ const TOGGLE_ICON: Partial<Record<Mode | "rental" | "taxi", React.ReactNode>> = 
   WALK: <Icon.Walk width={18} height={18} />,
   rental: <Icon.Bike width={18} height={18} />,
   taxi: <Icon.Car width={18} height={18} />,
+  park: <Icon.Parking width={18} height={18} />,
 };
 
 type Props = {
@@ -56,6 +58,7 @@ export function PlannerForm({ city, state, onChange, onSubmit, onPlace, onSwap, 
   // shared bikes: one chip for the city's networks (N per city); colour of the first, names in the hint
   const canRental = bikeShareEnabled(city);
   const canTaxi = onDemandFlag && onDemandEnabled(city);
+  const canPark = parkRideEnabled(city);
   const [timeOpen, setTimeOpen] = useState(false);
   const [more, setMore] = useState(state.wheelchair || state.bike);
   const timeRef = useRef<HTMLDivElement>(null);
@@ -76,13 +79,14 @@ export function PlannerForm({ city, state, onChange, onSubmit, onPlace, onSwap, 
   const toggles = plannerToggles(
     city,
     state,
-    { mode: (m) => t.mode[m], bike: t.planner.modeBike, walk: t.planner.modeWalk, rental: t.planner.modeRental, taxi: t.planner.modeTaxi, rentalHint: (n) => t.rental.modeHint(n || t.rental.mode), taxiHint: (n) => t.ondemand.modeHint(n || t.ondemand.mode) },
-    { rental: canRental, taxi: canTaxi },
+    { mode: (m) => t.mode[m], bike: t.planner.modeBike, walk: t.planner.modeWalk, rental: t.planner.modeRental, taxi: t.planner.modeTaxi, rentalHint: (n) => t.rental.modeHint(n || t.rental.mode), taxiHint: (n) => t.ondemand.modeHint(n || t.ondemand.mode), park: t.planner.modePark, parkHint: t.parking.modeHint },
+    { rental: canRental, taxi: canTaxi, park: canPark },
   );
   const onToggle = (tg: PlannerToggle) => {
     track("mode_toggle", { mode: tg.key, on: !tg.on });
     if (tg.kind === "rental") return set({ rental: !state.rental });
     if (tg.kind === "taxi") return set({ taxi: !state.taxi });
+    if (tg.kind === "park") return set({ park: !state.park });
     const m = tg.mode as Mode;
     const has = state.modes.includes(m);
     const next = has ? state.modes.filter((x) => x !== m) : [...state.modes, m];

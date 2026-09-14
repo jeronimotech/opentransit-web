@@ -8,6 +8,7 @@ import { FareTag } from "@/components/ui/FareTag";
 import { RouteStrip } from "./RouteStrip";
 import { estimateFare } from "@/lib/fare";
 import { formatPriceRange, legLeadPrice, onDemandLegs, onDemandShape } from "@/lib/ondemand";
+import { parkingSummary } from "@/lib/parking";
 import { leaveByOf } from "@/lib/leave-by";
 import type { CityFares, Itinerary } from "@/lib/api/types";
 
@@ -119,6 +120,11 @@ export function ItineraryCard({
           </span>
         ) : null}
         {odProvider ? <span className="text-xs font-semibold tabular-nums text-ink">{odLead ? formatPriceRange(odLead.price, lang) : t.ondemand.priceInApp}</span> : null}
+        {itinerary.parking ? (
+          <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold text-white" style={{ background: "#1d4ed8" }} title={t.parking.inItinerary}>
+            <Icon.Parking width={12} height={12} /> {parkingSummary(itinerary.parking, lang)}
+          </span>
+        ) : null}
         {rentalNets.map((r) => (
           <span key={r.networkId} className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold text-white" style={{ background: r.color }} title={t.rental.inItinerary}>
             <Icon.Bike width={12} height={12} /> {r.networkName}

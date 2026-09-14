@@ -58,6 +58,7 @@ export function CommuteCard({
               bike: false,
               rental: false,
               taxi: false,
+              park: false,
               selected: null,
             },
             lang,

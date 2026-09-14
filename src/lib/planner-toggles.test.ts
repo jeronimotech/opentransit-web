@@ -12,7 +12,7 @@ const city = {
     onDemand: [{ id: "taxi", name: "Taxi", kind: "taxi", color: "#F2C200", textColor: "#111111", estimate: { kind: "none" }, handoff: { kind: "none" }, enabled: true, order: 1 }],
   },
 } as unknown as City;
-const state = { modes: ["BUS", "WALK"] as City["modes"], rental: true, taxi: false };
+const state = { modes: ["BUS", "WALK"] as City["modes"], rental: true, taxi: false, park: false };
 
 describe("planner mode toggles", () => {
   it("orders transit modes, then own bike, walk, shared bikes and taxi/app", () => {
@@ -38,5 +38,12 @@ describe("planner mode toggles", () => {
     expect(toggleRows(6)).toBe(1);
     expect(toggleRows(7)).toBe(2);
     expect(plannerToggles(city, state, labels).length).toBe(6);
+  });
+  it("adds Carro + bus only where the city has paid parking zones and park & ride on", () => {
+    const withPark = { ...city, openMobility: { cds: { enabled: true }, parkRide: { enabled: true, maxDriveKm: 25, maxWalkMeters: 600, defaultDwellHours: 8 } } } as unknown as City;
+    const t = plannerToggles(withPark, { ...state, park: true }, { ...labels, park: "Carro + bus", parkHint: "hint" });
+    expect(t.map((x) => x.key)).toEqual(["BUS", "CABLE_CAR", "BICYCLE", "WALK", "rental", "taxi", "park"]);
+    expect(t.find((x) => x.key === "park")).toMatchObject({ kind: "park", on: true, label: "Carro + bus", hint: "hint" });
+    expect(plannerToggles(city, state, labels).some((x) => x.key === "park")).toBe(false);
   });
 });

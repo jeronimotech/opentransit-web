@@ -20,6 +20,7 @@ export type PlannerState = {
   bike: boolean; // "llegar en bici a la estación" (BICYCLE + TRANSIT)
   rental: boolean; // "Bici pública" (BIKE_RENTAL via GBFS), with or without transit
   taxi: boolean; // "Taxi / app" (on-demand: direct + first/last mile), API flag onDemand=true
+  park: boolean; // "Carro + bus" (v1.6 park & ride: own car to a paid parking zone by a station), API flag parkAndRide=true
   selected: number | null; // itinerary index
 };
 
@@ -54,6 +55,7 @@ export function readPlanner(sp: URLSearchParams): PlannerState {
     bike: sp.get("bike") === "1",
     rental: sp.get("rental") === "1",
     taxi: sp.get("taxi") === "1",
+    park: sp.get("park") === "1",
     selected: it !== null && it !== "" ? Number(it) : null,
   };
 }
@@ -79,6 +81,7 @@ export function writePlanner(s: PlannerState): URLSearchParams {
   if (s.bike) p.set("bike", "1");
   if (s.rental) p.set("rental", "1");
   if (s.taxi) p.set("taxi", "1");
+  if (s.park) p.set("park", "1");
   if (s.selected !== null) p.set("it", String(s.selected));
   return p;
 }
@@ -99,5 +102,6 @@ export function toPlanParams(s: PlannerState, locale: "es" | "en", rentalModes: 
     fromName: s.from.name ?? undefined,
     toName: s.to.name ?? undefined,
     onDemand: s.taxi || undefined,
+    parkAndRide: s.park || undefined,
   };
 }

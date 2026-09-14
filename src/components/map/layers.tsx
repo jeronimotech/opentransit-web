@@ -10,7 +10,8 @@ import { desaturate, routeChipColors } from "@/lib/route-color";
 import { LIVE_DETAIL_ZOOM, LIVE_MIN_ZOOM } from "@/lib/marker-style";
 import { ETA_COLORS, etaBucket } from "@/lib/eta";
 import { bboxOf, decodeGeometry, fc, toLineString, toPoint, type BBox, type LngLat } from "@/lib/geo";
-import type { BikeShareNetwork, Component, Geometry, Itinerary, NetworkShape, PoiCollection, PoiType, RentalStation, Stop, Vehicle } from "@/lib/api/types";
+import { PARKING_COLORS, parkingTone } from "@/lib/parking";
+import type { CurbZone, BikeShareNetwork, Component, Geometry, Itinerary, NetworkShape, PoiCollection, PoiType, RentalStation, Stop, Vehicle } from "@/lib/api/types";
 import type { FeatureCollection } from "geojson";
 
 /**
@@ -614,6 +615,79 @@ export function RentalStationsLayer({
       onClick: (f) => {
         const s = byId.get(String(f.properties?.id));
         if (s) onClick?.(s);
+      },
+    },
+  );
+  return null;
+}
+
+export const CURBS_MIN_ZOOM = 14;
+
+/**
+ * Paid on-street parking (CDS curb zones) at street zoom: each kerb as a line in the colour of what a
+ * driver will find — green with spaces, amber running low, red full, grey unknown, faint when you may not
+ * park right now. A short kerb is still tappable: the hit line is wider than the drawn one.
+ */
+export function CurbsLayer({ curbs, onClick, selectedId, id = "curbs" }: { curbs: CurbZone[]; onClick?: (z: CurbZone) => void; selectedId?: string | null; id?: string }) {
+  const byId = useMemo(() => new Map(curbs.map((z) => [z.id, z])), [curbs]);
+  const data = useMemo(
+    () =>
+      fc(
+        curbs
+          .filter((z) => z.geometry)
+          .map((z) => {
+            const tone = parkingTone(z);
+            return {
+              type: "Feature" as const,
+              geometry: z.geometry as GeoJSON.Geometry,
+              properties: { id: z.id, color: PARKING_COLORS[tone], tone, selected: z.id === selectedId, label: z.availableSpaces == null ? "" : String(z.availableSpaces) },
+            };
+          }),
+      ),
+    [curbs, selectedId],
+  );
+  useGeoJsonLayer(
+    id,
+    data,
+    [
+      {
+        id: `${id}-hit`,
+        type: "line",
+        minzoom: CURBS_MIN_ZOOM,
+        filter: ["==", ["geometry-type"], "LineString"],
+        paint: { "line-color": "#000000", "line-opacity": 0, "line-width": 18 },
+      },
+      {
+        id: `${id}-fill`,
+        type: "fill",
+        minzoom: CURBS_MIN_ZOOM,
+        filter: ["==", ["geometry-type"], "Polygon"],
+        paint: { "fill-color": ["get", "color"], "fill-opacity": ["case", ["==", ["get", "tone"], "closed"], 0.12, 0.28] },
+      },
+      {
+        id: `${id}-line`,
+        type: "line",
+        minzoom: CURBS_MIN_ZOOM,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": ["case", ["get", "selected"], "#f2b41b", ["get", "color"]],
+          "line-width": ["interpolate", ["linear"], ["zoom"], CURBS_MIN_ZOOM, ["case", ["get", "selected"], 6, 3], 17, ["case", ["get", "selected"], 9, 5]],
+          "line-opacity": ["case", ["==", ["get", "tone"], "closed"], 0.45, 0.95],
+        },
+      },
+      {
+        id: `${id}-count`,
+        type: "symbol",
+        minzoom: 16,
+        layout: { "symbol-placement": "line-center", "text-field": ["get", "label"], "text-size": 11, "text-font": ["Noto Sans Bold"], "text-offset": [0, -1.1], "text-allow-overlap": false },
+        paint: { "text-color": ["get", "color"], "text-halo-color": "#ffffff", "text-halo-width": 1.2 },
+      },
+    ],
+    {
+      clickLayers: [`${id}-hit`, `${id}-fill`],
+      onClick: (f) => {
+        const z = byId.get(String(f.properties?.id));
+        if (z) onClick?.(z);
       },
     },
   );

@@ -29,6 +29,7 @@ const base: PlannerState = {
   bike: false,
   rental: false,
   taxi: false,
+  park: false,
   selected: null,
 };
 

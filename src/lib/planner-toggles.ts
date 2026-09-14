@@ -4,16 +4,17 @@ import { TRANSIT_MODES } from "./planner-params";
 import type { PlannerState } from "./planner-params";
 import { bikeShareEnabled, bikeShareNetworks } from "./rental";
 import { onDemandEnabled, onDemandProviders } from "./ondemand";
+import { parkRideEnabled } from "./parking";
 
 /**
  * The planner's mode grid (aligned with the mobile app): compact toggles, icon over a
  * short label, filled with the mode / component / provider colour when on. Pure so the
  * order and the gating (shared bikes, taxi/app) are unit-tested.
  */
-export type ToggleKind = "mode" | "rental" | "taxi";
+export type ToggleKind = "mode" | "rental" | "taxi" | "park";
 export type PlannerToggle = { key: string; kind: ToggleKind; mode?: Mode; label: string; color: string; ink: string; on: boolean; hint: string | null };
 
-export type ToggleLabels = { mode: (m: Mode) => string; bike: string; walk: string; rental: string; taxi: string; rentalHint: (names: string) => string; taxiHint: (names: string) => string };
+export type ToggleLabels = { mode: (m: Mode) => string; bike: string; walk: string; rental: string; taxi: string; rentalHint: (names: string) => string; taxiHint: (names: string) => string; park?: string; parkHint?: string };
 
 /** Mode colours: transit modes take the city's component colour, walking/cycling neutral tones. */
 export function modeColor(city: City, m: Mode): string {
@@ -36,7 +37,7 @@ export function modeColor(city: City, m: Mode): string {
   }
 }
 
-export function plannerToggles(city: City, state: Pick<PlannerState, "modes" | "rental" | "taxi">, labels: ToggleLabels, opts: { rental?: boolean; taxi?: boolean } = {}): PlannerToggle[] {
+export function plannerToggles(city: City, state: Pick<PlannerState, "modes" | "rental" | "taxi"> & { park?: boolean }, labels: ToggleLabels, opts: { rental?: boolean; taxi?: boolean; park?: boolean } = {}): PlannerToggle[] {
   const out: PlannerToggle[] = [];
   const modes: Mode[] = [...TRANSIT_MODES.filter((m) => city.modes.includes(m)), ...(city.modes.includes("BICYCLE") ? (["BICYCLE"] as Mode[]) : []), "WALK"];
   for (const m of modes) {
@@ -49,6 +50,10 @@ export function plannerToggles(city: City, state: Pick<PlannerState, "modes" | "
   if (opts.taxi !== false && onDemandEnabled(city)) {
     const ps = onDemandProviders(city);
     out.push({ key: "taxi", kind: "taxi", label: labels.taxi, color: ps[0]?.color ?? "#F2C200", ink: ps[0]?.textColor ?? "#111111", on: state.taxi, hint: labels.taxiHint(ps.map((p) => p.name).join(" · ")) });
+  }
+  // v1.6 park & ride: only where the city publishes paid parking zones and switched the feature on
+  if (opts.park !== false && parkRideEnabled(city)) {
+    out.push({ key: "park", kind: "park", label: labels.park ?? "P+R", color: "#1d4ed8", ink: "#ffffff", on: !!state.park, hint: labels.parkHint ?? null });
   }
   return out;
 }

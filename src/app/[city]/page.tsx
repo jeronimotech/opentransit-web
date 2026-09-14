@@ -5,8 +5,10 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useCityCtx } from "@/components/shell/CityContext";
 import { SplitLayout, type Snap } from "@/components/shell/SplitLayout";
 import { MapView, useFitBounds, useMap, useMapZoom } from "@/components/map/MapView";
-import { ItineraryLayer, LayersControl, LocateButton, NETWORK_GROUPS, NetworkLayer, PinMarker, PoisLayer, RENTAL_MIN_ZOOM, RentalStationsLayer, StopsLayer, VehiclesLayer, ZoomGate, useMapBounds } from "@/components/map/layers";
+import { CURBS_MIN_ZOOM, CurbsLayer, ItineraryLayer, LayersControl, LocateButton, NETWORK_GROUPS, NetworkLayer, PinMarker, PoisLayer, RENTAL_MIN_ZOOM, RentalStationsLayer, StopsLayer, VehiclesLayer, ZoomGate, useMapBounds } from "@/components/map/layers";
 import { RentalStationCard } from "@/components/rental/RentalStationCard";
+import { CurbCard } from "@/components/parking/CurbCard";
+import { curbsEnabled } from "@/lib/parking";
 import { PlannerForm } from "@/components/planner/PlannerForm";
 import { MapPicker } from "@/components/planner/MapPicker";
 import { LongPressPick } from "@/components/planner/LongPressPick";
@@ -17,7 +19,7 @@ import { Hub } from "@/components/hub/Hub";
 import { ChatSheet } from "@/components/assistant/ChatSheet";
 import { EmptyState, Icon, Spinner } from "@/components/ui/primitives";
 import { useI18n } from "@/lib/i18n/provider";
-import { useNearbyStops, useNetwork, usePlan, usePois, useRentalStations } from "@/lib/api/hooks";
+import { useCurbs, useNearbyStops, useNetwork, usePlan, usePois, useRentalStations } from "@/lib/api/hooks";
 import { bikeShareEnabled, bikeShareNetworks, rentalModesFor } from "@/lib/rental";
 import { api, ApiRequestError } from "@/lib/api/client";
 import { useVehicleStream } from "@/lib/api/stream";
@@ -31,7 +33,7 @@ import { LIVE_MIN_ZOOM, liveAutoOn } from "@/lib/marker-style";
 import { track, useScreenView } from "@/lib/analytics";
 import { readPlanner, toPlanParams, writePlanner, type PlannerPoint, type PlannerState } from "@/lib/planner-params";
 import { applyEndpoint, otherField, pointFrom, swapEndpoints, type Field } from "@/lib/place-choice";
-import type { Itinerary, RentalStation } from "@/lib/api/types";
+import type { CurbZone, Itinerary, RentalStation } from "@/lib/api/types";
 
 /** Keeps origin and destination in view while the person compares options. */
 function FitPoints({ a, b }: { a: { lat: number; lon: number }; b: { lat: number; lon: number } }) {
@@ -68,6 +70,15 @@ function RentalInView({ city, enabled, selectedId, onSelect }: { city: string; e
   const bbox = useMapBounds(250);
   const q = useRentalStations(city, bbox ? bbox.join(",") : null, on);
   return on && q.data ? <RentalStationsLayer stations={q.data.stations} networks={bikeShareNetworks(cityObj)} selectedId={selectedId} onClick={onSelect} /> : null;
+}
+
+/** v1.6 — paid parking zones in the viewport at street zoom, coloured by free spaces. */
+function CurbsInView({ city, enabled, selectedId, onSelect }: { city: string; enabled: boolean; selectedId: string | null; onSelect: (z: CurbZone) => void }) {
+  const zoom = useMapZoom();
+  const on = enabled && zoom >= CURBS_MIN_ZOOM;
+  const bbox = useMapBounds(250);
+  const q = useCurbs(city, bbox ? bbox.join(",") : null, on);
+  return on && q.data ? <CurbsLayer curbs={q.data.curbs} selectedId={selectedId} onClick={onSelect} /> : null;
 }
 
 /** Live vehicles for the selected itinerary (focus context: always drawn, any zoom). */
@@ -108,7 +119,7 @@ function NetworkInView({ city, trunk, zonal }: { city: string; trunk: boolean; z
 }
 
 /** Layer popover + locate button, rendered inside the map so they can read the zoom. */
-function MapControls({ city, live, setLive, pois, setPois, net, setNet, zonal, setZonal, bikes, setBikes, onLocate, locating }: { city: string; live: boolean; setLive: (v: boolean) => void; pois: boolean; setPois: (v: boolean) => void; net: boolean; setNet: (v: boolean) => void; zonal: boolean; setZonal: (v: boolean) => void; bikes: boolean; setBikes: (v: boolean) => void; onLocate: () => Promise<{ lat: number; lon: number } | null>; locating: boolean }) {
+function MapControls({ city, live, setLive, pois, setPois, net, setNet, zonal, setZonal, bikes, setBikes, parking, setParking, onLocate, locating }: { city: string; live: boolean; setLive: (v: boolean) => void; pois: boolean; setPois: (v: boolean) => void; net: boolean; setNet: (v: boolean) => void; zonal: boolean; setZonal: (v: boolean) => void; bikes: boolean; setBikes: (v: boolean) => void; parking: boolean; setParking: (v: boolean) => void; onLocate: () => Promise<{ lat: number; lon: number } | null>; locating: boolean }) {
   const { t } = useI18n();
   const cityObj = useCityCtx();
   const cityCfg = resolveConfig(cityObj);
@@ -119,6 +130,7 @@ function MapControls({ city, live, setLive, pois, setPois, net, setNet, zonal, s
   const items = [
     ...(cityCfg.features.liveVehicles ? [{ key: "live", label: t.layers.live, on: live, onChange: setLive, hint: liveAutoOn(zoom) ? t.layers.liveHint : t.layers.liveZoomHint }] : []),
     ...(bikeShareEnabled(cityObj) ? [{ key: "bikes", label: t.rental.layer, on: bikes, onChange: setBikes, hint: zoom >= RENTAL_MIN_ZOOM ? t.rental.layerHint(networks.map((n) => n.name).join(" · ")) : t.rental.layerZoomHint }] : []),
+    ...(curbsEnabled(cityObj) ? [{ key: "parking", label: t.parking.layer, on: parking, onChange: setParking, hint: zoom >= CURBS_MIN_ZOOM ? t.parking.layerHint : t.parking.layerZoomHint }] : []),
     // Named by the city's own components ("Troncal · TransMiCable", "Subway · Streetcar"), and dropped
     // when the city has nothing in that group, so no toggle draws an empty layer.
     ...(trunkLabel ? [{ key: "network", label: trunkLabel, on: net, onChange: setNet, hint: t.layers.networkTrunkHint }] : []),
@@ -167,6 +179,8 @@ function Planner() {
   const [showZonal, setShowZonal] = useState(false);
   const [showBikes, setShowBikes] = useState(true);
   const [bikeStation, setBikeStation] = useState<RentalStation | null>(null);
+  const [showParking, setShowParking] = useState(true);
+  const [curb, setCurb] = useState<CurbZone | null>(null);
   const [liveCount, setLiveCount] = useState(0);
   const [forecast, setForecast] = useState(false);
   const [chat, setChat] = useState(false);
@@ -498,13 +512,29 @@ function Planner() {
           {cfg.features.liveVehicles && !selected ? <FleetInView city={city.id} enabled={showLive} colors={compColors} onClick={(id) => router.push(`/${city.id}/live?vehicle=${encodeURIComponent(id)}`)} /> : null}
           {cfg.features.pois ? <PoisInView city={city.id} enabled={showPois} /> : null}
           {bikeShareEnabled(city) && !selected ? <RentalInView city={city.id} enabled={showBikes} selectedId={bikeStation?.id ?? null} onSelect={setBikeStation} /> : null}
+          {curbsEnabled(city) && !selected ? <CurbsInView city={city.id} enabled={showParking} selectedId={curb?.id ?? null} onSelect={setCurb} /> : null}
           {/* v2.1 — the two ends are draggable: dropping one re-plans from where it landed */}
           {draft.from ? <PinMarker kind="from" lat={draft.from.lat} lon={draft.from.lon} label={t.planner.pinFrom} draggable onDragEnd={(p) => onDropPin("from", p)} /> : null}
           {draft.to ? <PinMarker kind="to" lat={draft.to.lat} lon={draft.to.lon} label={t.planner.pinTo} draggable onDragEnd={(p) => onDropPin("to", p)} /> : null}
           {geo.pos ? <PinMarker kind="user" lat={geo.pos.lat} lon={geo.pos.lon} /> : null}
           {/* v2.1 — pressing a spot on the map is the second way to start or end a trip there */}
           <LongPressPick onPick={onDropPin} />
-          <MapControls city={city.id} live={showLive} setLive={toggleTracked("live", setShowLive)} pois={showPois} setPois={toggleTracked("pois", setShowPois)} net={showNet} setNet={toggleTracked("network", setShowNet)} zonal={showZonal} setZonal={toggleTracked("zonal", setShowZonal)} bikes={showBikes} setBikes={toggleTracked("bikes", setShowBikes)} onLocate={() => locateFor("hub")} locating={locating === "hub"} />
+          <MapControls city={city.id} live={showLive} setLive={toggleTracked("live", setShowLive)} pois={showPois} setPois={toggleTracked("pois", setShowPois)} net={showNet} setNet={toggleTracked("network", setShowNet)} zonal={showZonal} setZonal={toggleTracked("zonal", setShowZonal)} bikes={showBikes} setBikes={toggleTracked("bikes", setShowBikes)} parking={showParking} setParking={toggleTracked("parking", setShowParking)} onLocate={() => locateFor("hub")} locating={locating === "hub"} />
+          {curb && !selected ? (
+            <CurbCard
+              city={city}
+              zone={curb}
+              onClose={() => setCurb(null)}
+              onDirections={(z) => {
+                setCurb(null);
+                if (z.center) planWithPlace({ lat: z.center.lat, lon: z.center.lon, name: z.name ?? z.streetName ?? t.parking.zone }, "to");
+              }}
+              onPlanFrom={(z) => {
+                setCurb(null);
+                if (z.center) planWithPlace({ lat: z.center.lat, lon: z.center.lon, name: z.name ?? z.streetName ?? t.parking.zone }, "from");
+              }}
+            />
+          ) : null}
           {bikeStation && !selected ? (
             <RentalStationCard
               city={city}

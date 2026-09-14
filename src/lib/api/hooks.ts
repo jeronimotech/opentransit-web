@@ -237,6 +237,19 @@ export function useRentalStations(city: string, bbox: string | null, enabled: bo
   });
 }
 
+/** v1.6 — curb zones in the viewport (paid parking with live spaces); same cadence as the bike stations. */
+export function useCurbs(city: string, bbox: string | null, enabled: boolean, userClass = "car") {
+  return useQuery({
+    queryKey: ["curbs", city, bbox, userClass],
+    queryFn: () => api.curbs(city, bbox ?? undefined, userClass),
+    enabled: enabled && !!bbox,
+    staleTime: 60_000,
+    refetchInterval: (q) => (q.state.error ? false : 120_000),
+    retry: retryPolicy,
+    placeholderData: (prev) => prev,
+  });
+}
+
 export function useRentalStation(city: string, id: string | null) {
   return useQuery({
     queryKey: ["rental", "station", city, id],

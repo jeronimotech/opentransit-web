@@ -21,11 +21,12 @@ import { resolveConfig } from "@/lib/city-config";
 import { serviceStatus } from "@/lib/service-window";
 import { RentalLegBlock } from "@/components/rental/RentalLegBlock";
 import { OnDemandLegBlock } from "@/components/ondemand/OnDemandLegBlock";
+import { ParkingLegBlock } from "@/components/parking/ParkingLegBlock";
 import { legLeadPrice } from "@/lib/ondemand";
 import { useNextBuses } from "@/lib/api/hooks";
 import { retimeItinerary, type Retimed } from "@/lib/retime";
 import { track } from "@/lib/analytics";
-import type { City, Itinerary, Leg, NextBus } from "@/lib/api/types";
+import type { City, Itinerary, Leg, NextBus, ParkingInfo } from "@/lib/api/types";
 import type { Dict } from "@/lib/i18n/dict";
 import { shareOrigin } from "@/lib/landing";
 
@@ -173,18 +174,18 @@ export function ItineraryDetail({
 
       <ol className="relative flex flex-col">
         {itinerary.legs.map((leg, i) => (
-          <LegRow key={i} leg={leg} city={city} tz={tz} last={i === itinerary.legs.length - 1} current={following && follow.legIndex === i} done={following && follow.legIndex !== null && i < follow.legIndex} onRetime={(dep) => setRetimed(retimeItinerary(named, i, dep))} retimedHere={retimed?.legIndex === i} />
+          <LegRow key={i} leg={leg} city={city} tz={tz} last={i === itinerary.legs.length - 1} current={following && follow.legIndex === i} done={following && follow.legIndex !== null && i < follow.legIndex} onRetime={(dep) => setRetimed(retimeItinerary(named, i, dep))} retimedHere={retimed?.legIndex === i} parking={leg.parkRide ? (itinerary.parking ?? null) : null} />
         ))}
       </ol>
     </div>
   );
 }
 
-function LegRow({ leg, city, tz, last, current, done, onRetime, retimedHere }: { leg: Leg; city: City; tz: string; last: boolean; current: boolean; done: boolean; onRetime: (dep: NextBus) => void; retimedHere: boolean }) {
+function LegRow({ leg, city, tz, last, current, done, onRetime, retimedHere, parking }: { leg: Leg; city: City; tz: string; last: boolean; current: boolean; done: boolean; onRetime: (dep: NextBus) => void; retimedHere: boolean; parking?: ParkingInfo | null }) {
   const { t, lang } = useI18n();
   const [open, setOpen] = useState(false);
   const odLead = leg.onDemand ? (legLeadPrice(leg)?.provider ?? leg.onDemand.providers[0] ?? null) : null;
-  const color = leg.rental ? leg.rental.color : odLead ? odLead.color : leg.transit ? routeChipColors(leg.route?.color, componentColor(leg.route?.component)).bg : "var(--ink-3)";
+  const color = leg.rental ? leg.rental.color : odLead ? odLead.color : leg.parkRide ? "#1d4ed8" : leg.transit ? routeChipColors(leg.route?.color, componentColor(leg.route?.component)).bg : "var(--ink-3)";
   const delay = fmtDelay(leg.delaySeconds, lang);
   const nStops = leg.intermediateStops.length + 1;
   const svc = serviceStatus(t, leg.route);
@@ -200,11 +201,11 @@ function LegRow({ leg, city, tz, last, current, done, onRetime, retimedHere }: {
       <div className="relative flex justify-center">
         <span className="z-10 mt-1.5 h-3 w-3 rounded-full border-2 bg-paper-2" style={{ borderColor: color }} />
         <span
-          className={`absolute top-3 bottom-0 w-1 ${leg.transit || leg.rental || leg.onDemand ? "" : "strip-walk"}`}
+          className={`absolute top-3 bottom-0 w-1 ${leg.transit || leg.rental || leg.onDemand || leg.parkRide ? "" : "strip-walk"}`}
           style={
             leg.rental
               ? { width: 4, backgroundImage: `repeating-linear-gradient(180deg, ${color} 0 7px, transparent 7px 11px)` }
-              : leg.onDemand
+              : leg.onDemand || leg.parkRide
                 ? { width: 4, backgroundImage: `repeating-linear-gradient(180deg, ${color} 0 12px, transparent 12px 16px)` }
               : leg.transit
                 ? { background: color }
@@ -227,6 +228,8 @@ function LegRow({ leg, city, tz, last, current, done, onRetime, retimedHere }: {
 
         {leg.rental ? (
           <RentalLegBlock leg={leg} city={city} open={open} onToggle={() => setOpen((o) => !o)} />
+        ) : leg.parkRide ? (
+          <ParkingLegBlock leg={leg} parking={parking ?? null} city={city} open={open} onToggle={() => setOpen((o) => !o)} />
         ) : leg.onDemand ? (
           <OnDemandLegBlock leg={leg} city={city} open={open} onToggle={() => setOpen((o) => !o)} />
         ) : leg.transit ? (

@@ -286,6 +286,12 @@ export const Icon = {
       <path d="M5 14l3-7h4l3 7M8 7h-2M12 7l1-2h2M8 7l3 7" />
     </svg>
   ),
+  Parking: (p: ComponentProps<"svg">) => (
+    <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden {...p}>
+      <rect x="3" y="3" width="14" height="14" rx="3" />
+      <path d="M8 14V6h3a2.5 2.5 0 010 5H8" />
+    </svg>
+  ),
   Car: (p: ComponentProps<"svg">) => (
     <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}>
       <path d="M4 12l1.5-4.5A1.5 1.5 0 017 6.5h6a1.5 1.5 0 011.5 1L16 12" />

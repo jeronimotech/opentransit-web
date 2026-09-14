@@ -33,8 +33,8 @@ export function FollowAlong({ itinerary, state, active, onToggle }: { itinerary:
             <>
               {leg ? (
                 <p>
-                  {t.follow.currentLeg}: <span className="font-semibold text-ink">{leg.transit ? leg.route?.shortName ?? leg.mode : t.mode.WALK}</span>
-                  {leg.to.name ? ` → ${leg.to.name}` : ""}
+                  {t.follow.currentLeg}: <span className="font-semibold text-ink">{leg.transit ? leg.route?.shortName ?? leg.mode : leg.parkRide ? t.parking.ownCar : t.mode.WALK}</span>
+                  {leg.parkRide && leg.to.name ? ` · ${t.parking.leaveCarAt} ${leg.to.name}` : leg.to.name ? ` → ${leg.to.name}` : ""}
                 </p>
               ) : null}
               <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-line">
