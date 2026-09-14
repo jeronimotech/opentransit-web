@@ -21,6 +21,7 @@ describe("parkingTone", () => {
   it("reads the count the way a driver would", () => {
     expect(parkingTone({ availableSpaces: 29, totalSpaces: 44, allowed: true })).toBe("ok");
     expect(parkingTone({ availableSpaces: 2, totalSpaces: 44, allowed: true })).toBe("low");
+    expect(parkingTone({ availableSpaces: 2, totalSpaces: 2, allowed: true })).toBe("ok"); // tiny zone, all free
     expect(parkingTone({ availableSpaces: 5, totalSpaces: 44, allowed: true })).toBe("low"); // under a fifth
     expect(parkingTone({ availableSpaces: 0, totalSpaces: 8, allowed: true })).toBe("full");
     expect(parkingTone({ availableSpaces: null, totalSpaces: null, allowed: true })).toBe("unknown");

@@ -27,7 +27,9 @@ export function parkingTone(z: Pick<CurbZone, "availableSpaces" | "totalSpaces" 
   if (n == null) return "unknown";
   if (n <= 0) return "full";
   const total = z.totalSpaces ?? 0;
-  if (n < 3 || (total > 0 && n / total < 0.2)) return "low";
+  // a tiny zone that is entirely free is fine, not "running low"
+  const ratio = total > 0 ? n / total : null;
+  if ((n < 3 && ratio !== 1) || (ratio !== null && ratio < 0.2)) return "low";
   return "ok";
 }
 
