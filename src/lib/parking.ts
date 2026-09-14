@@ -33,6 +33,9 @@ export function parkingTone(z: Pick<CurbZone, "availableSpaces" | "totalSpaces" 
   return "ok";
 }
 
+/** The blue every park & ride surface uses (car leg, toggle, badge). */
+export const PARK_RIDE_COLOR = "#1d4ed8";
+
 export const PARKING_COLORS: Record<ParkingTone, string> = {
   ok: "#2e7d4f",
   low: "#c77700",

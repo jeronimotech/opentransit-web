@@ -10,7 +10,7 @@ import { desaturate, routeChipColors } from "@/lib/route-color";
 import { LIVE_DETAIL_ZOOM, LIVE_MIN_ZOOM } from "@/lib/marker-style";
 import { ETA_COLORS, etaBucket } from "@/lib/eta";
 import { bboxOf, decodeGeometry, fc, toLineString, toPoint, type BBox, type LngLat } from "@/lib/geo";
-import { PARKING_COLORS, parkingTone } from "@/lib/parking";
+import { PARK_RIDE_COLOR, PARKING_COLORS, parkingTone } from "@/lib/parking";
 import type { CurbZone, BikeShareNetwork, Component, Geometry, Itinerary, NetworkShape, PoiCollection, PoiType, RentalStation, Stop, Vehicle } from "@/lib/api/types";
 import type { FeatureCollection } from "geojson";
 
@@ -114,16 +114,20 @@ export function ItineraryLayer({ itinerary, dim = false }: { itinerary: Itinerar
     const lines = itinerary.legs.map((leg, i) =>
       toLineString(decodeGeometry(leg.geometry), {
         i,
-        walk: !leg.transit && !leg.rental && !leg.onDemand,
+        walk: !leg.transit && !leg.rental && !leg.onDemand && !leg.parkRide,
         // shared-vehicle legs: dashed line in the network's colour
         rental: !!leg.rental,
         // taxi / ride-hailing legs: long dashes in the lead provider's colour
         ondemand: !!leg.onDemand,
+        // park & ride: your own car, a solid blue line like a transit leg
+        parkride: !!leg.parkRide,
         color: leg.rental
           ? leg.rental.color
           : leg.onDemand
             ? (leg.onDemand.providers.find((p) => p.providerId === leg.onDemand!.recommendedProviderId) ?? leg.onDemand.providers[0])?.color ?? "#667085"
-            : leg.route
+            : leg.parkRide
+              ? PARK_RIDE_COLOR
+              : leg.route
               ? routeChipColors(leg.route.color, componentColor(leg.route.component)).bg
               : "#667085",
       }),
@@ -140,7 +144,9 @@ export function ItineraryLayer({ itinerary, dim = false }: { itinerary: Itinerar
           ? [leg.from, leg.to].map((p) => toPoint(p.lon, p.lat, { end: true, color: leg.rental!.color, rentalPt: true }))
           : leg.onDemand
             ? [leg.from, leg.to].map((p) => toPoint(p.lon, p.lat, { end: true, color: (leg.onDemand!.providers.find((x) => x.providerId === leg.onDemand!.recommendedProviderId) ?? leg.onDemand!.providers[0])?.color ?? "#667085" }))
-            : [],
+            : leg.parkRide
+              ? [toPoint(leg.to.lon, leg.to.lat, { end: true, color: PARK_RIDE_COLOR })]
+              : [],
     );
     return fc([...lines, ...stops]);
   }, [itinerary]);
