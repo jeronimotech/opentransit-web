@@ -110,7 +110,7 @@ export function effectiveSection<K extends AdminSection>(override: AdminOverride
   return deepMerge(yaml[section], o) as AdminEditable[K];
 }
 
-const SECTIONS: AdminSection[] = ["fares", "config", "links", "services", "branding", "mobility", "landing"];
+const SECTIONS: AdminSection[] = ["fares", "config", "links", "services", "branding", "mobility", "landing", "geocoder"];
 
 /** What the app effectively sees for a snapshot: each section from the override, else YAML. */
 export function effectiveSnapshot(override: AdminOverride | null | undefined, yaml: AdminEditable): AdminEditable {

@@ -496,7 +496,8 @@ export type GeocodeResult = {
   stopId: string | null;
   /** Photon results carry none; so do GTFS stations, whose component the feed leaves unset. */
   component: Component | null;
-  source: "gtfs" | "photon";
+  /** `ideca` = Bogotá's cadastral geocoder (v2.2): an exact address or intersection. */
+  source: "gtfs" | "photon" | "ideca";
   /** Present when the query passed `lat`/`lon`. */
   distanceMeters?: number | null;
 };
@@ -824,8 +825,27 @@ export type AdminEditable = {
   mobility: CityMobility | null;
   /** v1.3 — public landing page content. */
   landing: CityLanding | null;
+  /** v2.2 — geocoder providers; the IDECA key comes back masked. */
+  geocoder: CityGeocoderAdmin | null;
 };
 export type AdminSection = keyof AdminEditable;
+
+/* ── v2.2 geocoder (admin-only section) ────────────────────────────────────── */
+
+/** Bogotá's cadastral geocoder (IDECA / Catastro): addresses and intersections. */
+export type IdecaGeocoderAdmin = {
+  enabled: boolean;
+  url: string;
+  /** Masked on read (`••••1234`); echoing the mask back keeps the stored key, `null` clears the override. */
+  apiKey: string | null;
+  /** Named avenues → the nomenclature the geocoder understands ("avenida boyacá" → "AK 72"). */
+  aliases: Record<string, string>;
+};
+
+export type CityGeocoderAdmin = {
+  photonUrl: string | null;
+  ideca: IdecaGeocoderAdmin;
+};
 export type AdminOverride = Partial<AdminEditable>;
 
 export type AdminConfigResponse = {

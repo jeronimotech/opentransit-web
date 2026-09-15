@@ -54,6 +54,7 @@ function yaml(): AdminEditable {
     branding: { primaryColor: yamlCity.branding.primaryColor },
     mobility: clone(yamlCity.mobility ?? null),
     landing: clone(yamlLanding),
+    geocoder: { photonUrl: "https://photon.komoot.io", ideca: { enabled: true, url: "https://catalogopmb.catastrobogota.gov.co/PMBWeb/web/api", apiKey: "••••374c", aliases: { "avenida boyacá": "AK 72", "autopista norte": "AK 45" } } },
   };
 }
 

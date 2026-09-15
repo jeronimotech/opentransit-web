@@ -19,10 +19,11 @@ import { MobilityTab } from "@/components/admin/MobilityTab";
 import { BrandTab } from "@/components/admin/BrandTab";
 import { LandingTab } from "@/components/admin/LandingTab";
 import { AssistantTab } from "@/components/admin/AssistantTab";
+import { GeocoderTab } from "@/components/admin/GeocoderTab";
 import { HistoryTab } from "@/components/admin/HistoryTab";
 import { AnalyticsTab } from "@/components/admin/AnalyticsTab";
 
-const TABS = ["fares", "config", "links", "services", "mobility", "brand", "landing", "assistant", "analytics", "history"] as const;
+const TABS = ["fares", "config", "links", "services", "mobility", "geocoder", "brand", "landing", "assistant", "analytics", "history"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function AdminCityPage() {
@@ -120,6 +121,7 @@ function AdminCity({ user, city, signOut }: { user: AdminUser; city: string; sig
             {tab === "links" ? <LinksTab city={city} data={data} /> : null}
             {tab === "services" ? <ServicesTab city={city} data={data} /> : null}
             {tab === "mobility" ? <MobilityTab city={city} data={data} /> : null}
+            {tab === "geocoder" ? <GeocoderTab city={city} data={data} /> : null}
             {tab === "brand" ? <BrandTab city={city} data={data} /> : null}
             {tab === "landing" ? <LandingTab city={city} data={data} /> : null}
             {tab === "assistant" ? <AssistantTab city={city} data={data} /> : null}
