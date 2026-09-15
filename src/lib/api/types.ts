@@ -496,8 +496,8 @@ export type GeocodeResult = {
   stopId: string | null;
   /** Photon results carry none; so do GTFS stations, whose component the feed leaves unset. */
   component: Component | null;
-  /** `ideca` = Bogotá's cadastral geocoder (v2.2): an exact address or intersection. */
-  source: "gtfs" | "photon" | "ideca";
+  /** `ideca` = Bogotá's cadastral geocoder (v2.2): an exact address or intersection; `catastro` = a named area (barrio, localidad) from the city's cadastre. */
+  source: "gtfs" | "photon" | "ideca" | "catastro";
   /** Present when the query passed `lat`/`lon`. */
   distanceMeters?: number | null;
 };
@@ -842,9 +842,22 @@ export type IdecaGeocoderAdmin = {
   aliases: Record<string, string>;
 };
 
+/** Named areas (barrios, localidades) mirrored from the city's open ArcGIS layers. */
+export type PlaceAreasAdmin = {
+  enabled: boolean;
+  barriosUrl: string | null;
+  barriosNameField: string;
+  barriosCodeField: string;
+  localidadesUrl: string | null;
+  localidadesNameField: string;
+  localidadesCodeField: string;
+  refreshDays: number;
+};
+
 export type CityGeocoderAdmin = {
   photonUrl: string | null;
   ideca: IdecaGeocoderAdmin;
+  areas: PlaceAreasAdmin;
 };
 export type AdminOverride = Partial<AdminEditable>;
 

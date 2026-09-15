@@ -54,7 +54,11 @@ function yaml(): AdminEditable {
     branding: { primaryColor: yamlCity.branding.primaryColor },
     mobility: clone(yamlCity.mobility ?? null),
     landing: clone(yamlLanding),
-    geocoder: { photonUrl: "https://photon.komoot.io", ideca: { enabled: true, url: "https://catalogopmb.catastrobogota.gov.co/PMBWeb/web/api", apiKey: "••••374c", aliases: { "avenida boyacá": "AK 72", "autopista norte": "AK 45" } } },
+    geocoder: {
+      photonUrl: "https://photon.komoot.io",
+      ideca: { enabled: true, url: "https://catalogopmb.catastrobogota.gov.co/PMBWeb/web/api", apiKey: "••••374c", aliases: { "avenida boyacá": "AK 72", "autopista norte": "AK 45" } },
+      areas: { enabled: true, barriosUrl: "https://serviciosgis.catastrobogota.gov.co/arcgis/rest/services/Mapa_Referencia/Mapa_Referencia/MapServer/37", barriosNameField: "SCANOMBRE", barriosCodeField: "SCACODIGO", localidadesUrl: "https://serviciosgis.catastrobogota.gov.co/arcgis/rest/services/Mapa_Referencia/Mapa_Referencia/MapServer/48", localidadesNameField: "LOCNOMBRE", localidadesCodeField: "LOCCODIGO", refreshDays: 30 },
+    },
   };
 }
 

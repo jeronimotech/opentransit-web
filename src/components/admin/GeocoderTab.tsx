@@ -7,9 +7,9 @@ import { api } from "@/lib/api/client";
 import { isMaskedKey } from "@/lib/assistant";
 import { isHttpsUrl, type Errors } from "@/lib/admin/validate";
 import { effectiveSection } from "@/lib/admin/diff";
-import { Control, SaveBar, SectionCard, TextInput, Toggle, saveErrorsFrom, useSectionDraft, type SaveState } from "./form";
+import { Control, NumberInput, SaveBar, SectionCard, TextInput, Toggle, saveErrorsFrom, useSectionDraft, type SaveState } from "./form";
 import { useSaveConfig } from "./useAdmin";
-import type { AdminConfigResponse, CityGeocoderAdmin, GeocodeResult, IdecaGeocoderAdmin } from "@/lib/api/types";
+import type { AdminConfigResponse, CityGeocoderAdmin, GeocodeResult, IdecaGeocoderAdmin, PlaceAreasAdmin } from "@/lib/api/types";
 
 /**
  * "Direcciones": the geocoder providers. Photon (OSM) for names, and Bogotá's
@@ -17,6 +17,7 @@ import type { AdminConfigResponse, CityGeocoderAdmin, GeocodeResult, IdecaGeocod
  * the assistant's rules (masked on read, echoing the mask keeps it).
  */
 const DEFAULT_IDECA: IdecaGeocoderAdmin = { enabled: false, url: "https://catalogopmb.catastrobogota.gov.co/PMBWeb/web/api", apiKey: null, aliases: {} };
+const DEFAULT_AREAS: PlaceAreasAdmin = { enabled: false, barriosUrl: null, barriosNameField: "SCANOMBRE", barriosCodeField: "SCACODIGO", localidadesUrl: null, localidadesNameField: "LOCNOMBRE", localidadesCodeField: "LOCCODIGO", refreshDays: 30 };
 
 /** "nombre = CÓDIGO" lines ⇄ the alias map. Returns null when a line has no "=". */
 export function parseAliases(text: string): Record<string, string> | null {
@@ -53,19 +54,22 @@ export function GeocoderTab({ city, data }: { city: string; data: AdminConfigRes
   const [probe, setProbe] = useState<Probe>({ status: "idle" });
 
   const stored = (effectiveSection(data.override, data.yaml, "geocoder") as CityGeocoderAdmin | null)?.ideca ?? null;
-  const g: CityGeocoderAdmin = { photonUrl: draft?.photonUrl ?? null, ideca: { ...DEFAULT_IDECA, ...(draft?.ideca ?? {}) } };
+  const g: CityGeocoderAdmin = { photonUrl: draft?.photonUrl ?? null, ideca: { ...DEFAULT_IDECA, ...(draft?.ideca ?? {}) }, areas: { ...DEFAULT_AREAS, ...(draft?.areas ?? {}) } };
   const text = aliasText ?? aliasesText(g.ideca.aliases);
   const parsed = parseAliases(text);
   const errors: Errors = { ...serverErrors };
   if (g.photonUrl && !isHttpsUrl(g.photonUrl)) errors["geocoder.photonUrl"] = t.admin.errors.https;
   if (g.ideca.enabled && !isHttpsUrl(g.ideca.url)) errors["geocoder.ideca.url"] = t.admin.errors.https;
   if (parsed === null) errors["geocoder.ideca.aliases"] = t.admin.geocoder.aliasesError;
+  if (g.areas.enabled && !isHttpsUrl(g.areas.barriosUrl)) errors["geocoder.areas.barriosUrl"] = t.admin.errors.https;
+  if (g.areas.localidadesUrl && !isHttpsUrl(g.areas.localidadesUrl)) errors["geocoder.areas.localidadesUrl"] = t.admin.errors.https;
 
   const set = (patch: Partial<CityGeocoderAdmin>) => {
     setServerErrors({});
     setDraft({ ...g, ...patch });
   };
   const setIdeca = (patch: Partial<IdecaGeocoderAdmin>) => set({ ideca: { ...g.ideca, ...patch } });
+  const setAreas = (patch: Partial<PlaceAreasAdmin>) => set({ areas: { ...g.areas, ...patch } });
 
   const onSave = async (meta: { note: string }) => {
     setState({ status: "saving" });
@@ -142,6 +146,23 @@ export function GeocoderTab({ city, data }: { city: string; data: AdminConfigRes
               }}
             />
           </Control>
+        </div>
+      </SectionCard>
+
+      <SectionCard title={t.admin.geocoder.areas} hint={t.admin.geocoder.areasHint} overridden={overridden}>
+        <div className="flex flex-col gap-4">
+          <Toggle id={k("areas.enabled")} checked={g.areas.enabled} onChange={(v) => setAreas({ enabled: v })} label={t.admin.geocoder.areasEnabled} />
+          <Control id={k("areas.barriosUrl")} label={t.admin.geocoder.barriosUrl} hint={t.admin.geocoder.barriosUrlHint} error={errors[k("areas.barriosUrl")]}>
+            <TextInput id={k("areas.barriosUrl")} value={g.areas.barriosUrl ?? ""} placeholder="https://…/MapServer/37" onChange={(e) => setAreas({ barriosUrl: e.target.value || null })} error={errors[k("areas.barriosUrl")]} />
+          </Control>
+          <Control id={k("areas.localidadesUrl")} label={t.admin.geocoder.localidadesUrl} hint={t.admin.geocoder.localidadesUrlHint} error={errors[k("areas.localidadesUrl")]}>
+            <TextInput id={k("areas.localidadesUrl")} value={g.areas.localidadesUrl ?? ""} placeholder="https://…/MapServer/48" onChange={(e) => setAreas({ localidadesUrl: e.target.value || null })} error={errors[k("areas.localidadesUrl")]} />
+          </Control>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Control id={k("areas.refreshDays")} label={t.admin.geocoder.refreshDays} error={errors[k("areas.refreshDays")]}>
+              <NumberInput id={k("areas.refreshDays")} min={1} max={365} value={g.areas.refreshDays} onChange={(n) => setAreas({ refreshDays: n ?? 30 })} error={errors[k("areas.refreshDays")]} />
+            </Control>
+          </div>
         </div>
       </SectionCard>
 
