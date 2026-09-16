@@ -186,7 +186,7 @@ export function validateOnDemand(list: OnDemandProvider[], tariffs: TaxiTariff[]
 }
 
 
-export const LANDING_LIMITS = { highlights: 8, screenshots: 8, faq: 12, partners: 12, openDataLinks: 12, title: 80, subtitle: 200, highlightTitle: 60, highlightText: 160, faqQ: 120, faqA: 600, cta: 40, seoTitle: 70, seoDescription: 160 } as const;
+export const LANDING_LIMITS = { highlights: 12, screenshots: 8, faq: 12, partners: 12, openDataLinks: 12, title: 80, subtitle: 200, highlightTitle: 60, highlightText: 160, faqQ: 120, faqA: 600, cta: 40, seoTitle: 70, seoDescription: 160 } as const;
 
 const optUrl = (e: Errors, path: string, v: unknown, msg: Messages) => {
   if (v != null && v !== "" && !isHttpsUrl(v)) e[path] = msg.https;
