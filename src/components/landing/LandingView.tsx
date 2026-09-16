@@ -13,7 +13,16 @@ function HighlightIcon({ icon }: { icon: LandingIcon | "car" }) {
   const p = { width: 22, height: 22 };
   switch (icon) {
     case "car":
+    case "taxi":
       return <Icon.Car {...p} />;
+    case "parking":
+      return <Icon.Parking {...p} />;
+    case "alarm":
+      return <Icon.Clock {...p} />;
+    case "go":
+      return <Icon.Locate {...p} />;
+    case "chat":
+      return <Icon.Chat {...p} />;
     case "route":
       return <Icon.Route {...p} />;
     case "live":
