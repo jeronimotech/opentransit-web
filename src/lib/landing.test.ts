@@ -68,7 +68,7 @@ describe("validateLanding", () => {
       theme: { primaryColor: "red", accentColor: null, logoUrl: "http://x", heroImageUrl: null, darkHero: true },
       hero: { title: "x".repeat(81), subtitle: null, ctaPrimary: { label: "", url: "ftp://x" }, ctaSecondary: null },
       apps: { ios: "http://apple.com", android: null, web: null },
-      highlights: Array.from({ length: 9 }, () => ({ icon: "nope" as "route", title: "", text: "" })),
+      highlights: Array.from({ length: 13 }, () => ({ icon: "nope" as "route", title: "", text: "" })),
       screenshots: [{ url: "x", alt: "", kind: "tablet" as "web" }],
       stats: { show: true, items: ["bogus" as "routes"] },
       faq: [{ q: "", a: "" }],
