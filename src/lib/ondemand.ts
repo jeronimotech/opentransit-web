@@ -1,3 +1,4 @@
+import type { Lang } from "./format";
 import type { City, Itinerary, Leg, LegOnDemandProvider, OnDemandPrice, OnDemandProvider, TaxiTariff, TariffSurcharge } from "./api/types";
 import { detectPlatform, type Platform } from "./rental";
 import { fmtMoney } from "./format";
@@ -40,13 +41,13 @@ export function tariffById(city: City | null | undefined, id: string | null | un
 
 /* ── prices ─────────────────────────────────────────────────────────────────── */
 
-const money = (n: number, currency: string, lang: "es" | "en") => fmtMoney(n, currency, lang);
+const money = (n: number, currency: string, lang: Lang) => fmtMoney(n, currency, lang);
 
 /**
  * "≈ $18.000–22.000" when the estimate carries a band, "≈ $18.000" when it is a point,
  * `null` when there is no number at all (the UI then says "Precio en la app").
  */
-export function formatPriceRange(price: OnDemandPrice | null | undefined, lang: "es" | "en" = "es"): string | null {
+export function formatPriceRange(price: OnDemandPrice | null | undefined, lang: Lang = "es"): string | null {
   if (!price) return null;
   const { currency } = price;
   const lo = price.min ?? price.amount;

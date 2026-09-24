@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LangSwitch } from "@/components/shell/LangSwitch";
 import type { ReactNode } from "react";
 import { useI18n } from "@/lib/i18n/provider";
 import { useTheme } from "@/lib/theme";
@@ -11,7 +12,7 @@ import { canManageUsers, displayName, scopeLabel, type AdminUser } from "@/lib/a
 
 /** `user` is absent only on the login screen; everywhere else the header says who you are. */
 export function AdminShell({ children, user, onSignOut, crumbs }: { children: ReactNode; user?: AdminUser | null; onSignOut?: () => void; crumbs?: ReactNode }) {
-  const { t, lang, setLang } = useI18n();
+  const { t, lang } = useI18n();
   const { pref, setPref, resolved } = useTheme();
   const toggleTheme = () => setPref(pref === "system" ? (resolved === "dark" ? "light" : "dark") : pref === "dark" ? "light" : "dark");
   return (
@@ -27,9 +28,7 @@ export function AdminShell({ children, user, onSignOut, crumbs }: { children: Re
             {crumbs ? <nav aria-label="breadcrumb" className="hidden min-w-0 items-center gap-1 truncate text-sm text-ink-2 md:flex">{crumbs}</nav> : null}
           </div>
           <div className="flex items-center gap-1">
-            <button type="button" onClick={() => setLang(lang === "es" ? "en" : "es")} className="rounded-lg px-2 py-1.5 text-xs font-bold text-ink-2 hover:bg-paper-3 hover:text-ink" aria-label={t.common.language}>
-              {lang === "es" ? "EN" : "ES"}
-            </button>
+            <LangSwitch compact />
             <button type="button" onClick={toggleTheme} className="grid h-9 w-9 place-items-center rounded-lg text-ink-2 hover:bg-paper-3 hover:text-ink" aria-label={t.common.theme}>
               {resolved === "dark" ? <Icon.Sun /> : <Icon.Moon />}
             </button>

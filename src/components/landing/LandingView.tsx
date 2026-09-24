@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 import type { CityLanding, LandingIcon, LandingResponse } from "@/lib/api/types";
-import { copyFor } from "@/lib/landing-copy";
+import { copyFor, landingDir } from "@/lib/landing-copy";
 import { ctaHref, fmtStat, normalizeLanding, resolveTheme, visibleStats } from "@/lib/landing";
 import { Icon } from "@/components/ui/primitives";
 import { RouteDiagram } from "./RouteDiagram";
@@ -183,7 +183,7 @@ export function LandingView({ data, appHref, preview, onClosePreview, diagramCol
   } as CSSProperties;
 
   return (
-    <div className={`lp ${theme.darkHero ? "lp-dark-hero" : ""}`} style={vars} lang={l.locale}>
+    <div className={`lp ${theme.darkHero ? "lp-dark-hero" : ""}`} style={vars} lang={l.locale} dir={landingDir(l.locale)}>
       <a href="#main" className="lp-skip">
         {t.skip}
       </a>

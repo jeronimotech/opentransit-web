@@ -47,6 +47,7 @@ export function ComponentIcon({ icon, ...p }: { icon: IconKind } & ComponentProp
           <path d="M6 13V7l4 4 4-4v6" />
         </svg>
       );
+    case "ferry":
     case "boat":
       return (
         <svg {...base}>

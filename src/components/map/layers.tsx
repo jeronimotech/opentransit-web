@@ -262,7 +262,7 @@ export function LineLayer({ id, geometry, color, width = 4, fit = false, opacity
  */
 export const NETWORK_GROUPS = {
   /** The backbone: a handful of high-capacity lines a rider can name. ON by default. */
-  trunk: { components: ["trunk", "cable", "rail", "tram"] as Component[], width: 2.5, opacity: 0.5 },
+  trunk: { components: ["trunk", "cable", "rail", "tram", "ferry"] as Component[], width: 2.5, opacity: 0.5 },
   /** Everything else — hundreds of overlapping shapes on the same corridors, OFF by default. */
   zonal: { components: ["zonal", "dual", "feeder", "bus", "other"] as Component[], width: 1.5, opacity: 0.18 },
 };

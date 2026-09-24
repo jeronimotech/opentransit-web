@@ -1,5 +1,7 @@
 "use client";
 
+import type { Lang } from "@/lib/format";
+
 import { useI18n } from "@/lib/i18n/provider";
 import { fmtMoney } from "@/lib/format";
 import { estimateTaxi } from "@/lib/ondemand";
@@ -15,7 +17,7 @@ const EMPTY_SURCHARGE: TariffSurcharge = { id: "", label: "", amount: 0, when: {
  * "Taxi (tarifa)": taximeter parameters and surcharges for one or more tariffs, with a
  * calculator preview (5 km day / 5 km night / 15 km airport) using the same rule as the app.
  */
-export function TaxiTariffEditor({ rows, onChange, errors, lang }: { rows: TaxiTariff[]; onChange: (next: TaxiTariff[]) => void; errors: Errors; lang: "es" | "en" }) {
+export function TaxiTariffEditor({ rows, onChange, errors, lang }: { rows: TaxiTariff[]; onChange: (next: TaxiTariff[]) => void; errors: Errors; lang: Lang }) {
   const { t } = useI18n();
   const a = t.admin.mobility.taxi;
   const k = (i: number, f: string) => `mobility.taxiTariffs.${i}.${f}`;
@@ -155,7 +157,7 @@ export function TaxiTariffEditor({ rows, onChange, errors, lang }: { rows: TaxiT
   );
 }
 
-function TariffPreview({ tariff, valid, lang }: { tariff: TaxiTariff; valid: boolean; lang: "es" | "en" }) {
+function TariffPreview({ tariff, valid, lang }: { tariff: TaxiTariff; valid: boolean; lang: Lang }) {
   const { t } = useI18n();
   const a = t.admin.mobility.taxi;
   const labels = { flagFall: t.ondemand.unitFlagFall, distance: t.ondemand.unitDistance, minimum: t.ondemand.unitMinimum };

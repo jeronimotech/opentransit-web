@@ -1,3 +1,4 @@
+import type { Lang } from "./format";
 import type { Mode, PlanParams } from "./api/types";
 import { buildPlanModes } from "./rental";
 
@@ -86,7 +87,7 @@ export function writePlanner(s: PlannerState): URLSearchParams {
   return p;
 }
 
-export function toPlanParams(s: PlannerState, locale: "es" | "en", rentalModes: Mode[] = ["BIKE_RENTAL"]): PlanParams | null {
+export function toPlanParams(s: PlannerState, locale: Lang, rentalModes: Mode[] = ["BIKE_RENTAL"]): PlanParams | null {
   if (!s.from || !s.to) return null;
   return {
     fromLat: s.from.lat,

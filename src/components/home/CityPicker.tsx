@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LangSwitch } from "@/components/shell/LangSwitch";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
 import { useCities } from "@/lib/api/hooks";
@@ -12,7 +13,7 @@ import { MOCK } from "@/lib/api/client";
 const LAST_CITY = "opentransit.city";
 
 export function CityPicker() {
-  const { t, lang, setLang } = useI18n();
+  const { t, lang } = useI18n();
   const { data, isLoading, error } = useCities();
   const router = useRouter();
   const cities = useMemo(() => data?.cities ?? [], [data]);
@@ -25,13 +26,7 @@ export function CityPicker() {
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col px-5 py-8">
       <div className="flex items-center justify-between">
         <Wordmark className="text-lg" />
-        <button
-          type="button"
-          onClick={() => setLang(lang === "es" ? "en" : "es")}
-          className="rounded-lg px-2 py-1 text-xs font-bold text-ink-2 hover:bg-paper-3"
-        >
-          {lang === "es" ? "EN" : "ES"}
-        </button>
+        <LangSwitch compact />
       </div>
 
       <section className="mt-14 md:mt-24">

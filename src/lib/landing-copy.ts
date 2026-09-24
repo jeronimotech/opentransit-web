@@ -3,7 +3,13 @@
  * Keyed by the landing's own locale (SSR), not by the app's language toggle.
  * City-specific words never live here: they come from the config.
  */
-export type LandingLocale = "es" | "en";
+import { landingIt } from "./i18n/landing.it";
+import { landingPt } from "./i18n/landing.pt";
+import { landingFr } from "./i18n/landing.fr";
+import { landingMs } from "./i18n/landing.ms";
+import { landingAr } from "./i18n/landing.ar";
+
+export type LandingLocale = "es" | "en" | "it" | "pt" | "fr" | "ms" | "ar";
 
 export const landingCopy = {
   es: {
@@ -93,4 +99,18 @@ export const landingCopy = {
 } as const;
 
 export type LandingCopy = (typeof landingCopy)["es"];
-export const copyFor = (locale: string | null | undefined): LandingCopy => (locale === "en" ? (landingCopy.en as unknown as LandingCopy) : landingCopy.es);
+const COPIES: Record<LandingLocale, LandingCopy> = {
+  es: landingCopy.es,
+  en: landingCopy.en as unknown as LandingCopy,
+  it: landingIt as unknown as LandingCopy,
+  pt: landingPt as unknown as LandingCopy,
+  fr: landingFr as unknown as LandingCopy,
+  ms: landingMs as unknown as LandingCopy,
+  ar: landingAr as unknown as LandingCopy,
+};
+/** Chrome copy for a landing locale (`it`, `pt-PT`, …); anything we do not have falls back to English, then Spanish. */
+export const copyFor = (locale: string | null | undefined): LandingCopy => {
+  const code = (locale ?? "").slice(0, 2).toLowerCase() as LandingLocale;
+  return COPIES[code] ?? (code ? COPIES.en : COPIES.es);
+};
+export const landingDir = (locale: string | null | undefined): "ltr" | "rtl" => ((locale ?? "").slice(0, 2).toLowerCase() === "ar" ? "rtl" : "ltr");

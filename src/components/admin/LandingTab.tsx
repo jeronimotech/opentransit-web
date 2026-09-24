@@ -1,5 +1,8 @@
 "use client";
 
+import { LANGS } from "@/lib/format";
+import type { LandingLocale } from "@/lib/landing-copy";
+
 import { useState, type ReactNode } from "react";
 import { useI18n } from "@/lib/i18n/provider";
 import { Badge, Button, Icon } from "@/components/ui/primitives";
@@ -84,9 +87,12 @@ export function LandingTab({ city, data }: { city: string; data: AdminConfigResp
         <div className="grid gap-4 md:grid-cols-[1fr_auto]">
           <Toggle id="lp-enabled" checked={l.enabled} onChange={(v) => set({ enabled: v })} label={L.enabled} hint={L.enabledHint} />
           <Control id="lp-locale" label={L.locale} error={errors["landing.locale"]}>
-            <select id="lp-locale" className="h-10 rounded-lg border border-line bg-paper-2 px-2 text-sm" value={l.locale} onChange={(e) => set({ locale: e.target.value as "es" | "en" })}>
-              <option value="es">Español</option>
-              <option value="en">English</option>
+            <select id="lp-locale" className="h-10 rounded-lg border border-line bg-paper-2 px-2 text-sm" value={l.locale} onChange={(e) => set({ locale: e.target.value as LandingLocale })}>
+              {LANGS.map((o) => (
+                <option key={o.code} value={o.code}>
+                  {o.label}
+                </option>
+              ))}
             </select>
           </Control>
         </div>

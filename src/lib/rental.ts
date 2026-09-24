@@ -1,3 +1,4 @@
+import type { Lang } from "./format";
 import type { BikeShareNetwork, City, Mode, RentalStation, RentalStationRef } from "./api/types";
 
 /**
@@ -56,7 +57,7 @@ export function availabilityTone(n: number | null | undefined): AvailabilityTone
 }
 
 /** "6 bicis · 13 puestos" / "6 bikes · 13 docks" — one style everywhere. */
-export function formatAvailability(vehicles: number | null | undefined, docks: number | null | undefined, lang: "es" | "en" = "es"): string {
+export function formatAvailability(vehicles: number | null | undefined, docks: number | null | undefined, lang: Lang = "es"): string {
   const v = vehicles ?? null;
   const d = docks ?? null;
   const bikes = v === null ? null : lang === "es" ? (v === 1 ? "1 bici" : `${v} bicis`) : v === 1 ? "1 bike" : `${v} bikes`;
@@ -109,7 +110,7 @@ export function refToStation(ref: RentalStationRef, networkId: string): RentalSt
 }
 
 /** GBFS 3.0 names are `[{text, language}]`; the API flattens them, but be tolerant. */
-export function stationName(name: unknown, lang: "es" | "en" = "es"): string {
+export function stationName(name: unknown, lang: Lang = "es"): string {
   if (typeof name === "string") return name;
   if (Array.isArray(name)) {
     const pick = name.find((n) => n?.language === lang) ?? name.find((n) => n?.language === "es") ?? name[0];

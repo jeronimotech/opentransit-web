@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LangSwitch } from "@/components/shell/LangSwitch";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/lib/i18n/provider";
@@ -30,7 +31,7 @@ export function Wordmark({ className = "" }: { className?: string }) {
  * at most a handful of controls over it.
  */
 export function CityHeader({ city }: { city: City }) {
-  const { t, lang, setLang } = useI18n();
+  const { t, lang } = useI18n();
   const { pref, setPref, resolved } = useTheme();
   const path = usePathname();
   const base = `/${city.id}`;
@@ -82,9 +83,7 @@ export function CityHeader({ city }: { city: City }) {
             demo
           </span>
         ) : null}
-        <button type="button" onClick={() => setLang(lang === "es" ? "en" : "es")} className="rounded-lg px-2 py-1.5 text-xs font-bold text-ink-2 hover:bg-paper-3 hover:text-ink" aria-label={t.common.language}>
-          {lang === "es" ? "EN" : "ES"}
-        </button>
+        <LangSwitch compact />
         <button type="button" onClick={toggleTheme} className="grid h-8 w-8 place-items-center rounded-lg text-ink-2 hover:bg-paper-3 hover:text-ink" aria-label={t.common.theme}>
           {resolved === "dark" ? <Icon.Sun /> : <Icon.Moon />}
         </button>
@@ -110,9 +109,7 @@ export function CityHeader({ city }: { city: City }) {
                 </Link>
               ))}
               <div className="mt-1 flex gap-1 border-t border-line pt-1">
-                <button type="button" onClick={() => setLang(lang === "es" ? "en" : "es")} className="h-11 flex-1 rounded-lg text-sm font-bold text-ink-2 hover:bg-paper-3" aria-label={t.common.language}>
-                  {lang === "es" ? "English" : "Español"}
-                </button>
+                <LangSwitch />
                 <button type="button" onClick={toggleTheme} className="grid h-11 w-11 place-items-center rounded-lg text-ink-2 hover:bg-paper-3" aria-label={t.common.theme}>
                   {resolved === "dark" ? <Icon.Sun /> : <Icon.Moon />}
                 </button>

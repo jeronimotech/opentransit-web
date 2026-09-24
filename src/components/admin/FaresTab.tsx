@@ -1,5 +1,7 @@
 "use client";
 
+import type { Lang } from "@/lib/format";
+
 import { useState } from "react";
 import { useI18n } from "@/lib/i18n/provider";
 import { fmtMoney } from "@/lib/format";
@@ -85,7 +87,7 @@ export function FaresTab({ city, data }: { city: string; data: AdminConfigRespon
   );
 }
 
-function FarePreview({ fares, valid, lang }: { fares: CityFares; valid: boolean; lang: "es" | "en" }) {
+function FarePreview({ fares, valid, lang }: { fares: CityFares; valid: boolean; lang: Lang }) {
   const { t } = useI18n();
   const rows = valid ? farePreview(fares) : [];
   const money = (n: number) => fmtMoney(n, fares.currency, lang);

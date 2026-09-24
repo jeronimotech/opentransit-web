@@ -1,6 +1,22 @@
-export type Lang = "es" | "en";
+export type Lang = "es" | "en" | "it" | "pt" | "fr" | "ms" | "ar";
 
-const localeOf = (lang: Lang) => (lang === "es" ? "es-CO" : "en-US");
+/** Every UI language, in the order the switcher lists them, with its own name. */
+export const LANGS: readonly { code: Lang; label: string; dir: "ltr" | "rtl" }[] = [
+  { code: "es", label: "Español", dir: "ltr" },
+  { code: "en", label: "English", dir: "ltr" },
+  { code: "pt", label: "Português", dir: "ltr" },
+  { code: "fr", label: "Français", dir: "ltr" },
+  { code: "it", label: "Italiano", dir: "ltr" },
+  { code: "ms", label: "Bahasa Melayu", dir: "ltr" },
+  { code: "ar", label: "العربية", dir: "rtl" },
+];
+const LANG_CODES = new Set<string>(LANGS.map((l) => l.code));
+export const isLang = (v: unknown): v is Lang => typeof v === "string" && LANG_CODES.has(v);
+export const dirOf = (lang: Lang): "ltr" | "rtl" => (lang === "ar" ? "rtl" : "ltr");
+
+/** BCP 47 tag used for Intl formatting: the regional variant of the cities we serve in that language. */
+const LOCALES: Record<Lang, string> = { es: "es-CO", en: "en-US", it: "it-IT", pt: "pt-PT", fr: "fr-FR", ms: "ms-MY", ar: "ar-MA" };
+export const localeOf = (lang: Lang | string): string => LOCALES[lang as Lang] ?? "en-US";
 
 export function fmtTime(iso: string | null | undefined, tz: string, lang: Lang = "es"): string {
   if (!iso) return "—";

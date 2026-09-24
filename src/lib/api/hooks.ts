@@ -1,5 +1,7 @@
 "use client";
 
+import type { Lang } from "../format";
+
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { ApiRequestError, api } from "./client";
 import type { Departure, Mode, NearbyRentalStation, PlanParams } from "./types";
@@ -298,7 +300,7 @@ export function useHealth(city: string, enabled = true, refreshMs = 60_000) {
  */
 export function useForecast(
   city: string,
-  p: { fromLat: number; fromLon: number; toLat: number; toLon: number; modes?: Mode[]; windowMinutes?: number; locale?: "es" | "en" } | null,
+  p: { fromLat: number; fromLon: number; toLat: number; toLon: number; modes?: Mode[]; windowMinutes?: number; locale?: Lang } | null,
   enabled: boolean,
 ) {
   return useQuery({

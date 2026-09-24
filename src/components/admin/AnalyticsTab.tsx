@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { localeOf } from "@/lib/format";
 import { useQuery } from "@tanstack/react-query";
 import { useI18n } from "@/lib/i18n/provider";
 import { analyticsApi } from "@/lib/api/client";
@@ -158,7 +159,7 @@ export function AnalyticsTab({ city, data }: { city: string; data: AdminConfigRe
               </div>
             </ChartCard>
           </div>
-          {s.lastRollupAt ? <p className="text-xs text-ink-3">{A.lastRollup}: {new Date(s.lastRollupAt).toLocaleString(lang === "es" ? "es-CO" : "en-US")}</p> : null}
+          {s.lastRollupAt ? <p className="text-xs text-ink-3">{A.lastRollup}: {new Date(s.lastRollupAt).toLocaleString(localeOf(lang))}</p> : null}
         </>
       ) : null}
     </div>

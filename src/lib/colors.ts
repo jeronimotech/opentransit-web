@@ -11,6 +11,7 @@ export const COMPONENT_COLORS: Record<Component, string> = {
   // the GTFS mode, not the agency.
   tram: "#0054A6",
   bus: "#D32F2F",
+  ferry: "#0277BD",
   other: "#667085",
 };
 

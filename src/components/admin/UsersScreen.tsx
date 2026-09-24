@@ -1,5 +1,7 @@
 "use client";
 
+import type { Lang } from "@/lib/format";
+
 import { useState } from "react";
 import { useI18n } from "@/lib/i18n/provider";
 import { fmtDateTime } from "@/lib/format";
@@ -73,7 +75,7 @@ export function UsersScreen({ cities, meId }: { cities: string[]; meId: number |
   );
 }
 
-function UserRow({ user, cities, isMe, lang }: { user: AdminUserRow; cities: string[]; isMe: boolean; lang: "es" | "en" }) {
+function UserRow({ user, cities, isMe, lang }: { user: AdminUserRow; cities: string[]; isMe: boolean; lang: Lang }) {
   const { t } = useI18n();
   const m = useUserMutations();
   const [editing, setEditing] = useState(false);

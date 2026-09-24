@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState, type ReactNode } from "react";
+import { localeOf } from "@/lib/format";
 
 /**
  * Plain-SVG chart primitives for the admin analytics tab, built to the dataviz method:
@@ -14,7 +15,7 @@ import { useId, useState, type ReactNode } from "react";
 export const SERIES = ["var(--viz-1)", "var(--viz-2)", "var(--viz-3)", "var(--viz-4)", "var(--viz-5)", "var(--viz-6)", "var(--viz-7)", "var(--viz-8)"];
 export const STATUS = { good: "var(--viz-good)", warning: "var(--viz-warning)", serious: "var(--viz-serious)" };
 
-export const fmtInt = (n: number, lang: string) => new Intl.NumberFormat(lang === "es" ? "es-CO" : "en-US", { maximumFractionDigits: 0 }).format(n);
+export const fmtInt = (n: number, lang: string) => new Intl.NumberFormat(localeOf(lang), { maximumFractionDigits: 0 }).format(n);
 
 /* ── stat tile ── */
 export function KpiTile({ label, value, previous, lang, vsLabel }: { label: string; value: number; previous: number | null; lang: string; vsLabel: string }) {

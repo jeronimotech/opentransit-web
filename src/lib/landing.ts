@@ -1,3 +1,5 @@
+import type { Lang } from "./format";
+import { localeOf } from "./format";
 import type { City, CityLanding, LandingResponse, LandingStatKey, LandingStats } from "./api/types";
 import { LANDING_STAT_KEYS } from "./api/types";
 
@@ -150,8 +152,8 @@ export function visibleStats(landing: CityLanding, stats: LandingStats | null | 
     .filter((s): s is { key: LandingStatKey; value: number } => typeof s.value === "number" && s.value > 0);
 }
 
-export function fmtStat(n: number, locale: "es" | "en"): string {
-  return new Intl.NumberFormat(locale === "es" ? "es-CO" : "en-US", { maximumFractionDigits: 0 }).format(n);
+export function fmtStat(n: number, locale: Lang): string {
+  return new Intl.NumberFormat(localeOf(locale), { maximumFractionDigits: 0 }).format(n);
 }
 
 /** Primary CTA: config url, else the web app for this city. */

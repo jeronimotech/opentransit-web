@@ -16,14 +16,28 @@ describe("the language to start in", () => {
   });
 
   it("skips languages we do not have and keeps looking", () => {
-    // A French speaker in Toronto gets English, not Spanish, because it is next in
+    // A German speaker in Toronto gets English, not Spanish, because it is next in
     // their own list of preferences.
-    expect(initialLang(null, ["fr-CA", "en-CA"])).toBe("en");
-    expect(initialLang(null, ["pt-BR", "es-CO"])).toBe("es");
+    expect(initialLang(null, ["de-DE", "en-CA"])).toBe("en");
+    expect(initialLang(null, ["ja", "es-CO"])).toBe("es");
   });
 
   it("ends at Spanish when nothing else applies", () => {
     expect(initialLang(null, [])).toBe("es");
     expect(initialLang("de-DE", ["ja"])).toBe("es");
+  });
+});
+
+// Seven languages now: a city that operates in one of them greets its visitors in it,
+// and so does a browser that prefers it.
+describe("the five languages added with the global cities", () => {
+  it("follows the city's locale", () => {
+    expect(initialLang("it-IT", ["en-US"])).toBe("it");
+    expect(initialLang("pt-PT", ["en-US"])).toBe("pt");
+    expect(initialLang("fr-MA", ["en-US"])).toBe("fr");
+  });
+  it("follows the browser when the city does not say", () => {
+    expect(initialLang(null, ["ms-MY", "en"])).toBe("ms");
+    expect(initialLang(null, ["ar", "fr"])).toBe("ar");
   });
 });

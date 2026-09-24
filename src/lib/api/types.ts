@@ -1,3 +1,4 @@
+import type { Lang } from "../format";
 /**
  * Types mirroring the opentransit API contract v1 + v1.1 additions (ROADMAP-v1.1.md).
  * v1.1 fields are optional so the client keeps working against a v1 API.
@@ -15,6 +16,7 @@ export type Component =
   | "rail"
   | "tram"
   | "bus"
+  | "ferry"
   | "other";
 
 export type Mode =
@@ -282,7 +284,7 @@ export type CityComponent = {
   id: Component;
   label: string;
   color: string;
-  icon: "brt" | "bus" | "cable" | "rail" | "tram" | "metro" | "boat" | "other";
+  icon: "brt" | "bus" | "cable" | "rail" | "tram" | "metro" | "boat" | "ferry" | "other";
 };
 
 export type CityFares = {
@@ -467,7 +469,7 @@ export type PlanParams = {
   wheelchair?: boolean;
   numItineraries?: number;
   maxWalkDistance?: number;
-  locale?: "es" | "en";
+  locale?: Lang;
   fromName?: string;
   toName?: string;
   /** v1.4 — add taxi / ride-hailing itineraries (direct + first/last mile). */
@@ -752,7 +754,7 @@ export type LandingFaq = { q: string; a: string };
 export type CityLanding = {
   enabled: boolean;
   slug: string | null;
-  locale: "es" | "en";
+  locale: Lang;
   theme: { primaryColor: string | null; accentColor: string | null; logoUrl: string | null; heroImageUrl: string | null; darkHero: boolean };
   hero: { title: string | null; subtitle: string | null; ctaPrimary: LandingCta | null; ctaSecondary: LandingCta | null };
   apps: { ios: string | null; android: string | null; web: string | null };

@@ -1,3 +1,4 @@
+import type { Lang } from "../format";
 import type {
   AdminConfigPatch,
   AdminConfigResponse,
@@ -168,7 +169,7 @@ export const api = {
   /** v1.7 — "Cuándo salir": the same trip planned across a window, one row per departure. */
   planForecast: (
     city: string,
-    p: { fromLat: number; fromLon: number; toLat: number; toLon: number; modes?: Mode[]; windowMinutes?: number; maxOptions?: number; arriveBy?: boolean; locale?: "es" | "en" },
+    p: { fromLat: number; fromLon: number; toLat: number; toLon: number; modes?: Mode[]; windowMinutes?: number; maxOptions?: number; arriveBy?: boolean; locale?: Lang },
   ) =>
     request<ForecastResponse>(`${c(city)}/plan/forecast`, {
       fromLat: p.fromLat,
@@ -203,7 +204,7 @@ export const api = {
       headers: { "X-Share-Key": writeKey },
     }),
 
-  geocode: (city: string, q: string, near?: { lat: number; lon: number }, limit = 8, locale?: "es" | "en") =>
+  geocode: (city: string, q: string, near?: { lat: number; lon: number }, limit = 8, locale?: Lang) =>
     request<GeocodeResponse>(`${c(city)}/geocode`, {
       q,
       lat: near?.lat,

@@ -1153,6 +1153,7 @@ export const dict = {
       rail: "Tren",
       tram: "Tranvía",
       bus: "Bus",
+      ferry: "Ferry",
       other: "Otro",
     },
     direction: {
@@ -2120,6 +2121,15 @@ export const dict = {
         statKey: "Unknown stat",
         email: "Must be an email address",
         httpsOrAnchor: "An https:// URL, a /path or a #anchor",
+        positive: "Must be a number > 0",
+        onDemandKind: "Must be taxi or ride app",
+        estimateKind: "Must be tariff, API or none",
+        tariffRef: "Pick an existing tariff",
+        handoffKind: "Must be none, link or template",
+        template: "https template with at least one known placeholder",
+        duplicateOrder: "That order is already in use",
+        factorRange: "Must be between 1.0 and 3.0",
+        hhmm: "A time like 19:00",
       },
       landing: {
         title: "Public page",
@@ -2319,6 +2329,7 @@ export const dict = {
       rail: "Rail",
       tram: "Streetcar",
       bus: "Bus",
+      ferry: "Ferry",
       other: "Other",
     },
     direction: {

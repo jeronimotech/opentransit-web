@@ -2,7 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { dict, type Dict } from "./dict";
-import type { Lang } from "../format";
+import { dicts } from "./dicts";
+import { dirOf, isLang, type Lang } from "../format";
 
 type Ctx = { lang: Lang; t: Dict; setLang: (l: Lang) => void; applyCityLocale: (locale: string | null | undefined) => void };
 
@@ -20,10 +21,10 @@ const KEY = "opentransit.lang";
  */
 export function initialLang(cityLocale?: string | null, navigatorLangs: readonly string[] = []): Lang {
   const city = (cityLocale ?? "").slice(0, 2).toLowerCase();
-  if (city === "en" || city === "es") return city;
+  if (isLang(city)) return city;
   for (const l of navigatorLangs) {
     const code = l.slice(0, 2).toLowerCase();
-    if (code === "en" || code === "es") return code;
+    if (isLang(code)) return code;
   }
   return "es";
 }
@@ -35,7 +36,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const v = localStorage.getItem(KEY);
-      if (v === "es" || v === "en") {
+      if (isLang(v)) {
         setLangState(v);
         setChosen(true);
         return;
@@ -53,6 +54,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     document.documentElement.lang = lang;
+    document.documentElement.dir = dirOf(lang);
   }, [lang]);
 
   const setLang = useCallback((l: Lang) => {
@@ -66,7 +68,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<Ctx>(
-    () => ({ lang, t: lang === "es" ? dict.es : (dict.en as unknown as Dict), setLang, applyCityLocale }),
+    () => ({ lang, t: dicts[lang] ?? dict.es, setLang, applyCityLocale }),
     [lang, setLang, applyCityLocale],
   );
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;

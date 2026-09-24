@@ -1,3 +1,4 @@
+import type { Lang } from "./format";
 import type { City, CurbZone, Itinerary, Leg, ParkingInfo } from "./api/types";
 
 /**
@@ -61,7 +62,7 @@ export function isParkRide(it: Pick<Itinerary, "legs" | "parking" | "source">): 
 }
 
 /** "Und1414 · 29 de 44 cupos" — the one line a card has room for. */
-export function parkingSummary(p: Pick<ParkingInfo, "name" | "availableSpaces" | "totalSpaces">, lang: "es" | "en"): string {
+export function parkingSummary(p: Pick<ParkingInfo, "name" | "availableSpaces" | "totalSpaces">, lang: Lang): string {
   const name = p.name ?? (lang === "es" ? "Parqueo" : "Parking");
   if (p.availableSpaces == null) return name;
   const spaces = p.totalSpaces != null ? `${p.availableSpaces} ${lang === "es" ? "de" : "of"} ${p.totalSpaces}` : String(p.availableSpaces);

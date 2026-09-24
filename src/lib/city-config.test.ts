@@ -35,7 +35,7 @@ describe("network layer names", () => {
   });
 
   it("leaves no component out of both groups, or its shapes would be unreachable", () => {
-    const all: City["components"] = (["trunk", "feeder", "dual", "zonal", "cable", "rail", "tram", "bus", "other"] as const).map(
+    const all: City["components"] = (["trunk", "feeder", "dual", "zonal", "cable", "rail", "tram", "bus", "ferry", "other"] as const).map(
       (id) => ({ id, label: id, color: "#000", icon: "bus" }),
     ) as CityComponent[];
     const covered = [

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { localeOf } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/provider";
 import { fmtDateTime } from "@/lib/format";
 import { api } from "@/lib/api/client";
@@ -197,7 +198,7 @@ export function MobilityTab({ city, data }: { city: string; data: AdminConfigRes
                 </div>
                 {pr?.pricingPlans?.length ? (
                   <p className="mt-2 text-xs text-ink-3">
-                    {t.rental.pricing}: {pr.pricingPlans.map((pl) => `${pl.name} ${new Intl.NumberFormat(lang === "es" ? "es-CO" : "en-US", { style: "currency", currency: pl.currency, maximumFractionDigits: 0 }).format(pl.price)}`).join(" · ")}
+                    {t.rental.pricing}: {pr.pricingPlans.map((pl) => `${pl.name} ${new Intl.NumberFormat(localeOf(lang), { style: "currency", currency: pl.currency, maximumFractionDigits: 0 }).format(pl.price)}`).join(" · ")}
                   </p>
                 ) : null}
               </li>
