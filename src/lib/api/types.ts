@@ -739,8 +739,8 @@ export type Healthz = { status: string; version: string; cities: string[] };
 
 /* ── v1.3 city landing page (white-label, admin-editable) ──────────────────── */
 
-export type LandingIcon = "route" | "live" | "board" | "bike" | "open" | "alert" | "accessibility" | "favorites" | "offline" | "map" | "ticket" | "info" | "taxi" | "parking" | "alarm" | "go" | "chat";
-export const LANDING_ICONS: LandingIcon[] = ["route", "live", "board", "bike", "open", "alert", "accessibility", "favorites", "offline", "map", "ticket", "info", "taxi", "parking", "alarm", "go", "chat"];
+export type LandingIcon = "route" | "live" | "board" | "bike" | "open" | "alert" | "accessibility" | "favorites" | "offline" | "map" | "ticket" | "info" | "taxi" | "parking" | "alarm" | "go" | "chat" | "globe";
+export const LANDING_ICONS: LandingIcon[] = ["route", "live", "board", "bike", "open", "alert", "accessibility", "favorites", "offline", "map", "ticket", "info", "taxi", "parking", "alarm", "go", "chat", "globe"];
 export type LandingStatKey = "routes" | "stops" | "vehiclesLive" | "bikeStations" | "alertsActive";
 export const LANDING_STAT_KEYS: LandingStatKey[] = ["routes", "stops", "vehiclesLive", "bikeStations", "alertsActive"];
 

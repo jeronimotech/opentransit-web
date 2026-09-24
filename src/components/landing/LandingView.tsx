@@ -55,6 +55,13 @@ function HighlightIcon({ icon }: { icon: LandingIcon | "car" }) {
           <path d="M8 10h4" />
         </svg>
       );
+    case "globe":
+      return (
+        <svg viewBox="0 0 20 20" {...p} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <circle cx="10" cy="10" r="7" />
+          <path d="M3 10h14M10 3c2.5 2.5 2.5 11.5 0 14M10 3c-2.5 2.5-2.5 11.5 0 14" />
+        </svg>
+      );
     default:
       return (
         <svg viewBox="0 0 20 20" {...p} fill="none" stroke="currentColor" strokeWidth="1.8">
