@@ -500,6 +500,8 @@ export const it = {
       p: "Non usiamo pubblicità, né tracker, né strumenti di analisi di terze parti. L'app non include nessun SDK di questo tipo.",
       tiles: (host: string) =>
         `La mappa viene disegnata con le tessere di ${host}, che il tuo dispositivo scarica direttamente: quel fornitore vede il tuo indirizzo IP e la zona che guardi. Non controlliamo quel servizio.`,
+      search:
+        "Quando cerchi un indirizzo, il testo che scrivi arriva al nostro server e da lì a un geocodificatore esterno che lo converte in coordinate: in alcune città è il geocodificatore ufficiale del catasto, nelle altre un servizio basato su OpenStreetMap. Se hai concesso la posizione, le tue coordinate viaggiano con la richiesta per ordinare i risultati per vicinanza. Conserviamo la risposta in cache per indirizzo cercato, senza nessun identificatore tuo.",
     },
     rights: {
       h: "I tuoi diritti",

@@ -500,6 +500,8 @@ export const ms = {
       p: "Kami tidak menggunakan iklan, penjejak, mahupun alat analitik pihak ketiga. Aplikasi ini tidak mengandungi sebarang SDK seumpama itu.",
       tiles: (host: string) =>
         `Peta dilukis dengan jubin daripada ${host}, yang dimuat turun terus oleh peranti anda: penyedia tersebut melihat alamat IP anda dan kawasan yang anda lihat. Kami tidak mengawal perkhidmatan itu.`,
+      search:
+        "Apabila anda mencari sesuatu alamat, teks yang anda taip sampai ke pelayan kami dan dari situ ke geopengekod luaran yang menukarkannya kepada koordinat: di sesetengah bandar ia geopengekod rasmi kadaster, di bandar lain perkhidmatan berasaskan OpenStreetMap. Jika anda memberi kebenaran lokasi, koordinat anda turut dihantar supaya keputusan boleh disusun mengikut jarak. Kami menyimpan jawapan dalam cache mengikut alamat yang dicari, tanpa sebarang pengenal pasti anda.",
     },
     rights: {
       h: "Hak anda",

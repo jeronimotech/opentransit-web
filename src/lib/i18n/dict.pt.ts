@@ -500,6 +500,8 @@ export const pt = {
       p: "Não usamos publicidade, nem rastreadores, nem ferramentas de análise de terceiros. A app não inclui nenhum SDK desse tipo.",
       tiles: (host: string) =>
         `O mapa é desenhado com mosaicos de ${host}, que o teu dispositivo descarrega diretamente: esse fornecedor vê o teu endereço IP e a zona que estás a ver. Não controlamos esse serviço.`,
+      search:
+        "Quando procuras uma morada, o texto que escreves chega ao nosso servidor e daí a um geocodificador externo que o converte em coordenadas: nalgumas cidades é o geocodificador oficial do cadastro, nas restantes um serviço baseado no OpenStreetMap. Se deste permissão de localização, as tuas coordenadas seguem com a consulta para ordenar os resultados por proximidade. Guardamos a resposta em cache por morada procurada, sem nenhum identificador teu.",
     },
     rights: {
       h: "Os teus direitos",

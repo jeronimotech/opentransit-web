@@ -72,6 +72,7 @@ export default function PrivacyPage() {
       <Section h={p.third.h}>
         <p>{p.third.p}</p>
         {f.tileHost ? <p>{p.third.tiles(f.tileHost)}</p> : null}
+        <p>{p.third.search}</p>
       </Section>
 
       <Section h={p.rights.h}>

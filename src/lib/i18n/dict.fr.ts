@@ -500,6 +500,8 @@ export const fr = {
       p: "Nous n’utilisons ni publicité, ni traceurs, ni outils d’analyse tiers. L’appli n’intègre aucun SDK de ce type.",
       tiles: (host: string) =>
         `La carte est dessinée avec des tuiles de ${host}, que votre appareil télécharge directement : ce fournisseur voit votre adresse IP et la zone que vous regardez. Nous ne contrôlons pas ce service.`,
+      search:
+        "Quand vous cherchez une adresse, le texte que vous saisissez arrive sur notre serveur puis à un géocodeur externe qui le convertit en coordonnées : dans certaines villes c’est le géocodeur officiel du cadastre, ailleurs un service fondé sur OpenStreetMap. Si vous avez accordé la localisation, vos coordonnées accompagnent la requête pour classer les résultats par proximité. Nous mettons la réponse en cache par adresse cherchée, sans aucun identifiant vous concernant.",
     },
     rights: {
       h: "Vos droits",

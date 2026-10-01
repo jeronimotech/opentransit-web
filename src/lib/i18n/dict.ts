@@ -500,6 +500,8 @@ export const dict = {
         p: "No usamos publicidad, ni rastreadores, ni herramientas de analítica de terceros. La app no incluye ningún SDK de ese tipo.",
         tiles: (host: string) =>
           `El mapa se dibuja con teselas de ${host}, que las descarga tu dispositivo directamente: ese proveedor ve tu dirección IP y la zona que miras. No controlamos ese servicio.`,
+        search:
+          "Cuando buscas una dirección, el texto que escribes llega a nuestro servidor y de ahí a un geocodificador externo que lo convierte en coordenadas: en algunas ciudades es el geocodificador oficial del catastro, en el resto un servicio basado en OpenStreetMap. Si concediste ubicación, tus coordenadas van con la consulta para ordenar los resultados por cercanía. Guardamos la respuesta en caché por dirección buscada, sin ningún identificador tuyo.",
       },
       rights: {
         h: "Tus derechos",
@@ -1676,6 +1678,8 @@ export const dict = {
         p: "No advertising, no trackers, no third-party analytics. The app ships no SDK of that kind.",
         tiles: (host: string) =>
           `The map is drawn from tiles served by ${host}, which your device downloads directly: that provider sees your IP address and the area you look at. We do not control that service.`,
+        search:
+          "When you search for an address, the text you type reaches our server and from there an external geocoder that turns it into coordinates: in some cities that is the official cadastral geocoder, elsewhere a service based on OpenStreetMap. If you granted location, your coordinates travel with the query so results can be ordered by distance. We cache the answer per address searched, with no identifier of yours attached.",
       },
       rights: {
         h: "Your rights",
