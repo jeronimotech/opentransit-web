@@ -677,7 +677,8 @@ export type VehicleFrame = {
   type: "full";
   seq: number;
   generatedAt: string;
-  feedTimestamp: string;
+  /** The feed's own clock, when it is plausible. Null for a feed whose header timestamp is frozen (TransMilenio's sat 72 h behind), because a number nobody can trust is worse than none. */
+  feedTimestamp: string | null;
   count: number;
   health: VehicleHealth;
   vehicles: Vehicle[];
@@ -687,7 +688,8 @@ export type VehicleDelta = {
   type: "delta";
   seq: number;
   generatedAt: string;
-  feedTimestamp: string;
+  /** The feed's own clock, when it is plausible. Null for a feed whose header timestamp is frozen (TransMilenio's sat 72 h behind), because a number nobody can trust is worse than none. */
+  feedTimestamp: string | null;
   count: number;
   health: VehicleHealth;
   updated: Vehicle[];
